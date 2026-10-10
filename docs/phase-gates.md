@@ -24,6 +24,9 @@
   Next phase starts only on a clean gate (0 critical, 0 major).
 - CodeRabbit is PAUSED by operator (cooldown). Until re-enabled, the audit step is a
   rigorous self-review: full file re-reads, isolated `tsc` + `node --test`, YAML/SQL checks.
+- A phase gate closes only against a re-read of the plan's scope lines for that phase —
+  never from memory of what was built (lesson 2026-10-10: Phase 6 closed early, user caught
+  missing inventories/rollback/concurrency proof).
 
 # Phase 3 — audit status
 
@@ -88,3 +91,13 @@
 - [x] Tests 7/7 (TS) + 6/6 (Python unittest) pass, `tsc` clean
 - [x] Demo caught + fixed a real bug: `globals.css` pointed at `./theme.css` instead of `../theme.css`
 - [ ] Voice playback + yt-dlp wiring remain VPS/hardware gates (Phase 10 fleet integration)
+
+# Website — public site (done, self-audited; per @frontend-design)
+
+- [x] Design plan: brief-pinned palette; angular clip panels + single beam sweep as the
+      memorable element; sentence-case copy; left-aligned broken grid (no SaaS-card kit)
+- [x] Routes: `/` landing, `/services` (server-priced catalog), `/membership`, `/referrals`,
+      `/verify` (exists), `/dashboard` (staff overview moved from `/`)
+- [x] API: `GET /api/catalog` (active rows, price-ordered) + `CatalogItem` contract
+- [x] Demo proves all routes 200 with live fixture data; fixed two real relative-path bugs
+      (`globals.css` theme import, nested `../../components` imports)

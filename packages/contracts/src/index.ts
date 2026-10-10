@@ -59,3 +59,11 @@ export interface OrderVerification {
   amountMinor: number;
   status: "pending" | "claimed" | "settled" | "rejected" | "expired";
 }
+
+// Website catalog: server-owned prices. Browser displays; never sets.
+export interface CatalogItem {
+  sku: string;
+  name: string;
+  priceMinor: number;
+  currency: string;
+}

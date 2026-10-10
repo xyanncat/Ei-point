@@ -1,8 +1,78 @@
 :root {
   --bg: #101329;
+  --bg-deep: #0b0e20;
   --surface: #202445;
+  --surface-line: #32386b;
   --text: #f5f2ff;
+  --text-dim: #b9b4d9;
   --accent: #b6a0ff;
   --gold: #e6bf75;
+  --ok: #7de3a8;
+  --bad: #ff8f8f;
+  --display-weight: 800;
 }
-/* Phase 4: anime-forward command-center theme, locally hosted fonts, reduced-motion + keyboard nav. */
+
+.hero-beam {
+  height: 3px;
+  border: 0;
+  background: linear-gradient(100deg, transparent 5%, var(--accent) 35%, var(--gold) 65%, transparent 95%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-beam {
+    background-size: 200% 100%;
+    animation: beam-sweep 1.6s ease-out 1;
+  }
+  @keyframes beam-sweep {
+    from {
+      background-position: 100% 0;
+      opacity: 0.2;
+    }
+    to {
+      background-position: 0 0;
+      opacity: 1;
+    }
+  }
+}
+
+.clip-panel {
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+  padding: 1.25rem 1.5rem;
+}
+
+.display-number {
+  font-weight: var(--display-weight);
+  font-size: 2.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 0;
+}
+
+.lede {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--text-dim);
+  max-width: 60ch;
+}
+
+.site-nav {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 1rem 0;
+}
+
+.service-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.service-grid > li:first-child {
+  grid-column: 1 / -1;
+}

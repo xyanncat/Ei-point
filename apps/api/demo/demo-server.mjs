@@ -28,6 +28,15 @@ const server = http.createServer((req, res) => {
       })),
     });
   }
+  if (url.pathname === "/api/catalog") {
+    return json(res, 200, {
+      items: [
+        { sku: "membership", name: "Royality Membership", priceMinor: 49900, currency: "INR" },
+        { sku: "tournament", name: "Tournament Entry", priceMinor: 9900, currency: "INR" },
+        { sku: "card-pack", name: "Mythic Card Pack", priceMinor: 19900, currency: "INR" },
+      ],
+    });
+  }
   if (url.pathname === "/api/guilds") {
     return json(res, 200, {
       guilds: [

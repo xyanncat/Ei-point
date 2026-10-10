@@ -1,50 +1,65 @@
-import { BOT_KEYS, type ServiceCard } from "@ei-royality/contracts";
-import { BotCard, DataStateView } from "../components/status";
+import type { CatalogItem } from "@ei-royality/contracts";
 
-// Overview: six bot cards with real service state (§6). Server-rendered from the API;
-// every view carries loading / empty / failed / stale states — never a spinner forever.
-async function fetchServices(): Promise<{ cards: ServiceCard[]; stale: boolean } | null> {
+async function fetchCatalog(): Promise<CatalogItem[] | null> {
   const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3001";
   try {
-    const res = await fetch(`${base}/api/services`, { cache: "no-store" });
+    const res = await fetch(`${base}/api/catalog`, { cache: "no-store" });
     if (!res.ok) return null;
-    return (await res.json()) as { cards: ServiceCard[]; stale: boolean };
+    const data = (await res.json()) as { items: CatalogItem[] };
+    return data.items;
   } catch {
     return null;
   }
 }
 
-export default async function OverviewPage() {
-  const data = await fetchServices();
-  if (data == null) {
-    return (
-      <section aria-label="Overview">
-        <h1>Overview</h1>
-        <DataStateView state="failed" detail="Service state unavailable — retry shortly." />
-      </section>
-    );
-  }
-  if (data.cards.length === 0) {
-    return (
-      <section aria-label="Overview">
-        <h1>Overview</h1>
-        <DataStateView state="empty" detail="No bots registered yet." />
-      </section>
-    );
-  }
-  const known = new Set<string>(BOT_KEYS);
-  const cards = data.cards.filter((c) => known.has(c.botKey));
+function price(item: CatalogItem): string {
+  return `${(item.priceMinor / 100).toFixed(2)} ${item.currency}`;
+}
+
+export default async function HomePage() {
+  const catalog = await fetchCatalog();
+  const count = catalog?.length ?? 0;
   return (
-    <section aria-label="Overview">
-      <h1>Overview</h1>
-      {data.stale ? <DataStateView state="stale" detail="No live heartbeats yet." /> : null}
-      <div role="list">
-        {cards.map((card) => (
-          <div role="listitem" key={card.botKey}>
-            <BotCard card={card} />
-          </div>
-        ))}
-      </div>
-    </section>
+    <>
+      <section aria-label="Introduction">
+        <p className="display-number" aria-label={`${count} services live`}>
+          {catalog == null ? "—" : count}
+        </p>
+        <h1>Play here. Belong here.</h1>
+        <p className="lede">
+          Ei Royality runs card battles, tournaments, and a members club on its own game servers — paid
+          over UPI or USDT, verified on this site, settled by staff. No app to install, no noise.
+        </p>
+        <p>
+          <a href="/services">See the game services</a> · <a href="/membership">Become a member</a>
+        </p>
+      </section>
+      <hr className="hero-beam" aria-hidden="true" />
+      <section aria-label="What you get">
+        <ul className="service-grid">
+          <li className="clip-panel">
+            <h2>Card battles, kept honest</h2>
+            <p>
+              Packs, trades, and a market where every card move is a guarded transaction — a card can
+              never be double-spent or duplicated, even if a server dies mid-trade.
+            </p>
+          </li>
+          <li className="clip-panel">
+            <h2>Pay your way</h2>
+            <p>UPI or USDT. Every order carries a verification link you can check here, any time.</p>
+            <p>
+              <a href="/verify">Verify an order</a>
+            </p>
+          </li>
+          <li className="clip-panel">
+            <h2>Bring friends, earn months</h2>
+            <p>Referral links pay monthly rewards while your circle stays active.</p>
+            <p>
+              <a href="/referrals">How referrals work</a>
+            </p>
+          </li>
+        </ul>
+      </section>
+    </>
   );
 }

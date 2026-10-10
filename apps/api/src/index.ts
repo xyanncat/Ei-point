@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { randomUUID } from "node:crypto";
-import { BOT_KEYS, type ErrorEnvelope, type GuildInfo, type OrderVerification, type ServiceCard } from "@ei-royality/contracts";
+import { BOT_KEYS, type CatalogItem, type ErrorEnvelope, type GuildInfo, type OrderVerification, type ServiceCard } from "@ei-royality/contracts";
 import { signSession, verifySession } from "./session.js";
 import { issueCsrfToken, verifyCsrfToken } from "./csrf.js";
 import { buildAuthorizeUrl, exchangeCode, verifyOAuthState, type OAuthConfig } from "./oauth.js";
@@ -205,6 +205,25 @@ app.get("/api/guilds", async (req, reply) => {
   } catch (err) {
     req.log.error(err);
     return reply.code(503).send(envelope("db-unavailable", "Guild list unavailable.", true));
+  }
+});
+
+// --- Public catalog: server-owned prices for the website (§6, §7). ---
+app.get("/api/catalog", async (req, reply) => {
+  try {
+    const rows = await queryDb<{ sku: string; name: string; price_minor: number; currency: string }>(
+      `SELECT sku, name, price_minor, currency FROM commerce.catalog WHERE active = TRUE ORDER BY price_minor`,
+    );
+    const items: CatalogItem[] = rows.map((r) => ({
+      sku: r.sku,
+      name: r.name,
+      priceMinor: r.price_minor,
+      currency: r.currency,
+    }));
+    return { items };
+  } catch (err) {
+    req.log.error(err);
+    return reply.code(503).send(envelope("db-unavailable", "Catalog unavailable.", true));
   }
 });
 
