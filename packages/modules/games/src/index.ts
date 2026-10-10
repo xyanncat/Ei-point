@@ -64,6 +64,21 @@ export interface DbTx {
   query: (sql: string, params: unknown[]) => Promise<{ rows: Array<Record<string, unknown>>; rowCount: number }>;
 }
 
+// Transaction owner: BEGIN first, COMMIT on success, ROLLBACK on any failure.
+// Atomicity itself is Postgres's job (VPS gate); this guarantees we never leave
+// a half-applied buy unrolled-back on our side.
+export async function withTransaction<T>(db: DbTx, fn: (tx: DbTx) => Promise<T>): Promise<T> {
+  await db.query("BEGIN", []);
+  try {
+    const result = await fn(db);
+    await db.query("COMMIT", []);
+    return result;
+  } catch (err) {
+    await db.query("ROLLBACK", []);
+    throw err;
+  }
+}
+
 export type BuyFailure = "listing-unavailable" | "self-buy" | "insufficient-funds" | "transfer-failed";
 
 // Atomic market buy: locks listing + buyer balance, moves card and funds, closes listing.
@@ -98,6 +113,19 @@ export const CREATE_LISTING_SQL = `
   INSERT INTO games.listings (guild_id, seller_id, instance_id, price_minor, idempotency_key)
   VALUES ($1, $2, $3, $4, $5)
   ON CONFLICT (idempotency_key) DO NOTHING`;
+
+// Pack opening mints one instance per drawn card. Rarity -> card_id mapping comes
+// from the catalog import (project assets/Cards) — draws stay pure until then.
+export const MINT_INSTANCE_SQL = `
+  INSERT INTO games.card_instances (card_id, owner_guild_id, owner_user_id)
+  VALUES ($1, $2, $3)
+  RETURNING instance_id`;
+
+export const INVENTORY_SQL = `
+  SELECT i.instance_id, i.card_id, d.name, d.rarity
+  FROM games.card_instances i JOIN games.card_definitions d ON d.card_id = i.card_id
+  WHERE i.owner_guild_id = $1 AND i.owner_user_id = $2
+  ORDER BY d.rarity, d.name LIMIT $3`;
 
 export const CREATE_TRADE_SQL = `
   INSERT INTO games.trades (guild_id, status, idempotency_key)

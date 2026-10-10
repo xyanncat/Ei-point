@@ -64,7 +64,9 @@
 - [x] Games: seeded pack draws with rarity buckets, trade state machine, atomic market buy
       (row locks, fund check, self-buy guard, single open→sold transition) (`packages/modules/games/`)
 - [x] Tests 10/10 pass, `tsc` clean — including one test-caught fix (negative XP floors at 0)
-- [x] DB tables already exist (`002_domain.sql`); concurrency proof under load is a VPS/staging gate (§11)
+- [x] Completion audit: added card minting + inventory SQL, `withTransaction` with rollback test,
+      and a lock-faithful concurrent double-buy test (exactly one winner, funds conserved) — 12/12 games+community tests green
+- [x] DB tables already exist (`002_domain.sql`); load proof under real concurrency is a VPS/staging gate (§11)
 
 # Phase 7 — commerce + website (done, self-audited)
 
