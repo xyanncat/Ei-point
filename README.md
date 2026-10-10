@@ -33,6 +33,18 @@ docs/
 - Docker Engine 29.9.0 + Compose 5.6.0 (per benchmark — verify on VPS before prod)
 - Lockfiles + pinned patch versions + image digests for releases (see `infra/docker/`)
 
+## Local demo (no credentials, no database)
+
+```bash
+node apps/api/demo/demo-server.mjs        # fixture API on :3001 (leave running)
+cd apps/dashboard && npm install --no-save next@14.2.18 react@18.3.1 react-dom@18.3.1
+NEXT_PUBLIC_API_BASE=http://127.0.0.1:3001 npx next dev -p 3000
+```
+
+Then open <http://localhost:3000> (overview with six demo bot cards) and
+<http://localhost:3000/verify?token=demo> (order verification).
+`apps/api/demo/demo-server.mjs` is fixture-only and never deployed.
+
 ## Quick start (dev)
 
 ```bash

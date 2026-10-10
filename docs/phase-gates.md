@@ -74,3 +74,15 @@
       duplicates and wrong-state callers fail clearly, lost-update race returns already-settled
 - [x] Public verification API (`GET /api/orders/verify`, hash lookup, safe fields) + verify page
 - [x] Tests 9/9 pass, `tsc` clean — including one test-caught fix (TRON vector length)
+
+# Phase 8 — AI + music (done, self-audited)
+
+- [x] AI memory: bounded prompt window (count + char caps) with summary prefix; thread/message/
+      summary/usage SQL (`packages/modules/ai/`)
+- [x] Provider router: 2 concurrent, 20 queued then clean reject, 60 s deadline with abort,
+      primary→fallback, budgets (`AI_CONCURRENT`/`AI_QUEUE_MAX`/`AI_DEADLINE_MS`)
+- [x] Music queue: add/remove/shuffle (keeps current first)/loop modes/snapshot round-trip
+      with clamping restore (`apps/bots/music-py/src/queue_state.py`, dependency-free)
+- [x] Tests 7/7 (TS) + 6/6 (Python unittest) pass, `tsc` clean
+- [x] Demo caught + fixed a real bug: `globals.css` pointed at `./theme.css` instead of `../theme.css`
+- [ ] Voice playback + yt-dlp wiring remain VPS/hardware gates (Phase 10 fleet integration)
