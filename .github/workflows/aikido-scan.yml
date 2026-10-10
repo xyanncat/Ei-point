@@ -1,0 +1,38 @@
+# Aikido security scan (SAST + dependencies + IaC + secrets)
+#
+# Uses the Aikido Local Scanner: code is scanned inside the runner and only
+# results upload to Aikido — source never leaves the premises.
+# Setup (one time, ~5 min): see docs/security.md. Until AIKIDO_API_KEY exists
+# as a repo secret, this workflow skips cleanly instead of going red.
+#
+# Scan only main: Aikido collects results under one repository name per branch.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+name: Aikido Scan
+
+jobs:
+  aikido-local-scan-repo:
+    runs-on: ubuntu-latest
+    container:
+      image: aikidosecurity/local-scanner:latest
+    steps:
+      - name: Check for API key
+        run: |
+          if [ -z "${{ secrets.AIKIDO_API_KEY }}" ]; then
+            echo "AIKIDO_API_KEY not set — see docs/security.md, skipping scan."
+            exit 0
+          fi
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: my-repo
+      - name: Run scan
+        run: >
+          aikido-local-scanner scan my-repo
+          --apikey ${{ secrets.AIKIDO_API_KEY }}
+          --repositoryname Ei-point
+          --branchname main
