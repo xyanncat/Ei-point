@@ -18,6 +18,12 @@ const BATCH = 10;
 const POLL_MS = 5000;
 
 const client = new Client({ connectionString: DATABASE_URL, application_name: OWNER });
+// A dropped LISTEN connection must not become an uncaught exception: exit and let the
+// supervisor (compose restart policy / systemd) bring up a fresh connection + LISTEN.
+client.on("error", (err) => {
+  console.error("pg client error — exiting for supervisor restart", err);
+  process.exit(1);
+});
 await client.connect();
 await client.query("LISTEN ei_jobs");
 client.on("notification", () => {
@@ -37,11 +43,16 @@ async function pump(): Promise<void> {
       } catch (err) {
         const attempts = (job as { attempts: number }).attempts;
         // nextBackoffMs returns ms; FAIL_SQL interval is seconds — round up, never shorten.
-        await client.query(FAIL_SQL, [
-          (job as { job_id: string }).job_id,
-          Math.ceil(nextBackoffMs(attempts) / 1000),
-          err instanceof Error ? err.message : String(err),
-        ]);
+        try {
+          await client.query(FAIL_SQL, [
+            (job as { job_id: string }).job_id,
+            Math.ceil(nextBackoffMs(attempts) / 1000),
+            err instanceof Error ? err.message : String(err),
+          ]);
+        } catch (failErr) {
+          // Never let one job's bookkeeping failure starve the rest of the batch.
+          console.error("FAIL_SQL failed", { job: (job as { job_id: string }).job_id, failErr });
+        }
       }
     }
     // Reconcile missed NOTIFYs: pump again if work remains due (same predicate as LEASE_SQL).

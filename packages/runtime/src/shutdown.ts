@@ -15,9 +15,13 @@ export function onShutdown(signals: NodeJS.Signals[] = ["SIGTERM", "SIGINT"], dr
     process.on(sig, () => {
       if (shuttingDown) return;
       shuttingDown = true;
-      drain()
-        .catch((err) => console.error("drain failed", err))
-        .finally(() => process.exit(0));
+      drain().then(
+        () => process.exit(0),
+        (err) => {
+          console.error("drain failed", err);
+          process.exit(1);
+        },
+      );
       // Hard stop if drain hangs (bounded recovery, never indefinite).
       setTimeout(() => process.exit(1), 15000).unref();
     });
