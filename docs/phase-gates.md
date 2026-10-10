@@ -56,3 +56,12 @@
 - [x] Logging: stream allowlist, credential redaction, outbox-shaped events (`packages/modules/logging/`)
 - [x] Tests 16/16 pass, `tsc` clean (isolated env)
 - [x] DB tables already exist (`002_domain.sql`); bot command wiring lands with Phase 10 fleet integration
+
+# Phase 6 — community + economy (done, self-audited)
+
+- [x] Community: welcome renderer, limit-checked embed builder, triangular XP curve + level-ups,
+      welcome/XP/leaderboard SQL (`packages/modules/community/`)
+- [x] Games: seeded pack draws with rarity buckets, trade state machine, atomic market buy
+      (row locks, fund check, self-buy guard, single open→sold transition) (`packages/modules/games/`)
+- [x] Tests 10/10 pass, `tsc` clean — including one test-caught fix (negative XP floors at 0)
+- [x] DB tables already exist (`002_domain.sql`); concurrency proof under load is a VPS/staging gate (§11)
