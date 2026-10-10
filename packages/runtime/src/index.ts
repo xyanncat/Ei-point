@@ -40,3 +40,9 @@ export interface TelemetryFields {
   latencyMs: number;
   failureCategory?: FailureCategory;
 }
+
+export * from "./auth.js";
+export * from "./jobs.js";
+export * from "./lifecycle.js";
+export * from "./outbox.js";
+export * from "./shutdown.js";
