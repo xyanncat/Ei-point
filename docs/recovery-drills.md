@@ -6,7 +6,8 @@ Targets (§9): DB RPO ≤ 5 min, files RPO ≤ 24 h, full-service RTO ≤ 2 h. M
 
 1. pgBackRest restore → temp postgres → checksum + row-count compare (all `commerce.*`, `games.*`, `ai.*` tables).
 2. restic file restore → temp volume → checksum compare (artwork/uploads; music-cache excluded).
-3. Record: backup time, restore time, counts, checksums, drill PASS/FAIL in `ops.service_status`.
+3. Record: backup time, restore time, counts, checksums, drill PASS/FAIL in the history table below
+   (+ mirror as `ops.diagnostic_events` category=`drill`; `ops.service_status` holds only latest pointer).
 
 ## Pre-launch (replacement host)
 

@@ -20,6 +20,9 @@ await client.connect();
 // ops schema must exist before the ledger (fresh DBs have no schemas yet).
 await client.query(`CREATE SCHEMA IF NOT EXISTS ops`);
 await client.query(`CREATE TABLE IF NOT EXISTS ops.schema_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+// Serialize concurrent runners (api/workers deploys) with an advisory lock held for the whole run.
+await client.query(`SELECT pg_advisory_lock(727201)`);
+try {
 for (const f of files) {
   const done = await client.query(`SELECT 1 FROM ops.schema_migrations WHERE name=$1`, [f]);
   if (done.rowCount > 0) {
@@ -37,5 +40,8 @@ for (const f of files) {
     throw err;
   }
 }
-await client.end();
 console.log("migrations ok");
+} finally {
+  await client.query(`SELECT pg_advisory_unlock(727201)`).catch(() => {});
+  await client.end();
+}
