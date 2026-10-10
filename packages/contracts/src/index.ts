@@ -18,3 +18,36 @@ export interface OutboxEvent<T = unknown> {
   payload: T;
   correlationId: string;
 }
+
+// Phase 4 — dashboard foundation contracts (§6). Server owns all values; browser never
+// chooses amounts, discounts or guild access.
+export type ServiceState = "ok" | "degraded" | "down" | "unknown";
+
+export interface ServiceCard {
+  botKey: BotKey;
+  state: ServiceState;
+  gateway: ServiceState;
+  dbReady: boolean;
+  latencyMs: number | null;
+  updatedAt: string;
+}
+
+export interface GuildInfo {
+  guildId: string;
+  name: string;
+  approved: boolean;
+}
+
+export type DataState = "loading" | "empty" | "failed" | "stale" | "saving" | "confirmed" | "ready";
+
+export interface ErrorEnvelope {
+  error: string;
+  code: string;
+  correlationId: string;
+  retryable: boolean;
+}
+
+export interface SessionClaims {
+  discordUserId: string;
+  expiresAt: number; // epoch ms
+}

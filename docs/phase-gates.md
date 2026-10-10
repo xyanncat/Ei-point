@@ -20,8 +20,10 @@
 # Workflow (single-branch)
 
 - All work lands directly on `main` (remote: `xyanncat/Ei-point`). No long-lived branches.
-- Each phase: implement → self-verify (typecheck/tests) → `coderabbit review --agent --base-commit <previous-tip>`
-  → fix → re-audit → push. Next phase starts only on a clean audit (0 critical, 0 major).
+- Each phase: implement → self-verify (typecheck/tests) → audit → fix → push.
+  Next phase starts only on a clean gate (0 critical, 0 major).
+- CodeRabbit is PAUSED by operator (cooldown). Until re-enabled, the audit step is a
+  rigorous self-review: full file re-reads, isolated `tsc` + `node --test`, YAML/SQL checks.
 
 # Phase 3 — audit status
 
@@ -32,4 +34,15 @@
 - [x] API `readyz` DB probe with `finally` cleanup (`apps/api/src/index.ts`)
 - [x] Migration `003_notifications.sql` (job/outbox NOTIFY triggers)
 - [x] Unit tests 4/4 pass, `tsc` clean (verified in isolated env — no pnpm on this box)
-- [ ] Closing CodeRabbit audit — PENDING (rate-limited at last attempt; 1 major fixed unverified)
+- [x] Closing audit — self-review (CodeRabbit paused): drain/exit-code/import fixes verified, tests green
+
+# Phase 4 — dashboard foundation (in progress)
+
+- [x] Visual system: theme tokens, globals, reduced-motion, skip-link, focus rings (`apps/dashboard/`)
+- [x] OAuth login/callback/logout + signed sessions + CSRF gate (`apps/api/src/session|csrf|oauth.ts`, routes in `index.ts`)
+- [x] Guild navigation endpoint (`GET /api/guilds`, session-required, approved-only)
+- [x] Service overview endpoint (`GET /api/services`, six bot cards from `ops.service_status`)
+- [x] Overview page with loading/empty/failed/stale states; saved≠confirmed states reserved for forms (Phases 5–8)
+- [x] Contracts: `ServiceCard`, `GuildInfo`, `DataState`, `ErrorEnvelope`, `SessionClaims`
+- [x] Tests 8/8 pass (session/csrf/oauth), `tsc` clean for api-auth + dashboard
+- [x] Self-audit of route wiring: cookie-parse hardening, callback error logging, OAuth param fix — tests re-green
