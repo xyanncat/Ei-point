@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { randomUUID } from "node:crypto";
-import { BOT_KEYS, type ErrorEnvelope, type GuildInfo, type ServiceCard } from "@ei-royality/contracts";
+import { BOT_KEYS, type ErrorEnvelope, type GuildInfo, type OrderVerification, type ServiceCard } from "@ei-royality/contracts";
 import { signSession, verifySession } from "./session.js";
 import { issueCsrfToken, verifyCsrfToken } from "./csrf.js";
 import { buildAuthorizeUrl, exchangeCode, verifyOAuthState, type OAuthConfig } from "./oauth.js";
@@ -205,6 +205,33 @@ app.get("/api/guilds", async (req, reply) => {
   } catch (err) {
     req.log.error(err);
     return reply.code(503).send(envelope("db-unavailable", "Guild list unavailable.", true));
+  }
+});
+
+// --- Public order verification: token-hash lookup, safe fields only (§6, §7). ---
+app.get<{ Querystring: { token?: string } }>("/api/orders/verify", async (req, reply) => {
+  const { token } = req.query;
+  if (token == null || token.length < 16) {
+    return reply.code(400).send(envelope("bad-token", "Verification link is invalid.", false));
+  }
+  try {
+    const { createHash } = await import("node:crypto");
+    const hash = createHash("sha256").update(token).digest("hex");
+    const rows = await queryDb<{ status: OrderVerification["status"]; amount_minor: number; sku_name: string }>(
+      `SELECT o.status, o.amount_minor, c.name AS sku_name
+       FROM commerce.orders o JOIN commerce.catalog c ON c.sku = o.sku
+       WHERE o.order_token_hash = $1`,
+      [hash],
+    );
+    const row = rows[0];
+    if (row == null) {
+      return reply.code(404).send(envelope("order-unknown", "No order matches this link.", false));
+    }
+    const result: OrderVerification = { skuName: row.sku_name, amountMinor: row.amount_minor, status: row.status };
+    return result;
+  } catch (err) {
+    req.log.error(err);
+    return reply.code(503).send(envelope("db-unavailable", "Verification unavailable.", true));
   }
 });
 

@@ -51,3 +51,11 @@ export interface SessionClaims {
   discordUserId: string;
   expiresAt: number; // epoch ms
 }
+
+// Phase 7 — public order verification. Only safe-to-publish fields;
+// the lookup key is the token hash, never buyer identity.
+export interface OrderVerification {
+  skuName: string;
+  amountMinor: number;
+  status: "pending" | "claimed" | "settled" | "rejected" | "expired";
+}

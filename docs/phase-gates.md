@@ -65,3 +65,12 @@
       (row locks, fund check, self-buy guard, single open→sold transition) (`packages/modules/games/`)
 - [x] Tests 10/10 pass, `tsc` clean — including one test-caught fix (negative XP floors at 0)
 - [x] DB tables already exist (`002_domain.sql`); concurrency proof under load is a VPS/staging gate (§11)
+
+# Phase 7 — commerce + website (done, self-audited)
+
+- [x] Catalog/money rules, order token hashing, UPI payload builder, USDT (tron/erc20) validation
+- [x] Order state machine, referral codes + YYYY-MM cycles + month-boundary expiry
+- [x] Atomic claim (pending→claimed) and settlement (claimed→settled) with row locks;
+      duplicates and wrong-state callers fail clearly, lost-update race returns already-settled
+- [x] Public verification API (`GET /api/orders/verify`, hash lookup, safe fields) + verify page
+- [x] Tests 9/9 pass, `tsc` clean — including one test-caught fix (TRON vector length)
