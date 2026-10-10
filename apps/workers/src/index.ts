@@ -1,7 +1,7 @@
 // Phase 3: job recovery worker — LISTEN + periodic reconciliation (§5).
 // Leases + bounded retries + backoff/jitter + dead-letter via ops.jobs; handlers land per-phase.
 import { Client } from "pg";
-import { LEASE_SQL, COMPLETE_SQL, FAIL_SQL, nextBackoffMs } from "@ei-royality/runtime";
+import { LEASE_SQL, FAIL_SQL, nextBackoffMs } from "@ei-royality/runtime";
 import { installRejectionHandler, onShutdown } from "@ei-royality/runtime";
 
 installRejectionHandler();
