@@ -1,4 +1,4 @@
-// NOTIFY on new jobs/outbox so workers wake immediately; reconciliation covers misses (§5).
+-- NOTIFY on new jobs/outbox so workers wake immediately; reconciliation covers misses (§5).
 CREATE OR REPLACE FUNCTION ops.notify_work() RETURNS trigger AS $$
 BEGIN
   PERFORM pg_notify('ei_jobs', NEW.job_id::text);

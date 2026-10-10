@@ -26,7 +26,7 @@ export const LEASE_SQL = `
       attempts = attempts + 1, updated_at = now()
   WHERE job_id IN (
     SELECT job_id FROM ops.jobs
-    WHERE status IN ('pending', 'leased')
+    WHERE status IN ('pending', 'leased', 'failed')
       AND next_run_at <= now()
       AND (lease_expires_at IS NULL OR lease_expires_at < now())
     ORDER BY next_run_at

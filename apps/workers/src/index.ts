@@ -2,7 +2,9 @@
 // Leases + bounded retries + backoff/jitter + dead-letter via ops.jobs; handlers land per-phase.
 import { Client } from "pg";
 import { LEASE_SQL, COMPLETE_SQL, FAIL_SQL, nextBackoffMs } from "@ei-royality/runtime";
-import { onShutdown } from "@ei-royality/runtime";
+import { installRejectionHandler, onShutdown } from "@ei-royality/runtime";
+
+installRejectionHandler();
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (DATABASE_URL == null) {
@@ -34,24 +36,27 @@ async function pump(): Promise<void> {
         throw new Error(`no-handler:${String((job as { kind: string }).kind)}`);
       } catch (err) {
         const attempts = (job as { attempts: number }).attempts;
+        // nextBackoffMs returns ms; FAIL_SQL interval is seconds — round up, never shorten.
         await client.query(FAIL_SQL, [
           (job as { job_id: string }).job_id,
-          nextBackoffMs(attempts),
+          Math.ceil(nextBackoffMs(attempts) / 1000),
           err instanceof Error ? err.message : String(err),
         ]);
       }
     }
-    // Reconcile missed NOTIFYs: pump again if work remains due.
+    // Reconcile missed NOTIFYs: pump again if work remains due (same predicate as LEASE_SQL).
     const pending = await client.query(
-      `SELECT 1 FROM ops.jobs WHERE status IN ('pending','failed') AND next_run_at <= now() LIMIT 1`,
+      `SELECT 1 FROM ops.jobs WHERE status IN ('pending','leased','failed') AND next_run_at <= now() AND (lease_expires_at IS NULL OR lease_expires_at < now()) LIMIT 1`,
     );
-    if ((pending.rowCount ?? 0) > 0) setTimeout(() => void pump(), 1000).unref();
+    if ((pending.rowCount ?? 0) > 0) {
+      setTimeout(() => void pump().catch((err) => console.error("repump failed", err)), 1000).unref();
+    }
   } finally {
     pumping = false;
   }
 }
 
-const timer = setInterval(() => void pump(), POLL_MS);
+const timer = setInterval(() => void pump().catch((err) => console.error("poll pump failed", err)), POLL_MS);
 onShutdown(["SIGTERM", "SIGINT"], async () => {
   clearInterval(timer);
   await client.end();

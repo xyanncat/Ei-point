@@ -13,9 +13,12 @@ app.get("/readyz", async () => {
   try {
     const { Client } = await import("pg");
     const db = new Client({ connectionString: url, connectionTimeoutMillis: 3000 });
-    await db.connect();
-    await db.query("SELECT 1");
-    await db.end();
+    try {
+      await db.connect();
+      await db.query("SELECT 1");
+    } finally {
+      await db.end().catch(() => {});
+    }
     return { dbReady: true, status: "ok" };
   } catch (err) {
     return { dbReady: false, status: "degraded", note: err instanceof Error ? err.message : String(err) };
