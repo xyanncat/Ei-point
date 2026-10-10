@@ -26,6 +26,18 @@ Per [GitHub Action Setup](https://help.aikido.dev/code-scanning/local-code-scann
 The workflow is non-blocking by design until the first baseline is triaged.
 Release/PR gating (fail on open issues ≥ severity) is the follow-up once triage is clean.
 
+## 3. Local scans via Aikido MCP (developer workstation)
+
+The `aikido` MCP server is registered in `~/.config/opencode/opencode.jsonc`
+(`npx -y @aikidosec/mcp@latest`). It exposes `aikido_scan_paths` — a local
+SAST/secrets/IaC scan of files on disk, usable as the per-phase audit step.
+
+Known limitation (verified 2026-10-10): on this Windows workstation the bundled
+SAST (Opengrep) and IaC (Checkov) engines fail to execute, so a local MCP scan
+currently proves secrets-clean only. Full SAST/IaC coverage comes from the CI
+scanner (§2, needs `AIKIDO_API_KEY`) or a VPS-side run. Re-verify engine health
+before relying on MCP scans for a phase gate.
+
 ## Secret hygiene (enforced now, audited per phase)
 
 - Real secrets live only in `.env` (gitignored, never committed) and the VPS vault.
