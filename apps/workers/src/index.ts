@@ -31,10 +31,12 @@ client.on("notification", () => {
 });
 
 let pumping = false;
+let stopping = false;
+let activePump: Promise<void> | null = null;
 async function pump(): Promise<void> {
-  if (pumping) return;
+  if (pumping || stopping) return;
   pumping = true;
-  try {
+  const run: Promise<void> = (async () => {
     const leased = await client.query(LEASE_SQL, [OWNER, LEASE_SEC, BATCH]);
     for (const job of leased.rows) {
       try {
@@ -65,11 +67,22 @@ async function pump(): Promise<void> {
   } finally {
     pumping = false;
   }
+  })();
+  activePump = run;
+  try {
+    await run;
+  } finally {
+    if (activePump === run) activePump = null;
+  }
 }
 
 const timer = setInterval(() => void pump().catch((err) => console.error("poll pump failed", err)), POLL_MS);
 onShutdown(["SIGTERM", "SIGINT"], async () => {
+  // Stop scheduling new work, then let the active batch finish before closing the client
+  // (shutdown.ts enforces a 15 s hard stop if the drain hangs).
+  stopping = true;
   clearInterval(timer);
+  if (activePump != null) await activePump.catch((err) => console.error("final pump failed", err));
   await client.end();
 });
 console.log("workers listening (Phase 3 recovery loop)");
