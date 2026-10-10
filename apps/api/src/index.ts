@@ -7,8 +7,19 @@ const app = Fastify({ logger: true });
 app.get("/healthz", async () => ({ ok: true, service: "api" }));
 
 app.get("/readyz", async () => {
-  // Phase 3: check postgres + bot gateway states. For now report unknown, never fake ok.
-  return { dbReady: false, status: "init", note: "Phase 3 wires real readiness" };
+  // Phase 3: real DB readiness; gateway/provider states land with bot heartbeats (Phase 5+).
+  const url = process.env.DATABASE_URL;
+  if (url == null) return { dbReady: false, status: "init", note: "DATABASE_URL missing" };
+  try {
+    const { Client } = await import("pg");
+    const db = new Client({ connectionString: url, connectionTimeoutMillis: 3000 });
+    await db.connect();
+    await db.query("SELECT 1");
+    await db.end();
+    return { dbReady: true, status: "ok" };
+  } catch (err) {
+    return { dbReady: false, status: "degraded", note: err instanceof Error ? err.message : String(err) };
+  }
 });
 
 const port = Number(process.env.API_PORT ?? 3001);

@@ -87,7 +87,9 @@ services:
   bot-security:
     build: { context: ../.., dockerfile: apps/bots/security/Dockerfile }
     restart: unless-stopped
-    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_SECURITY_BOT_TOKEN} }
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BOT_TOKEN: ${DISCORD_SECURITY_BOT_TOKEN}
     networks: [app, data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
@@ -97,7 +99,9 @@ services:
   bot-moderation:
     build: { context: ../.., dockerfile: apps/bots/moderation/Dockerfile }
     restart: unless-stopped
-    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_MODERATION_BOT_TOKEN} }
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BOT_TOKEN: ${DISCORD_MODERATION_BOT_TOKEN}
     networks: [app, data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
@@ -107,7 +111,9 @@ services:
   bot-community:
     build: { context: ../.., dockerfile: apps/bots/community/Dockerfile }
     restart: unless-stopped
-    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_COMMUNITY_BOT_TOKEN} }
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BOT_TOKEN: ${DISCORD_COMMUNITY_BOT_TOKEN}
     networks: [app, data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     volumes: ["artwork:/srv/artwork:ro"]
@@ -118,7 +124,9 @@ services:
   bot-ai:
     build: { context: ../.., dockerfile: apps/bots/ai/Dockerfile }
     restart: unless-stopped
-    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_AI_BOT_TOKEN} }
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BOT_TOKEN: ${DISCORD_AI_BOT_TOKEN}
     networks: [app, data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "0.75", memory: 2G } } }
@@ -128,7 +136,9 @@ services:
   bot-music:
     build: { context: ../.., dockerfile: apps/bots/music-py/Dockerfile }
     restart: unless-stopped
-    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_MUSIC_BOT_TOKEN} }
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BOT_TOKEN: ${DISCORD_MUSIC_BOT_TOKEN}
     networks: [app, data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     volumes: ["music-cache:/srv/music-cache"]
@@ -139,7 +149,9 @@ services:
   bot-commerce:
     build: { context: ../.., dockerfile: apps/bots/commerce/Dockerfile }
     restart: unless-stopped
-    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_COMMERCE_BOT_TOKEN} }
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BOT_TOKEN: ${DISCORD_COMMERCE_BOT_TOKEN}
     networks: [app, data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "0.50", memory: 2G } } }
@@ -149,7 +161,8 @@ services:
   workers:
     build: { context: ../.., dockerfile: apps/workers/Dockerfile }
     restart: unless-stopped
-    environment: { DATABASE_URL: ${DATABASE_URL} }
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
     networks: [app, data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "0.50", memory: 2G } } }
