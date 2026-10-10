@@ -1,0 +1,9 @@
+[Unit]
+Description=Ei Royality watchdog (bounded restarts + alerts, §8)
+After=docker.service
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ei-royality-watchdog.sh

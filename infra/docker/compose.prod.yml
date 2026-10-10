@@ -1,0 +1,6 @@
+# Production overlay: pinned digests only. No build: — images must be prebuilt + tested.
+# Usage: docker compose -f compose.yml -f compose.prod.yml up -d <svc>
+# Resolve digests at release: docker pull <img> && docker inspect --format='{{.RepoDigests}}' <img>
+services:
+  postgres: { build: null, image: "postgres:17.5@sha256:REPLACE_ME" }
+  nginx: { build: null, image: "nginx:1.27.3-alpine@sha256:REPLACE_ME" }

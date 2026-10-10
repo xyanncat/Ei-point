@@ -1,0 +1,160 @@
+name: ei-royality
+services:
+  postgres:
+    # Pin patch + digest at release time. Digest below is a placeholder — resolve with:
+    #   docker pull postgres:17.5 && docker inspect --format='{{.RepoDigests}}' postgres:17.5
+    image: "postgres:17.5"
+    restart: unless-stopped
+    command: ["postgres", "-c", "max_connections=120", "-c", "shared_buffers=2GB", "-c", "wal_level=replica", "-c", "archive_mode=on", "-c", "archive_command=/usr/local/bin/archive-wal.sh %p"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - backup-staging:/var/backups/ei-royality:ro
+    networks: [data]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    deploy:
+      resources:
+        limits: { cpus: "1.50", memory: 8G }
+        reservations: { memory: 4G }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  nginx:
+    image: "nginx:1.27.3-alpine"
+    restart: unless-stopped
+    ports: ["127.0.0.1:8080:8080"]
+    volumes:
+      - ../nginx/nginx.conf:ro:/etc/nginx/nginx.conf:ro
+      - artwork:/srv/artwork:ro
+    networks: [edge, app]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 1G }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+    read_only: true
+
+  api:
+    build: { context: ../.., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      SESSION_SECRET: ${SESSION_SECRET}
+    networks: [app, data]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    deploy:
+      resources:
+        limits: { cpus: "0.40", memory: 1536M }
+    depends_on: { postgres: { condition: service_healthy } }
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  web:
+    build: { context: ../.., dockerfile: apps/dashboard/Dockerfile }
+    restart: unless-stopped
+    networks: [app]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    deploy:
+      resources:
+        limits: { cpus: "0.35", memory: 1536M }
+    depends_on: [api]
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  # --- Bots: 5× Node (discord.js 14) + 1× Python (music). Caps per §7. ---
+  bot-security:
+    build: { context: ../.., dockerfile: apps/bots/security/Dockerfile }
+    restart: unless-stopped
+    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_SECURITY_BOT_TOKEN} }
+    networks: [app, data]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
+    depends_on: { postgres: { condition: service_healthy } }
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  bot-moderation:
+    build: { context: ../.., dockerfile: apps/bots/moderation/Dockerfile }
+    restart: unless-stopped
+    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_MODERATION_BOT_TOKEN} }
+    networks: [app, data]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
+    depends_on: { postgres: { condition: service_healthy } }
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  bot-community:
+    build: { context: ../.., dockerfile: apps/bots/community/Dockerfile }
+    restart: unless-stopped
+    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_COMMUNITY_BOT_TOKEN} }
+    networks: [app, data]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    volumes: ["artwork:/srv/artwork:ro"]
+    deploy: { resources: { limits: { cpus: "0.75", memory: 3G } } }
+    depends_on: { postgres: { condition: service_healthy } }
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  bot-ai:
+    build: { context: ../.., dockerfile: apps/bots/ai/Dockerfile }
+    restart: unless-stopped
+    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_AI_BOT_TOKEN} }
+    networks: [app, data]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    deploy: { resources: { limits: { cpus: "0.75", memory: 2G } } }
+    depends_on: { postgres: { condition: service_healthy } }
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  bot-music:
+    build: { context: ../.., dockerfile: apps/bots/music-py/Dockerfile }
+    restart: unless-stopped
+    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_MUSIC_BOT_TOKEN} }
+    networks: [app, data]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    volumes: ["music-cache:/srv/music-cache"]
+    deploy: { resources: { limits: { cpus: "1.00", memory: 3G } } }
+    depends_on: { postgres: { condition: service_healthy } }
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  bot-commerce:
+    build: { context: ../.., dockerfile: apps/bots/commerce/Dockerfile }
+    restart: unless-stopped
+    environment: { DATABASE_URL: ${DATABASE_URL}, BOT_TOKEN: ${DISCORD_COMMERCE_BOT_TOKEN} }
+    networks: [app, data]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    deploy: { resources: { limits: { cpus: "0.50", memory: 2G } } }
+    depends_on: { postgres: { condition: service_healthy } }
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  workers:
+    build: { context: ../.., dockerfile: apps/workers/Dockerfile }
+    restart: unless-stopped
+    environment: { DATABASE_URL: ${DATABASE_URL} }
+    networks: [app, data]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    deploy: { resources: { limits: { cpus: "0.50", memory: 2G } } }
+    depends_on: { postgres: { condition: service_healthy } }
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+networks:
+  edge: { name: ei-royality_edge }
+  app: { name: ei-royality_app }
+  data: { name: ei-royality_data, internal: true }
+
+volumes:
+  pgdata: { name: ei-royality_pgdata }
+  artwork: { name: ei-royality_artwork }
+  music-cache: { name: ei-royality_music-cache }
+  logs: { name: ei-royality_logs }
+  backup-staging: { name: ei-royality_backup-staging }
+  tmp: { name: ei-royality_tmp }
