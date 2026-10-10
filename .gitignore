@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.next/
+out/
+.env
+*.local
+pgdata/
+backup-staging/
+tmp/
+music-cache/
+logs/
+coverage/
