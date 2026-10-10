@@ -27,8 +27,15 @@ for (const f of files) {
     continue;
   }
   console.log(`apply ${f}`);
-  await client.query(readFileSync(join(dir, f), "utf8"));
-  await client.query(`INSERT INTO ops.schema_migrations (name) VALUES ($1)`, [f]);
+  await client.query("BEGIN");
+  try {
+    await client.query(readFileSync(join(dir, f), "utf8"));
+    await client.query(`INSERT INTO ops.schema_migrations (name) VALUES ($1)`, [f]);
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  }
 }
 await client.end();
 console.log("migrations ok");

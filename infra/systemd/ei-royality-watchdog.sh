@@ -9,7 +9,7 @@ STATE_DIR=/var/lib/ei-royality/watchdog
 mkdir -p "$STATE_DIR"
 for svc in $ALLOWED_SERVICES; do
   # Compose-aware lookup: containers are <project>-<service>-<n>; match by compose service label.
-  cid=$(docker ps -q --filter "label=com.docker.compose.service=$svc" | head -n 1)
+  cid=$(docker ps -aq --filter "label=com.docker.compose.service=$svc" | head -n 1)
   if [ -z "$cid" ]; then continue; fi
   healthy=$(docker inspect --format='{{.State.Health.Status}}' "$cid" 2>/dev/null || echo "none")
   running=$(docker inspect --format='{{.State.Running}}' "$cid")
