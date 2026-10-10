@@ -17,18 +17,21 @@ name: Aikido Scan
 
 jobs:
   aikido-local-scan-repo:
-    # No key, no scan: skip the whole job instead of running the scanner with an
-    # empty --apikey (an empty value swallows the next CLI flag and fails the run).
-    if: ${{ secrets.AIKIDO_API_KEY != '' }}
     runs-on: ubuntu-latest
     container:
       image: aikidosecurity/local-scanner:latest
     steps:
+      - name: Check for API key
+        # Step-level gate (job-level `if:` on secrets is rejected at startup):
+        # without a key the scan step skips and the run stays green.
+        if: ${{ secrets.AIKIDO_API_KEY == '' }}
+        run: echo "AIKIDO_API_KEY not set — see docs/security.md, scan skipped."
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           path: my-repo
       - name: Run scan
+        if: ${{ secrets.AIKIDO_API_KEY != '' }}
         run: >
           aikido-local-scanner scan my-repo
           --apikey ${{ secrets.AIKIDO_API_KEY }}
