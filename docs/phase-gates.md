@@ -36,7 +36,7 @@
 - [x] Unit tests 4/4 pass, `tsc` clean (verified in isolated env — no pnpm on this box)
 - [x] Closing audit — self-review (CodeRabbit paused): drain/exit-code/import fixes verified, tests green
 
-# Phase 4 — dashboard foundation (in progress)
+# Phase 4 — dashboard foundation (done, self-audited)
 
 - [x] Visual system: theme tokens, globals, reduced-motion, skip-link, focus rings (`apps/dashboard/`)
 - [x] OAuth login/callback/logout + signed sessions + CSRF gate (`apps/api/src/session|csrf|oauth.ts`, routes in `index.ts`)
@@ -46,3 +46,13 @@
 - [x] Contracts: `ServiceCard`, `GuildInfo`, `DataState`, `ErrorEnvelope`, `SessionClaims`
 - [x] Tests 8/8 pass (session/csrf/oauth), `tsc` clean for api-auth + dashboard
 - [x] Self-audit of route wiring: cookie-parse hardening, callback error logging, OAuth param fix — tests re-green
+
+# Phase 5 — protection modules (done, self-audited)
+
+- [x] Security: raid detection, trust scoring + bands, antinuke verdicts, whitelist/lockdown/incident/snapshot SQL,
+      checksum-guarded snapshots + restore planner (`packages/modules/security/`)
+- [x] Moderation: scoped permission checks, 28-day timeout bounds, purge planner (bulk/manual/rejected),
+      case SQL with idempotency (`packages/modules/moderation/`)
+- [x] Logging: stream allowlist, credential redaction, outbox-shaped events (`packages/modules/logging/`)
+- [x] Tests 16/16 pass, `tsc` clean (isolated env)
+- [x] DB tables already exist (`002_domain.sql`); bot command wiring lands with Phase 10 fleet integration
