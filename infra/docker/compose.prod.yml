@@ -1,6 +1,18 @@
 # Production overlay: pinned digests only. No build: — images must be prebuilt + tested.
 # Usage: docker compose -f compose.yml -f compose.prod.yml up -d <svc>
-# Resolve digests at release: docker pull <img> && docker inspect --format='{{.RepoDigests}}' <img>
+# Resolve digests at release on the VPS and replace each REPLACE_ME below:
+#   docker pull postgres:17.5 && docker inspect --format='{{.RepoDigests}}' postgres:17.5
+#   docker pull nginx:1.27.3-alpine && docker inspect --format='{{.RepoDigests}}' nginx:1.27.3-alpine
+# TODO(release): replace digests + add pinned entries for api/web/workers/all bots.
 services:
   postgres: { build: null, image: "postgres:17.5@sha256:REPLACE_ME" }
   nginx: { build: null, image: "nginx:1.27.3-alpine@sha256:REPLACE_ME" }
+  api: { build: null, image: "ei-royality/api:REPLACE_ME" }
+  web: { build: null, image: "ei-royality/web:REPLACE_ME" }
+  bot-security: { build: null, image: "ei-royality/bot-security:REPLACE_ME" }
+  bot-moderation: { build: null, image: "ei-royality/bot-moderation:REPLACE_ME" }
+  bot-community: { build: null, image: "ei-royality/bot-community:REPLACE_ME" }
+  bot-ai: { build: null, image: "ei-royality/bot-ai:REPLACE_ME" }
+  bot-music: { build: null, image: "ei-royality/bot-music:REPLACE_ME" }
+  bot-commerce: { build: null, image: "ei-royality/bot-commerce:REPLACE_ME" }
+  workers: { build: null, image: "ei-royality/workers:REPLACE_ME" }

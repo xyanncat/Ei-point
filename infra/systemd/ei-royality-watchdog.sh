@@ -8,16 +8,18 @@ FAIL_THRESHOLD=3
 STATE_DIR=/var/lib/ei-royality/watchdog
 mkdir -p "$STATE_DIR"
 for svc in $ALLOWED_SERVICES; do
-  if ! docker inspect "$svc" >/dev/null 2>&1; then continue; fi
-  healthy=$(docker inspect --format='{{.State.Health.Status}}' "$svc" 2>/dev/null || echo "none")
-  running=$(docker inspect --format='{{.State.Running}}' "$svc")
+  # Compose-aware lookup: containers are <project>-<service>-<n>; match by compose service label.
+  cid=$(docker ps -q --filter "label=com.docker.compose.service=$svc" | head -n 1)
+  if [ -z "$cid" ]; then continue; fi
+  healthy=$(docker inspect --format='{{.State.Health.Status}}' "$cid" 2>/dev/null || echo "none")
+  running=$(docker inspect --format='{{.State.Running}}' "$cid")
   if [ "$running" != "true" ] || [ "$healthy" = "unhealthy" ]; then
     count=$(cat "$STATE_DIR/$svc.count" 2>/dev/null || echo 0)
     count=$((count + 1))
     echo "$count" > "$STATE_DIR/$svc.count"
     if [ "$count" -ge "$FAIL_THRESHOLD" ]; then
-      logger -t ei-royality-watchdog "restarting $svc after $count failures"
-      docker restart "$svc" >/dev/null
+      logger -t ei-royality-watchdog "restarting $svc ($cid) after $count failures"
+      docker restart "$cid" >/dev/null
       echo 0 > "$STATE_DIR/$svc.count"
     fi
   else

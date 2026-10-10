@@ -14,5 +14,8 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "migrate": "node infra/postgres/run-migrations.mjs"
+  },
+  "dependencies": {
+    "pg": "8.13.1"
   }
 }

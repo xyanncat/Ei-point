@@ -17,6 +17,8 @@ const { Client } = await import("pg").catch(() => {
 });
 const client = new Client({ connectionString: process.env.DATABASE_URL });
 await client.connect();
+// ops schema must exist before the ledger (fresh DBs have no schemas yet).
+await client.query(`CREATE SCHEMA IF NOT EXISTS ops`);
 await client.query(`CREATE TABLE IF NOT EXISTS ops.schema_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
 for (const f of files) {
   const done = await client.query(`SELECT 1 FROM ops.schema_migrations WHERE name=$1`, [f]);

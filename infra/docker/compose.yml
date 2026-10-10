@@ -5,10 +5,11 @@ services:
     #   docker pull postgres:17.5 && docker inspect --format='{{.RepoDigests}}' postgres:17.5
     image: "postgres:17.5"
     restart: unless-stopped
-    command: ["postgres", "-c", "max_connections=120", "-c", "shared_buffers=2GB", "-c", "wal_level=replica", "-c", "archive_mode=on", "-c", "archive_command=/usr/local/bin/archive-wal.sh %p"]
+    # Phase 2: archiving OFF. Phase 9 enables pgBackRest with a real archive_command + repo mount.
+    command: ["postgres", "-c", "max_connections=120", "-c", "shared_buffers=2GB", "-c", "wal_level=replica"]
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-ei_royality_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -26,14 +27,23 @@ services:
       retries: 5
       start_period: 30s
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+    # Note: POSTGRES_USER here is the admin bootstrap login (see .env.example).
+    # App services connect via DATABASE_URL with the least-privilege ei_royality_app login.
 
   nginx:
     image: "nginx:1.27.3-alpine"
     restart: unless-stopped
     ports: ["127.0.0.1:8080:8080"]
     volumes:
-      - ../nginx/nginx.conf:ro:/etc/nginx/nginx.conf:ro
+      - type: bind
+        source: ../nginx/nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
       - artwork:/srv/artwork:ro
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /run
     networks: [edge, app]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy:

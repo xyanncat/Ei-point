@@ -1,6 +1,17 @@
 FROM node:24.8.0-bookworm-slim AS base
-# NOTE: verify on target VPS (no AVX/AES-NI per benchmark §1). Build off hot path; ship digests.
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml ./
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
-CMD ["node", "--version"]
+COPY packages/runtime/package.json ./packages/runtime/
+COPY packages/contracts/package.json ./packages/contracts/
+COPY apps/api/package.json ./apps/api/
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --frozen-lockfile --filter @ei-royality/api...
+COPY . .
+RUN pnpm --filter @ei-royality/api build
+
+FROM node:24.8.0-bookworm-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=base /app/apps/api/dist ./dist
+COPY --from=base /app/apps/api/package.json ./
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --prod --frozen-lockfile
+CMD ["node", "dist/index.js"]
