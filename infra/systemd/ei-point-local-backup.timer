@@ -1,0 +1,12 @@
+[Unit]
+Description=Ei Point local backup every 6h (§9 local tier)
+After=docker.service
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=6h
+Persistent=true
+Unit=ei-point-local-backup.service
+
+[Install]
+WantedBy=timers.target

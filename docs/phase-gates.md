@@ -111,6 +111,7 @@
 # Phase 9 — Operations (done, self-audited)
 
 - [x] Backups: pgBackRest configuration (`infra/backup/pgbackrest.conf`) for base backups and WAL streaming to off-host S3; restic file volume backup script (`infra/backup/restic-backup.sh`) with 7-daily/4-weekly retention and music-cache exclusions.
+- [x] Local VPS tier (no outer source): `infra/backup/local-backup.sh` (pg_dump -Fc + roles + artwork tarball + manifest, 700/600 perms) on a 6h systemd timer (`infra/systemd/ei-point-local-backup.*`), 28-snapshot retention, atomic publish via `.partial` + rename.
 - [x] Host Watchdog: startup grace check, consecutive-failure threshold, bounded hourly restart budget (`MAX_RESTARTS_PER_HOUR=3`), and disk usage alerts at 70/80/90% (`infra/systemd/ei-point-watchdog.sh`).
 - [x] Resolver checks: DNS audit script asserting 1.1.1.1 is never used and probing fallback resolvers (`scripts/check-dns-resolvers.sh`).
 - [x] Monitoring & Fleet Health: multi-service health probe covering all 6 bot HTTP ports, API, Nginx, and `ops.service_status` (`scripts/health-fleet.sh`).
