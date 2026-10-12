@@ -28,9 +28,9 @@ trap 'rm -rf "$WORK"' EXIT
 
 # Load DB credentials (600-root file, never echoed).
 if [ -f "$ENV_FILE" ]; then
+  set -a
   # shellcheck disable=SC1090
   # shellcheck source=/srv/ei-point/.env
-  set -a
   . "$ENV_FILE"
   set +a
 fi
