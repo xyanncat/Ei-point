@@ -30,7 +30,9 @@ trap 'rm -rf "$WORK"' EXIT
 if [ -f "$ENV_FILE" ]; then
   # shellcheck disable=SC1090
   # shellcheck source=/srv/ei-point/.env
-  set -a; . "$ENV_FILE"; set +a
+  set -a
+  . "$ENV_FILE"
+  set +a
 fi
 POSTGRES_ADMIN_USER="${POSTGRES_ADMIN_USER:-ei_point_admin}"
 POSTGRES_DB="${POSTGRES_DB:-ei_point}"
