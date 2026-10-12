@@ -29,6 +29,7 @@ trap 'rm -rf "$WORK"' EXIT
 # Load DB credentials (600-root file, never echoed).
 if [ -f "$ENV_FILE" ]; then
   # shellcheck disable=SC1090
+  # shellcheck source=/srv/ei-point/.env
   set -a; . "$ENV_FILE"; set +a
 fi
 POSTGRES_ADMIN_USER="${POSTGRES_ADMIN_USER:-ei_point_admin}"
@@ -83,7 +84,12 @@ trap - EXIT
 
 # Prune oldest beyond $KEEP (newest-first sort keeps $KEEP; partials excluded —
 # startup already swept them, this is belt-and-braces for concurrent readers).
-mapfile -t snaps < <(ls -1d "$BACKUP_ROOT"/*/ 2>/dev/null | grep -v '\.partial/$' | sort -r || true)
+mapfile -t all_snaps < <(ls -1d "$BACKUP_ROOT"/*/ 2>/dev/null | sort -r || true)
+snaps=()
+for d in "${all_snaps[@]}"; do
+  case "$d" in *.partial/) continue;; esac
+  snaps+=("$d")
+done
 if [ "${#snaps[@]}" -gt "$KEEP" ]; then
   for old in "${snaps[@]:$KEEP}"; do rm -rf "$old"; done
   echo "[INFO] pruned to $KEEP snapshots"
