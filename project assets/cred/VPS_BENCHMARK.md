@@ -112,6 +112,34 @@ offered; RAM and disk are effectively unlimited for this workload; bake the
 cached-resolver + explicit Docker DNS config in from day one; one backup job
 must cover Postgres + Mongo + all file data, verified and off-host.
 
+## Re-benchmark — 2026-10-12 (fresh install, Ei-Point baseline)
+
+Host reinstalled (same provider/specs), measured on the clean Debian 13 + Ei-Point setup:
+
+| Test | Result | vs old baseline |
+|---|---:|---|
+| CPU | 10 vCPU "Common KVM processor", **no AVX/AES-NI/SSE4.2** | same |
+| AES-256-CBC | 43 MB/s (16B) → 178 MB/s (8KB) | ~same (software AES) |
+| SHA-256 | 19 MB/s (16B) → 199 MB/s (16KB) | same |
+| Mem write / read (4 GiB tmpfs) | 244 MB/s / 1.4 GB/s | methodology differs from old "copy" test |
+| Disk write 1 GiB (oflag=direct) | 306 MB/s | old: 635–1200 MB/s (write-cache method) |
+| Disk read 1 GiB (cached) | 4.3 GB/s | old: 6.3 GB/s |
+| Ping 8.8.8.8 | 1.32 ms avg (transient packet loss observed) | same |
+| WAN download 100 MB | **20.4 MB/s ≈ 163 Mbps** (proof.ovh.net; hetzner endpoint fails) | old: 40 Mbps — improved |
+| DNS cached (resolved stub) | 11–17 ms | same |
+| Discord REST `/gateway` | **45 ms** | old: 290 ms — improved |
+| Swap | 16 GiB /swapfile active, swappiness=10 | same |
+| Disk usage | 492 G, ~10–16 G used (4% incl. swapfile) | fresh |
+| Toolchain | Docker 29.9.0 + Compose v5.6.0, Node 24.8.0, pnpm 9.12.0 | pinned versions verified |
+| VPS test suite | `pnpm test` **exit 0** (phase6 18/18, phase4 5/5, controls 4/4, api 41/41) | first full pass on target |
+
+Networking/DNS hardening applied on install: systemd-networkd DHCP config for `ens18` (was DOWN with no config), resolver pinned to 8.8.8.8/9.9.9.9 via systemd-resolved (1.1.1.1 removed everywhere), Docker + Node + swap provisioned.
+
+Known VPS quirks recorded during setup:
+- coterm serial socket is flaky (dashboard console loses the connection/freezes; reopen a fresh xterm.js session from the dashboard to recover). Matches old finding #10.
+- `speed.cloudflare.com` and `speed.hetzner.de` endpoints are blocked/unusable from this VM; use proof.ovh.net for WAN tests.
+- embedded-postgres tests need the `locales` package + `en_US.UTF-8` generated (`locale-gen`), otherwise `initdb` fails on the library's hardcoded `--lc-messages=en_US.UTF-8`.
+
 ## History
 
 | Date | Overall | Notes |
