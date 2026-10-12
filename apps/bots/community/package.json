@@ -1,0 +1,20 @@
+{
+  "name": "@ei-point/bot-community",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "discord.js": "14.16.3",
+    "pg": "8.13.1",
+    "@ei-point/flow": "workspace:*",
+    "@ei-point/module-community": "workspace:*",
+    "@ei-point/module-games": "workspace:*"
+  },
+  "devDependencies": { "typescript": "5.6.3", "tsx": "4.19.2", "@types/node": "24.3.0", "@types/pg": "8.11.10" }
+}

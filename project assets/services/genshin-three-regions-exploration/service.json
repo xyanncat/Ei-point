@@ -1,0 +1,13 @@
+{
+  "slug": "genshin-three-regions-exploration",
+  "sku": "genshin-three-regions-exploration",
+  "name": "Any 3 Regions (100%)",
+  "game": "Genshin Impact",
+  "category": "Exploration",
+  "description": "Complete 100% exploration across three selected regions.",
+  "duration": "3 regions · 100% exploration",
+  "price_minor": 149900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

@@ -14,6 +14,10 @@ describe("welcomes", () => {
 });
 
 describe("embeds", () => {
+  it("rejects combined embed length and invalid color", () => {
+    assert.equal(buildEmbed({ title: 't'.repeat(256), description: 'd'.repeat(4096), fields: [{ name: 'n', value: 'v'.repeat(1024) }, { name: 'n', value: 'v'.repeat(1024) }] }), null);
+    assert.equal(buildEmbed({ title: 'a', description: 'b', color: -1 }), null);
+  });
   it("accepts valid embeds", () => {
     const e = buildEmbed({ title: "News", description: "hi", fields: [{ name: "a", value: "b" }] });
     assert.equal(e?.title, "News");

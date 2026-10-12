@@ -1,6 +1,20 @@
 // Contract-first schemas (§10 Phase 2). OpenAPI + events grow here; bots/API import types from this package.
-export const BOT_KEYS = ["security", "moderation", "community", "ai", "music", "commerce"] as const;
+export type { paths as DashboardApiPaths, components as DashboardApiSchemas } from './dashboard-api.js';
+export const BOT_KEYS = ["kafka", "cyrene", "robin", "cipher", "silverwolf", "himiko"] as const;
 export type BotKey = (typeof BOT_KEYS)[number];
+
+// Legacy module keys (pre-rename) mapped to the new identities.
+// kafka = security+moderation+logging, cyrene = ai+search+tts,
+// robin = music, cipher = commerce, silverwolf = community+games,
+// himiko = embed+announce.
+export const BOT_MODULES: Record<BotKey, string[]> = {
+  kafka: ["security", "moderation", "logging"],
+  cyrene: ["ai", "search", "tts"],
+  robin: ["music"],
+  cipher: ["commerce"],
+  silverwolf: ["community", "games"],
+  himiko: ["embed", "announce"],
+};
 
 export interface HealthReport {
   service: string;
@@ -24,7 +38,10 @@ export interface OutboxEvent<T = unknown> {
 export type ServiceState = "ok" | "degraded" | "down" | "unknown";
 
 export interface ServiceCard {
-  botKey: BotKey;
+  botKey: string;
+  modules?: string[];
+  stale?: boolean;
+  provider?: ServiceState;
   state: ServiceState;
   gateway: ServiceState;
   dbReady: boolean;
@@ -36,6 +53,7 @@ export interface GuildInfo {
   guildId: string;
   name: string;
   approved: boolean;
+  scopes?: string[];
 }
 
 export type DataState = "loading" | "empty" | "failed" | "stale" | "saving" | "confirmed" | "ready";
@@ -49,7 +67,17 @@ export interface ErrorEnvelope {
 
 export interface SessionClaims {
   discordUserId: string;
+  sessionId?: string;
   expiresAt: number; // epoch ms
+}
+
+export interface DashboardOverview {
+  guild: GuildInfo;
+  cards: ServiceCard[];
+  stale: boolean;
+  fetchedAt: string;
+  incidents: { id: string; kind: string; severity: string; createdAt: string }[];
+  actions: { id: string; key: string; version: number; changedAt: string }[];
 }
 
 // Phase 7 — public order verification. Only safe-to-publish fields;

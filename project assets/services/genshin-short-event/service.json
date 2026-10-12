@@ -1,0 +1,13 @@
+{
+  "slug": "genshin-short-event",
+  "sku": "genshin-short-event",
+  "name": "Short Event",
+  "game": "Genshin Impact",
+  "category": "Event service",
+  "description": "Limited-time events are completed before they end whenever possible.",
+  "duration": "Short event",
+  "price_minor": 15000,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

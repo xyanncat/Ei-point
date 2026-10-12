@@ -3,3 +3,12 @@ dist
 .git
 .env
 coverage
+project assets/*
+!project assets/services
+!project assets/Cards
+tests
+**/node_modules
+**/dist
+**/.next
+**/.next-production
+**/.env*

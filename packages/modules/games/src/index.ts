@@ -102,10 +102,12 @@ export async function executeBuy(
   const moved = await db.query(TRANSFER_INSTANCE_SQL, [row.instance_id, args.buyerId, row.seller_id]);
   if (moved.rowCount !== 1) return { ok: false, reason: "transfer-failed" };
 
-  await db.query(ADJUST_BALANCE_SQL, [row.guild_id, args.buyerId, -row.price_minor]);
-  await db.query(ADJUST_BALANCE_SQL, [row.guild_id, row.seller_id, row.price_minor]);
+  await db.query(ENSURE_BALANCE_SQL, [row.guild_id, row.seller_id]);
+  const debit = await db.query(ADJUST_BALANCE_SQL, [row.guild_id, args.buyerId, -row.price_minor]);
+  const credit = await db.query(ADJUST_BALANCE_SQL, [row.guild_id, row.seller_id, row.price_minor]);
+  if (debit.rowCount !== 1 || credit.rowCount !== 1) throw new Error('balance-update-failed');
   const closed = await db.query(CLOSE_LISTING_SQL, [args.listingId]);
-  if (closed.rowCount !== 1) return { ok: false, reason: "listing-unavailable" };
+  if (closed.rowCount !== 1) throw new Error('listing-close-failed');
   return { ok: true };
 }
 
@@ -134,3 +136,5 @@ export const CREATE_TRADE_SQL = `
 
 export const SET_TRADE_SQL = `
   UPDATE games.trades SET status = $2 WHERE trade_id = $1 AND status = 'pending'`;
+
+export * from './service.js';

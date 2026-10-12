@@ -1,0 +1,13 @@
+{
+  "slug": "genshin-reputation-quests",
+  "sku": "genshin-reputation-quests",
+  "name": "Reputation Quests",
+  "game": "Genshin Impact",
+  "category": "Quest service",
+  "description": "Focused reputation quest progression for your selected account.",
+  "duration": "Reputation progress",
+  "price_minor": 149900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

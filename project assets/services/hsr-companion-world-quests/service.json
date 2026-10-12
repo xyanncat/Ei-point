@@ -1,0 +1,13 @@
+{
+  "slug": "hsr-companion-world-quests",
+  "sku": "hsr-companion-world-quests",
+  "name": "Companion Missions + World Quests",
+  "game": "Honkai: Star Rail",
+  "category": "Quest service",
+  "description": "Complete companion stories and world quests for broader account progress.",
+  "duration": "15–30 days",
+  "price_minor": 299900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

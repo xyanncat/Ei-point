@@ -1,0 +1,13 @@
+{
+  "slug": "hsr-per-planet-exploration",
+  "sku": "hsr-per-planet-exploration",
+  "name": "Per Planet Exploration",
+  "game": "Honkai: Star Rail",
+  "category": "Exploration",
+  "description": "Focused exploration support for one Star Rail planet.",
+  "duration": "1–2 weeks",
+  "price_minor": 99900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

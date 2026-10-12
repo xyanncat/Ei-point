@@ -1,0 +1,13 @@
+{
+  "slug": "genshin-character-story-quests",
+  "sku": "genshin-character-story-quests",
+  "name": "All Character Story Quests",
+  "game": "Genshin Impact",
+  "category": "Quest service",
+  "description": "Complete character story quests for your selected account.",
+  "duration": "Up to 60 days",
+  "price_minor": 499900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

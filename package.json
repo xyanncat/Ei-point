@@ -1,5 +1,5 @@
 {
-  "name": "ei-royality",
+  "name": "ei-point",
   "private": true,
   "version": "0.1.0",
   "packageManager": "pnpm@9.12.0",
@@ -10,12 +10,20 @@
   "scripts": {
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
+    "test": "pnpm --filter @ei-point/contracts build && pnpm --filter @ei-point/flow build && pnpm -r test && pnpm test:phase6 && pnpm test:phase4 && node --test tests/controls/database.test.mjs",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck",
-    "migrate": "node infra/postgres/run-migrations.mjs"
+    "typecheck": "pnpm --filter @ei-point/contracts build && pnpm --filter @ei-point/flow build && pnpm --filter @ei-point/module-games build && pnpm --filter @ei-point/module-community build && pnpm -r typecheck",
+    "migrate": "node infra/postgres/run-migrations.mjs",
+    "generate:dashboard-api": "openapi-typescript apps/api/src/openapi.json -o packages/contracts/src/dashboard-api.ts",
+    "test:phase6": "pnpm --filter @ei-point/flow build && pnpm --filter @ei-point/module-games build && pnpm --filter @ei-point/module-community build && pnpm --filter @ei-point/bot-community build && node --test tests/phase6/*.test.mjs",
+    "test:phase4": "pnpm --filter @ei-point/contracts build && pnpm --filter @ei-point/api build && node --test tests/phase4/*.test.mjs"
   },
   "dependencies": {
     "pg": "8.13.1"
+  },
+  "devDependencies": {
+    "@types/pg": "8.11.10",
+    "embedded-postgres": "17.5.0-beta.15",
+    "openapi-typescript": "7.10.1"
   }
 }

@@ -1,18 +1,13 @@
-FROM node:24.8.0-bookworm-slim AS base
+FROM node:24.8.0-bookworm-slim AS build
 WORKDIR /app
-COPY package.json pnpm-workspace.yaml ./
-COPY packages/runtime/package.json ./packages/runtime/
-COPY packages/contracts/package.json ./packages/contracts/
-COPY apps/bots/security/package.json ./apps/bots/security/
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --no-frozen-lockfile --filter @ei-royality/bot-security...
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 COPY . .
-RUN pnpm --filter @ei-royality/bot-security build
+RUN pnpm install --frozen-lockfile && pnpm --filter @ei-point/flow build && pnpm --filter @ei-point/contracts build && pnpm --filter @ei-point/module-security build && pnpm --filter @ei-point/bot-security build
+RUN pnpm --filter @ei-point/bot-security deploy --prod /release
 
-FROM node:24.8.0-bookworm-slim AS runtime
+FROM node:24.8.0-bookworm-slim
 WORKDIR /app
+COPY --from=build --chown=node:node /release /app
+USER node
 ENV NODE_ENV=production
-# TODO(release): switch to pnpm deploy --prod + committed pnpm-lock.yaml --frozen-lockfile once lockfile lands.
-COPY --from=base /app/apps/bots/security/dist ./dist
-COPY --from=base /app/apps/bots/security/package.json ./
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --prod --no-frozen-lockfile
 CMD ["node", "dist/index.js"]

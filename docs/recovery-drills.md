@@ -1,4 +1,4 @@
-# Ei Royality — Recovery Drills (Phase 2 stub → executed in Phase 9–10)
+# Ei Point — Recovery Drills (Phase 2 stub → executed in Phase 9–10)
 
 Targets (§9): DB RPO ≤ 5 min, files RPO ≤ 24 h, full-service RTO ≤ 2 h. Measure — don't assume.
 

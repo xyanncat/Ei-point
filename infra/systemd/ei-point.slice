@@ -1,0 +1,9 @@
+[Unit]
+Description=Ei Point project slice
+Before=slices.target
+
+[Slice]
+CPUQuota=800%
+MemoryHigh=32G
+MemoryMax=40G
+MemorySwapMax=2G

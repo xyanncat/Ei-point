@@ -1,0 +1,15 @@
+# Kafka frontend
+
+All public routes now share a Kafka frame, portrait logo, active navigation, locally served supplied artwork, animated silk and falling petals. Game services, membership, referrals and verification each have distinct art compositions. The homepage and dashboard heroes are preserved. Supplied artwork is copied without edits; CSS crops the tea portrait for the logo and frames the other images. The UI-reference image informs typography and curved line composition; it is not rendered as a screenshot of a website.
+
+Public ambient motion and individual artwork motion can be paused. Reduced-motion preferences stop the effects. Verification without a token shows guidance and a token form, short tokens show an incomplete-token state, and unknown/unavailable orders retain an honest error state. Service cards direct users to staff; they do not imply a checkout flow that has not been implemented.
+
+The visible product name is Ei point; the checkout and package identifiers remain unchanged. The accepted hero is retained. Supporting dashboard sections now use service dossiers with module chips and large emblems, a silk-toned navigation rail, timeline feeds, and matching detail dialogs. The sign-in screen pairs a full-height animated Kafka portrait with a framed Discord sign-in panel, stacking on mobile.
+
+The homepage and dashboard hero use Kafka from Honkai: Star Rail as their character reference. Burgundy hair, cream tailoring, black fabric and gold jewelry informed the wine, ivory and brass palette. The dashboard uses an editorial serif hero, fine borders and connected fleet panels rather than rounded pastel tiles. Operational labels and health colors remain readable.
+
+`apps/dashboard/components/kafka-scene.tsx` animates the character illustration with a breathing sway and pointer parallax. SVG silk threads and CSS butterflies move separately. This is an animated illustration, not a Live2D rig or a character video. The motion button pauses the scene; operating-system reduced-motion preferences disable it. There is no animation library, video streaming or server rendering loop. Artwork is served locally with the dashboard image.
+
+The built-in image generation tool produced `apps/dashboard/public/art/kafka-hero.png` using the user's supplied reference. Prompt: premium anime Kafka illustration; burgundy hair, violet eyes, sunglasses, white blouse, cream jacket, black skirt, gold accessories; confident sunglasses-adjusting pose, windswept hair and burgundy rim light; one character, no text, logos or watermark. The request specified transparency; the delivered artwork has a painted backdrop, blended into the scene using CSS edge masking. The original supplied reference is not required at runtime.
+
+Verification: production Next build and browser QA at desktop and mobile sizes. Check animation pause/resume, reduced motion, local artwork loading, no horizontal overflow, guild selection, search, bot details, focus return, refresh failures, and authentication states. Local preview uses the existing explicitly labeled demo API; live Discord and VPS release gates remain documented in `phase4-dashboard.md`.

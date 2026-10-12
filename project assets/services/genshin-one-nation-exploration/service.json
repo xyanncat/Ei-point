@@ -1,0 +1,19 @@
+{
+  "slug": "genshin-one-nation-exploration",
+  "sku": "genshin-one-nation-exploration",
+  "name": "One Nation Full Exploration",
+  "game": "Genshin Impact",
+  "category": "Exploration",
+  "description": "Complete one nation’s exploration with its key progression work.",
+  "duration": "Up to 60 days",
+  "price_minor": 499900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js",
+  "inclusions": [
+    "Character story quests",
+    "World quests",
+    "Oculus collection",
+    "Reputation quests"
+  ]
+}

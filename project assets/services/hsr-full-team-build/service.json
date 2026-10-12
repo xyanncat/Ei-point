@@ -1,0 +1,19 @@
+{
+  "slug": "hsr-full-team-build",
+  "sku": "hsr-full-team-build",
+  "name": "Full Team Build (4 Characters)",
+  "game": "Honkai: Star Rail",
+  "category": "Character build",
+  "description": "Build a complete four-character team for your selected account.",
+  "duration": "Up to 30 days",
+  "price_minor": 199900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js",
+  "facts": [
+    [
+      "Payment requirement",
+      "Advance payment required"
+    ]
+  ]
+}

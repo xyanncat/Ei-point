@@ -1,52 +1,38 @@
-import type { CatalogItem } from "@ei-royality/contracts";
-import { DataStateView } from "../../components/status";
-
-async function fetchCatalog(): Promise<CatalogItem[] | null> {
-  const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3001";
-  try {
-    const res = await fetch(`${base}/api/catalog`, { cache: "no-store" });
-    if (!res.ok) return null;
-    return ((await res.json()) as { items: CatalogItem[] }).items;
-  } catch {
-    return null;
-  }
-}
-
-export default async function ServicesPage() {
-  const items = await fetchCatalog();
-  if (items == null) {
-    return (
-      <section aria-label="Game services">
-        <h1>Game services</h1>
-        <DataStateView state="failed" detail="Catalog unavailable — retry shortly." />
-      </section>
-    );
-  }
-  if (items.length === 0) {
-    return (
-      <section aria-label="Game services">
-        <h1>Game services</h1>
-        <DataStateView state="empty" detail="No services on sale right now." />
-      </section>
-    );
-  }
+import { PageArt } from "../../components/page-art";
+import { ServiceCatalog } from "../../components/service-catalog";
+export default function ServicesPage() {
   return (
     <section aria-label="Game services">
-      <h1>Game services</h1>
-      <p className="lede">Prices are set by the server. What you see is what you pay — no discounts to haggle, no surprises at checkout.</p>
-      <ul className="service-grid">
-        {items.map((item, i) => (
-          <li key={item.sku} className="clip-panel" style={i === 0 ? { borderColor: "var(--gold)" } : undefined}>
-            <h2>{item.name}</h2>
-            <p className="display-number">
-              {(item.priceMinor / 100).toFixed(2)} <span style={{ fontSize: "1rem" }}>{item.currency}</span>
-            </p>
+      <div className="ei-page-layout">
+        <div className="ei-page-body">
+          <p>Game services</p>
+          <h1>
+            Make your
+            <br />
+            next move.
+          </h1>
+          <p className="lede">
+            Quest progression, exploration and character builds from the
+            original Ei Paradise catalog. Choose a game and find the support
+            your account needs.
+          </p>
+          <div className="clip-panel">
+            <h2>Original services, preserved</h2>
             <p>
-              <a href="/verify">Pay, then verify your order</a>
+              These service definitions and INR prices come from the supplied
+              archive. Staff confirm availability and the final order before
+              payment.
             </p>
-          </li>
-        ))}
-      </ul>
+            <a className="ei-action" href="#catalog">
+              Browse all services
+            </a>
+          </div>
+        </div>
+        <PageArt src="/art/kafka-tea.png" caption="The next move is yours." />
+      </div>
+      <div id="catalog">
+        <ServiceCatalog />
+      </div>
     </section>
   );
 }

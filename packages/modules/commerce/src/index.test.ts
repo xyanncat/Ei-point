@@ -31,7 +31,7 @@ describe("money + tokens", () => {
 
 describe("upi payload", () => {
   it("builds a valid upi://pay string", () => {
-    const p = buildUpiPayload({ payeeVpa: "shop@upi", payeeName: "Ei Royality", amountMinor: 19900, note: "order-1" });
+    const p = buildUpiPayload({ payeeVpa: "shop@upi", payeeName: "Ei Point", amountMinor: 19900, note: "order-1" });
     assert.ok(p?.startsWith("upi://pay?"));
     assert.ok(p?.includes("pa=shop%40upi"));
     assert.ok(p?.includes("am=199.00"));

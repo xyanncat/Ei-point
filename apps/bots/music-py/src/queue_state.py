@@ -15,6 +15,8 @@ class Track:
     track_id: str
     title: str
     duration_ms: int
+    url: str = ""
+    webpage_url: str = ""
 
 
 @dataclass
@@ -69,7 +71,16 @@ class QueueState:
 
     def snapshot(self) -> dict:
         return {
-            "queue": [{"track_id": t.track_id, "title": t.title, "duration_ms": t.duration_ms} for t in self.tracks],
+            "queue": [
+                {
+                    "track_id": t.track_id,
+                    "title": t.title,
+                    "duration_ms": t.duration_ms,
+                    "url": getattr(t, "url", ""),
+                    "webpage_url": getattr(t, "webpage_url", ""),
+                }
+                for t in self.tracks
+            ],
             "position": self.position,
             "position_ms": self.position_ms,
             "loop_mode": self.loop_mode,
@@ -78,7 +89,16 @@ class QueueState:
 
     @classmethod
     def restore(cls, data: dict) -> "QueueState":
-        tracks = [Track(track_id=t["track_id"], title=t["title"], duration_ms=t["duration_ms"]) for t in data.get("queue", [])]
+        tracks = [
+            Track(
+                track_id=t["track_id"],
+                title=t["title"],
+                duration_ms=t.get("duration_ms", 0),
+                url=t.get("url", ""),
+                webpage_url=t.get("webpage_url", ""),
+            )
+            for t in data.get("queue", [])
+        ]
         q = cls(tracks=tracks)
         q.position = min(int(data.get("position", 0)), max(0, len(tracks) - 1)) if tracks else 0
         q.position_ms = max(0, int(data.get("position_ms", 0)))

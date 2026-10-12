@@ -1,0 +1,13 @@
+{
+  "slug": "genshin-main-event",
+  "sku": "genshin-main-event",
+  "name": "Main Event",
+  "game": "Genshin Impact",
+  "category": "Event service",
+  "description": "Limited-time events are completed before they end whenever possible.",
+  "duration": "Main event",
+  "price_minor": 20000,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

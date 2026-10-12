@@ -136,6 +136,16 @@ describe("concurrent double-buy", () => {
   });
 });
 describe("market buy", () => {
+  it('does not report success when a balance update fails after transfer', async () => {
+    const db = {
+      query: async (sql: string) => {
+        if (sql.includes('FROM games.listings')) return { rows: [{ guild_id: 'g', seller_id: 's', instance_id: 'i', price_minor: 100, status: 'open' }], rowCount: 1 };
+        if (sql.includes('FROM games.balances')) return { rows: [{ amount_minor: '500' }], rowCount: 1 };
+        return { rows: [], rowCount: sql.includes('games.balances SET') ? 0 : 1 };
+      },
+    };
+    await assert.rejects(executeBuy(db, { listingId: 'l', buyerId: 'b' }), /balance-update-failed/);
+  });
   interface Row {
     rows: Array<Record<string, unknown>>;
     rowCount: number;

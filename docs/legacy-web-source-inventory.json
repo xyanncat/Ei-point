@@ -1,0 +1,738 @@
+{
+  "files": [
+    {
+      "path": "EI-point/dashboard/AGENTS.md",
+      "sha256": "ec1b6e023814ae1a510b02ea62229e5eb035d75e39e3335d5ea7f5ce5654d567",
+      "lines": 10
+    },
+    {
+      "path": "EI-point/dashboard/next-env.d.ts",
+      "sha256": "1b59d4c6b83807db275d43f3cf2cc8e9323f465fab764eea091cc5becd5bad37",
+      "lines": 8
+    },
+    {
+      "path": "EI-point/dashboard/package.json",
+      "sha256": "e173d5da88243e8f08a9f381fe35a8313c75524b2e052836e6c75a9a56a8e330",
+      "lines": 36
+    },
+    {
+      "path": "EI-point/dashboard/postcss.config.js",
+      "sha256": "2641bdb583f3f2a6c8433dcd9034c1e4d991a9271c79386032fabca8237f1fd3",
+      "lines": 9
+    },
+    {
+      "path": "EI-point/dashboard/proxy.ts",
+      "sha256": "c45764d900cd3441f3a0b9905fa357fe56dcad338628cb01db7a0fccff85fe1b",
+      "lines": 180
+    },
+    {
+      "path": "EI-point/dashboard/tailwind.config.ts",
+      "sha256": "5a9fa254ca97b4bcea3569edbb0c8095987017a0b1b1666a9874dee9a06ebec5",
+      "lines": 135
+    },
+    {
+      "path": "EI-point/dashboard/tsconfig.json",
+      "sha256": "ed364ee4547eb7b41982f13b1bf2c952f6865def5005ba2161cde3df82263efd",
+      "lines": 50
+    },
+    {
+      "path": "EI-point/dashboard/vitest.config.ts",
+      "sha256": "c0ed1babb9acff199b9869e696a79d486dea87b4b7e028c4d288cd91ac2a1e82",
+      "lines": 16
+    },
+    {
+      "path": "EI-point/dashboard/.vercel/project.json",
+      "sha256": "266ca9f390a5ad4d7639d55aae70bcce56a68cebdf2864899988e7c940dfb5d2",
+      "lines": 1
+    },
+    {
+      "path": "EI-point/dashboard/app/error.tsx",
+      "sha256": "cb21b7ef8d1f54a553bf1387fad78a0a2b12d2ad62f95cbdeee926c115d687c2",
+      "lines": 78
+    },
+    {
+      "path": "EI-point/dashboard/app/global-error.tsx",
+      "sha256": "fb089187ca21c268642a6850b502baf3a2ad2d6fb16e1935ed767740486d7ebc",
+      "lines": 87
+    },
+    {
+      "path": "EI-point/dashboard/app/globals.css",
+      "sha256": "de97697009f0f926d8c68f6aa2fda14b09a45e1d8185e2b4d2d66634f396e5bf",
+      "lines": 415
+    },
+    {
+      "path": "EI-point/dashboard/app/layout.tsx",
+      "sha256": "dc3cfb56cf58a5f95477e85f47f7c234eae1825780b0e7c62436a8008693aa47",
+      "lines": 48
+    },
+    {
+      "path": "EI-point/dashboard/app/not-found.tsx",
+      "sha256": "dd6e3738fa6ed3e7142f466a9091daea53c73724e697fdaf9836235452e1eaa9",
+      "lines": 59
+    },
+    {
+      "path": "EI-point/dashboard/app/page.tsx",
+      "sha256": "a49afa7defaa53a47f26acf799c89043a16b99ed7359caacf162c1442d861922",
+      "lines": 33
+    },
+    {
+      "path": "EI-point/dashboard/lib/api-response.ts",
+      "sha256": "51374da949000118892f241d8f566f921068c64fbe53c80d77a788e7db9ea4eb",
+      "lines": 49
+    },
+    {
+      "path": "EI-point/dashboard/lib/authz.test.ts",
+      "sha256": "aa1b0cb33f62a1a0762faf16b4c0b802af930d86e7da4da3b84cde86cb145f9e",
+      "lines": 61
+    },
+    {
+      "path": "EI-point/dashboard/lib/authz.ts",
+      "sha256": "9225b66154f3dc9fba6108cdc4d99d36ace04f050a1b707408862fb8b6f7a99f",
+      "lines": 140
+    },
+    {
+      "path": "EI-point/dashboard/lib/bot-meta.ts",
+      "sha256": "a9eb1ff57a071b41dd534054b8125d1f1fcdc59f31be16053134bd6510047fbc",
+      "lines": 24
+    },
+    {
+      "path": "EI-point/dashboard/lib/bots.test.ts",
+      "sha256": "f52486b7c5bdb54f154a42c5f1d72b1945c96c40bfadca6eab740db30aa91366",
+      "lines": 16
+    },
+    {
+      "path": "EI-point/dashboard/lib/bots.ts",
+      "sha256": "21927543b9f9e5199eb3be8ff4c758a7b9d1dd89df15efefdb0c555767b942d7",
+      "lines": 107
+    },
+    {
+      "path": "EI-point/dashboard/lib/demo.test.ts",
+      "sha256": "d529adc5370460c4267a38dfee9737576bf5126bd091e4da51699db1318abd0b",
+      "lines": 49
+    },
+    {
+      "path": "EI-point/dashboard/lib/demo.ts",
+      "sha256": "cb75a91063c2a5e6810ac0351e95368c5bb6b971b6c7344f5d32e15b465be77c",
+      "lines": 427
+    },
+    {
+      "path": "EI-point/dashboard/lib/discord-verify.test.ts",
+      "sha256": "f3c493522a1ae6cc2f7c57f19c6d2ae9cf8584982bdc5839559a46f66eb3eb0d",
+      "lines": 148
+    },
+    {
+      "path": "EI-point/dashboard/lib/discord-verify.ts",
+      "sha256": "3a0b48a6e57d94ab391be71b0347575fb54d4a93ca97082ccacf8264f33c4ee1",
+      "lines": 199
+    },
+    {
+      "path": "EI-point/dashboard/lib/format.test.ts",
+      "sha256": "cc333a2f605871fa3473f3a50a766e61e8b7faea6597335a79e72f0567bc1f6f",
+      "lines": 95
+    },
+    {
+      "path": "EI-point/dashboard/lib/format.ts",
+      "sha256": "5511e3a2123ad8a947a1dde3285302aa2cd3842d0ef1374f0caa1c0b8730e143",
+      "lines": 82
+    },
+    {
+      "path": "EI-point/dashboard/lib/hmac.test.ts",
+      "sha256": "1f16cbb8fcfd3af358a4d1d26c5295026837beea1045f525efb8cdceba87610c",
+      "lines": 147
+    },
+    {
+      "path": "EI-point/dashboard/lib/hmac.ts",
+      "sha256": "c96ac15ab9861e3a136536c00afc475e2cde7224637adaf436e60689092e18b0",
+      "lines": 180
+    },
+    {
+      "path": "EI-point/dashboard/lib/interlink.ts",
+      "sha256": "def46d21e643b1689522bf46b144e500473827c341b8ecc1c11ba90f9fcbc28e",
+      "lines": 95
+    },
+    {
+      "path": "EI-point/dashboard/lib/internal-auth.ts",
+      "sha256": "225b2b69fd564043f68d06c4b910bfb524fe6ef99d052af7c073315c1055f9f4",
+      "lines": 36
+    },
+    {
+      "path": "EI-point/dashboard/lib/jsonb.test.ts",
+      "sha256": "8b14442fce404dd6f32056fe6d37cb3e5d1ab6c77a065f86d19d0203238805ca",
+      "lines": 77
+    },
+    {
+      "path": "EI-point/dashboard/lib/jsonb.ts",
+      "sha256": "c0a3d57c27f90f91ef69a7c199b310ba2bf8ba45706e40eb7d53ba4edf661c65",
+      "lines": 170
+    },
+    {
+      "path": "EI-point/dashboard/lib/mongo.ts",
+      "sha256": "7e833518f419727fa73835557ff4e964211d3b885c77688586e7d8b4938a505a",
+      "lines": 89
+    },
+    {
+      "path": "EI-point/dashboard/lib/secret-vault.test.ts",
+      "sha256": "362b76d4ed883d6e98307b35655e7507e91b13b7038960bee4d570f4cbd36ce6",
+      "lines": 51
+    },
+    {
+      "path": "EI-point/dashboard/lib/secret-vault.ts",
+      "sha256": "e6b8eee09901bf970cba747c6ec6faaa62a8436de4076f38754a2835ca8d4ea7",
+      "lines": 213
+    },
+    {
+      "path": "EI-point/dashboard/lib/setup.ts",
+      "sha256": "e4291f0fd0e642430bda664711e370b8e0bc92bfef633eed9ef65bfc284cd3d1",
+      "lines": 153
+    },
+    {
+      "path": "EI-point/dashboard/lib/site-origin.test.ts",
+      "sha256": "6ad122e98d451d93a6316a1757dc7365661ddb6610821537c62899cbceb440ca",
+      "lines": 51
+    },
+    {
+      "path": "EI-point/dashboard/lib/site-origin.ts",
+      "sha256": "7a50eb1ea2e09813a00241a038ccbd32bc7646591da9404f110f3272a7b8ab30",
+      "lines": 31
+    },
+    {
+      "path": "EI-point/dashboard/lib/types.ts",
+      "sha256": "73014425797b643a6ec77da7b3491f08647330b360f7beee606c68cc858bfa87",
+      "lines": 257
+    },
+    {
+      "path": "EI-point/dashboard/lib/data/config.ts",
+      "sha256": "85be879dece2a22ad5d553fd1d8d07e9371d74f7ce20eec97ae0df77e14d8b2d",
+      "lines": 165
+    },
+    {
+      "path": "EI-point/dashboard/lib/data/logs.ts",
+      "sha256": "eb9fa3a34a997f8f28aa5ddaea5a0b10ac4b67746d49e3df15c1fa71c5340f68",
+      "lines": 101
+    },
+    {
+      "path": "EI-point/dashboard/lib/data/security.ts",
+      "sha256": "4985e963ff18c4ae7707ec132dabf814458cb59eb2555ef53e333ab8efbf30ce",
+      "lines": 66
+    },
+    {
+      "path": "EI-point/dashboard/lib/data/servers.ts",
+      "sha256": "1e5721e5382d6169ea716f8e8fe303a973d4494e116f0732562f4a0e6873fbe8",
+      "lines": 123
+    },
+    {
+      "path": "EI-point/dashboard/lib/data/unavailable.ts",
+      "sha256": "ed19ddfdc2f397d6aae0ad76a8645cdd34e7bcac59be9f587bcf3658720cf6be",
+      "lines": 4
+    },
+    {
+      "path": "EI-point/dashboard/lib/secrets/cloudflare.ts",
+      "sha256": "76868b2cb3436cfdba654571c124d0d1638ba05a73ca16e757781e0366a82a4e",
+      "lines": 29
+    },
+    {
+      "path": "EI-point/dashboard/lib/secrets/firebase.ts",
+      "sha256": "247a203908510e1236bfb4f3b0ecd524dc214214c8c6d098b733774f022c3d0b",
+      "lines": 27
+    },
+    {
+      "path": "EI-point/dashboard/lib/secrets/index.ts",
+      "sha256": "74a25cfba3368f690e8034110c514d097f4cf875f13d77f6cd210485034b5688",
+      "lines": 6
+    },
+    {
+      "path": "EI-point/dashboard/lib/secrets/mongodb.ts",
+      "sha256": "2b6d2a4c1ead9a0b99b3c67ee2b799fc2ec7dbfc199663f9d556599233843a3c",
+      "lines": 16
+    },
+    {
+      "path": "EI-point/dashboard/lib/secrets/redis.ts",
+      "sha256": "5383702d719b23d39d9632e691685a9557c8e12304d4dce83592e1fad7d87a26",
+      "lines": 15
+    },
+    {
+      "path": "EI-point/dashboard/lib/secrets/supabase.ts",
+      "sha256": "0236b1049a7c29caa164aeec2047d9f73641ce6d9935ee224fdfb7dbd55e804d",
+      "lines": 15
+    },
+    {
+      "path": "EI-point/dashboard/lib/supabase/client.ts",
+      "sha256": "ded3192552336b848e53369706ac683f5d5d1f3e4ea9ba4356d5252a463a7e76",
+      "lines": 23
+    },
+    {
+      "path": "EI-point/dashboard/lib/supabase/cookie-contract.test.ts",
+      "sha256": "898d7e69414e3dfed47cf5116912e0cc7dfad802e4143c43368570a7cfce4e5a",
+      "lines": 69
+    },
+    {
+      "path": "EI-point/dashboard/lib/supabase/middleware.test.ts",
+      "sha256": "a27680e29eadb22424f20185d6dbc192cd5e7f159d68aaecd20502e1765c6920",
+      "lines": 108
+    },
+    {
+      "path": "EI-point/dashboard/lib/supabase/middleware.ts",
+      "sha256": "be521501f2a0a7759e2473caa4216b191895e164116603bc0cfd7196642e56b6",
+      "lines": 79
+    },
+    {
+      "path": "EI-point/dashboard/lib/supabase/server.ts",
+      "sha256": "e94fd4bb55bab1d831a976d70e0a974d318209ec73aa2442d389253e38d5b2f8",
+      "lines": 106
+    },
+    {
+      "path": "EI-point/dashboard/lib/supabase/session.ts",
+      "sha256": "2f9a9d86cade063aea458bdd1ac1e938e86e41d8741be662e8d4fa4f17236e93",
+      "lines": 12
+    },
+    {
+      "path": "EI-point/dashboard/components/auth/SignInPanel.tsx",
+      "sha256": "654acbc6adbfce14f8c5d6761d8be98d3c606588636b21eccb08f0cccbcf8b2d",
+      "lines": 184
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/AccessControl.tsx",
+      "sha256": "c13dcd54f5905e1c01bc8d26517ffe3a4036716dca611a88260c7c2f76693563",
+      "lines": 193
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/AdminControlPanel.tsx",
+      "sha256": "2cd14cd6ad5c63fa9f06112c0a2f716f610067b4b646a732942800ef40216a82",
+      "lines": 70
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/BotTabs.tsx",
+      "sha256": "90adcb53e147246a5011240800bd2d2747325ebf9107606baafeff7658bc196c",
+      "lines": 84
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/CharacterArt.tsx",
+      "sha256": "302cdca7e4572fe18cc5dd90ac273653bc62c5dd1cdae5f664d77ba1df4420b7",
+      "lines": 71
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/ConfigForm.tsx",
+      "sha256": "ab25b544fe875c9851a1e587adba3a3701eb104ffc25fd4d5fadafbc0cf8754d",
+      "lines": 319
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/ControlCenter.tsx",
+      "sha256": "07fd024c3261a139885ce2b01406d98431006a3c0a4a2bf97a8ec83e5ebd8081",
+      "lines": 463
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/DashboardShell.tsx",
+      "sha256": "482bb969c117beeb6ed64fcb5ce5034453a97c583fa3c8a821a7a21f5c162478",
+      "lines": 446
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/GrandLine.tsx",
+      "sha256": "bdbe54f73e06aa29981a8cccf70e4b700939b8460b78b02c4952f1c028def8b1",
+      "lines": 66
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/GuildHeader.tsx",
+      "sha256": "69b81b6b71a57adea05a0c036e15fb20e25b3f92d10b8a051d392af31f52ce81",
+      "lines": 94
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/LogStream.tsx",
+      "sha256": "3567a54bb8393146a2ffc45de0d0f1f10f12936c80ecdc32b3caede4755d028e",
+      "lines": 334
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/PageHeader.tsx",
+      "sha256": "d5531907566b5508f7a0692b8d6473f3c1f666391858efa684d81a24a65609e1",
+      "lines": 36
+    },
+    {
+      "path": "EI-point/dashboard/components/dashboard/SecurityTable.tsx",
+      "sha256": "b3e23876e690712ec0066e2ee4e3e4173b5ad75f9ee72a4a083caee648e4f560",
+      "lines": 239
+    },
+    {
+      "path": "EI-point/dashboard/components/landing/ArchitectureSection.tsx",
+      "sha256": "573ccb9d74368e71435ecc4c097ec215c917671e8ab2b7e9da26887af4b37999",
+      "lines": 91
+    },
+    {
+      "path": "EI-point/dashboard/components/landing/BotShowcase.tsx",
+      "sha256": "8bdfe260794e1e0f7b96268b5f46e136041047054a01500df17c2ed4f6d14991",
+      "lines": 128
+    },
+    {
+      "path": "EI-point/dashboard/components/landing/CallToAction.tsx",
+      "sha256": "7f31906549ebee4607860ac0ca4d857bf9d04abcbd0bdd176d7dd0e8ced47cb5",
+      "lines": 68
+    },
+    {
+      "path": "EI-point/dashboard/components/landing/FeatureGrid.tsx",
+      "sha256": "a7ff3b96b2a7480c52a7f9250fb25c01fdfc3e85b544ccf5f884adc463d2bdc8",
+      "lines": 99
+    },
+    {
+      "path": "EI-point/dashboard/components/landing/Hero.tsx",
+      "sha256": "6f60ccef7169adf93bfb9123286ed5b805536b69d96ceb0ef7cf2386e859e2aa",
+      "lines": 6
+    },
+    {
+      "path": "EI-point/dashboard/components/landing/SiteFooter.tsx",
+      "sha256": "d1a32b56bd027596e9e94da47ac87758bcae6de370e495d570f207be908e6333",
+      "lines": 84
+    },
+    {
+      "path": "EI-point/dashboard/components/landing/SiteHeader.tsx",
+      "sha256": "810722c439799dcce2582d59dad95668a4bddb809b61b578d5f3136752269300",
+      "lines": 154
+    },
+    {
+      "path": "EI-point/dashboard/components/motion/Reveal.tsx",
+      "sha256": "64b3542871dcfd6362ed36223f9fe33621e114c8cb691f9fe152bcc59903fa5b",
+      "lines": 124
+    },
+    {
+      "path": "EI-point/dashboard/components/ui/Badge.tsx",
+      "sha256": "befef9d30519e6849df768abb3f116fb74b04bade8ea0849e4531f1de3428d4d",
+      "lines": 76
+    },
+    {
+      "path": "EI-point/dashboard/components/ui/Controls.tsx",
+      "sha256": "488af094aa3b7acc5506d49d42dc66f1321cedd37676098677766dc64d96eb47",
+      "lines": 293
+    },
+    {
+      "path": "EI-point/dashboard/components/ui/icons.tsx",
+      "sha256": "aacda77ff33feba9abdeb438309730dd1ae89133a15fbff360e5d45e21f39eae",
+      "lines": 224
+    },
+    {
+      "path": "EI-point/dashboard/components/ui/Panel.tsx",
+      "sha256": "c9ec7a257fd9b455df27f47413fe7029d98420aa2b03cc7c3b3c7556eaa604e7",
+      "lines": 107
+    },
+    {
+      "path": "EI-point/dashboard/app/dashboard/error.tsx",
+      "sha256": "14196324d2e32b849f6ec57ae91e70121fd40678fafbaa3137d2b4955c414b47",
+      "lines": 64
+    },
+    {
+      "path": "EI-point/dashboard/app/dashboard/layout.tsx",
+      "sha256": "9cce65aadabe54bce5bf044d21771c22d1ab3cf818f05507a5d48d1801c2ff5f",
+      "lines": 36
+    },
+    {
+      "path": "EI-point/dashboard/app/dashboard/page.tsx",
+      "sha256": "18c687f96b8721873f7e1263a2f87772d7fa2789ac68f3c755d3debdf207d27f",
+      "lines": 117
+    },
+    {
+      "path": "EI-point/dashboard/app/login/page.tsx",
+      "sha256": "23966a7cfeb6dc5c4572ba6d0de50c753123bb9cee610f43a4b326ad59b34883",
+      "lines": 48
+    },
+    {
+      "path": "EI-point/dashboard/app/dashboard/admin/page.tsx",
+      "sha256": "4e7efdb698ce6aec7b9f73a603545dbe300995d486fade2cde26b317b6cda8c9",
+      "lines": 23
+    },
+    {
+      "path": "EI-point/dashboard/app/dashboard/[guildId]/layout.tsx",
+      "sha256": "8272fa5dd39f26b098afc9f9e453e69af9f619ed61635a3a7fdd151e72b1f659",
+      "lines": 28
+    },
+    {
+      "path": "EI-point/dashboard/app/dashboard/[guildId]/not-found.tsx",
+      "sha256": "0a253fe152af63521fc9f2fa2fb29d0529bbdecbca9b6a5c82f0824a21638ad3",
+      "lines": 34
+    },
+    {
+      "path": "EI-point/dashboard/app/dashboard/[guildId]/page.tsx",
+      "sha256": "7054ca2cf2a3ee3a8e49126c4521c4c963f100d4ec2c8873407e0e6aa8ef0653",
+      "lines": 61
+    },
+    {
+      "path": "EI-point/dashboard/app/dashboard/[guildId]/logs/page.tsx",
+      "sha256": "b2465e56db3d1a1a350ab85e53f3a40ddd35f08c25979ca7c630b32061cc79df",
+      "lines": 36
+    },
+    {
+      "path": "EI-point/dashboard/app/dashboard/[guildId]/security/page.tsx",
+      "sha256": "51d682dfa681900cdd5dce531c38947fa3649c9d9d59ea040b8c5343aec295fc",
+      "lines": 33
+    },
+    {
+      "path": "EI-point/dashboard/app/dashboard/[guildId]/setup/page.tsx",
+      "sha256": "40ca2ee192207ad40367fbf8bc35a3768d5f036a6370b9c71994cb0ef2d88fd1",
+      "lines": 154
+    },
+    {
+      "path": "EI-point/dashboard/app/bot-error/[botId]/page.tsx",
+      "sha256": "755847f29e3a2be99b1fa79136f78a36e26336771ed89b7a350dc8c87884edf0",
+      "lines": 92
+    },
+    {
+      "path": "EI-point/dashboard/app/auth/callback/route.ts",
+      "sha256": "4edf46f045b9ece9b1d4c33e0dcdce13a400d77c49e9a7f7d0e9dc7a1be423df",
+      "lines": 105
+    },
+    {
+      "path": "EI-point/dashboard/app/auth/signout/route.ts",
+      "sha256": "43ea99ee30cf285328b4b0fff7939166cdc6f875e3a0084b03952833b7fe5eb5",
+      "lines": 23
+    },
+    {
+      "path": "EI-point/dashboard/app/api/guild-whitelist/route.test.ts",
+      "sha256": "67f5d20a0425e6fb5a6a01695ee0985337c71ccd18710b4f48a3d47b68fb2bcd",
+      "lines": 80
+    },
+    {
+      "path": "EI-point/dashboard/app/api/guild-whitelist/route.ts",
+      "sha256": "dc9dce13e4f91c01383def8aa748a743c069ddddf4fb862b41f72958c3bfca24",
+      "lines": 54
+    },
+    {
+      "path": "EI-point/dashboard/app/api/health/route.test.ts",
+      "sha256": "d6ed1cd72d43b80564bd4b71d991b69918baf957ce819fa00c2ff1b641056bc4",
+      "lines": 31
+    },
+    {
+      "path": "EI-point/dashboard/app/api/health/route.ts",
+      "sha256": "bf59264876aae2af95e2ec9a716897875cdd5ff035788dc72d0a419b0d18cafa",
+      "lines": 117
+    },
+    {
+      "path": "EI-point/dashboard/app/api/secret/route.ts",
+      "sha256": "e3ed30592ac108be83c527a030eee0d8266fb534dd84fe7204dda6d48debf54a",
+      "lines": 19
+    },
+    {
+      "path": "EI-point/dashboard/app/api/server-settings/[guildId]/route.test.ts",
+      "sha256": "af7519a2db2190793182c7fa88468a1685e17a0efe364af390189ae31845e7d8",
+      "lines": 87
+    },
+    {
+      "path": "EI-point/dashboard/app/api/server-settings/[guildId]/route.ts",
+      "sha256": "11ded9d2ca5b673ca74485625aad12501589c5e7934b69278a71a83c18ad825b",
+      "lines": 58
+    },
+    {
+      "path": "EI-point/dashboard/app/api/secret/[name]/route.ts",
+      "sha256": "fb4c3f7279df6dbc819fe1318261915a355e997bc9f5270007207905ded1c411",
+      "lines": 118
+    },
+    {
+      "path": "EI-point/dashboard/app/api/secret/[name]/reveal/route.test.ts",
+      "sha256": "0075f3272d0ab1891ee86af5f3f961bcb5ec8f15fe7a76b722d4fd3a8bbcf07a",
+      "lines": 147
+    },
+    {
+      "path": "EI-point/dashboard/app/api/secret/[name]/reveal/route.ts",
+      "sha256": "3a0b6b36f07f62fbb8c33a0a33d7c56f1e10e6b494ec409a224aba11ffb5797e",
+      "lines": 85
+    },
+    {
+      "path": "EI-point/dashboard/app/api/logs/[guildId]/route.ts",
+      "sha256": "84bce89c9a3e058232ef4843f6ac8ad3d2e879f19758b321c8c71503947a3e9a",
+      "lines": 79
+    },
+    {
+      "path": "EI-point/dashboard/app/api/internal/accounts/route.test.ts",
+      "sha256": "dc9e562a91812ac24becbf0582770e82460d4d3b6449a779b77a3b95d33f2610",
+      "lines": 85
+    },
+    {
+      "path": "EI-point/dashboard/app/api/internal/accounts/route.ts",
+      "sha256": "ee1e9f12428be6a0b44f4731baa139e313fe539fe34e17c241db701d540b9cd7",
+      "lines": 42
+    },
+    {
+      "path": "EI-point/dashboard/app/api/internal/config/route.test.ts",
+      "sha256": "3eec4992cfad23d08938fb0e3db64e8a099e83df33e29d73b3858d5a0c416ae1",
+      "lines": 168
+    },
+    {
+      "path": "EI-point/dashboard/app/api/internal/config/route.ts",
+      "sha256": "2ec0692b2d2003e37214cd9ebc724b085dce3621c4c6d188872196eaa0e6cda9",
+      "lines": 194
+    },
+    {
+      "path": "EI-point/dashboard/app/api/internal/secret/[name]/route.test.ts",
+      "sha256": "14188131e029fb73b8e471d88c070d79b2d7b89adc32b6ba22e2c5bc875c9c0f",
+      "lines": 139
+    },
+    {
+      "path": "EI-point/dashboard/app/api/internal/secret/[name]/route.ts",
+      "sha256": "b4218e028a66886da7b4ef4f1725cd288d898d6af5dda56540395f7188d91f13",
+      "lines": 93
+    },
+    {
+      "path": "EI-point/dashboard/app/api/guild-whitelist/[guildId]/route.test.ts",
+      "sha256": "18cdcfc80d15c57cb7d04d1070c730dd5fcbd7cf7f86ec9fea835b3b09f448a9",
+      "lines": 61
+    },
+    {
+      "path": "EI-point/dashboard/app/api/guild-whitelist/[guildId]/route.ts",
+      "sha256": "9f57c73b3f25c6fd27cfba496094f17b881e75d167c5f910507417498c865cd2",
+      "lines": 33
+    },
+    {
+      "path": "EI-point/dashboard/app/api/embed/[guildId]/route.test.ts",
+      "sha256": "b185c6ea9b964fd276b0667d3e7339acdc897665d6fff71311788c9f6a136e70",
+      "lines": 151
+    },
+    {
+      "path": "EI-point/dashboard/app/api/embed/[guildId]/route.ts",
+      "sha256": "c130cdce39f559faf4a5fa6b3913792561ba97f317daabc488839a19590aa791",
+      "lines": 165
+    },
+    {
+      "path": "EI-point/dashboard/app/api/config/[guildId]/[botId]/route.test.ts",
+      "sha256": "3f41510092ef77a578644bc05fdb0a287c6e15099e22141b0183773a4ed36adb",
+      "lines": 98
+    },
+    {
+      "path": "EI-point/dashboard/app/api/config/[guildId]/[botId]/route.ts",
+      "sha256": "b87c97fe55b52aaa1008fa76e82ad2872b2198b504dbdfa62a7614bbbe93a473",
+      "lines": 133
+    },
+    {
+      "path": "EI-point/dashboard/app/api/bot-state/[guildId]/route.test.ts",
+      "sha256": "6f966a7a408b30833d33eaa61f3a943b7761432243635d8cc8e714985f1d331e",
+      "lines": 101
+    },
+    {
+      "path": "EI-point/dashboard/app/api/bot-state/[guildId]/route.ts",
+      "sha256": "0ed838de1348cde785f4b2f4e13786bc69c797d804b37228b3d5b554263366dd",
+      "lines": 53
+    },
+    {
+      "path": "Ei Paradise/website/404.html",
+      "sha256": "2892450c5a845231ed3c78d56cd67826b4824b4a32b7a57c26219014e0161f96",
+      "lines": 28
+    },
+    {
+      "path": "Ei Paradise/website/index.html",
+      "sha256": "a5a2804644b466928b6c876a27602ad0e61734ea0332dbd1712198c0382360a9",
+      "lines": 192
+    },
+    {
+      "path": "Ei Paradise/website/verify.html",
+      "sha256": "bc7adad2bde561654506871a5e859375990de116a533e788a270c69d1e9005f5",
+      "lines": 140
+    },
+    {
+      "path": "Ei Paradise/website/css/style.css",
+      "sha256": "0a790bacb15c1f901be2f7c27e314113b8e39c1a39a8ccdc5a62dde525dfa4b4",
+      "lines": 2370
+    },
+    {
+      "path": "Ei Paradise/website/js/config.js",
+      "sha256": "ba78fa42f128488a50026c8f5ed76df8b45bc1e229f3a4ac46cd9c421d691411",
+      "lines": 11
+    },
+    {
+      "path": "Ei Paradise/website/js/main.js",
+      "sha256": "de6a654f64cc9020cd8f2666f424a59efb1c076be5d712432201e8c6f4da97b8",
+      "lines": 129
+    },
+    {
+      "path": "Ei Paradise/website/js/payment.js",
+      "sha256": "c3bcebc571ce96359834c80566485ef47ec88f23d4178e51f5552500dd508752",
+      "lines": 490
+    }
+  ],
+  "routes": [
+    {
+      "path": "/api/guild-whitelist",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/health",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/secret",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/server-settings/[guildId]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ]
+    },
+    {
+      "path": "/api/secret/[name]",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE"
+      ]
+    },
+    {
+      "path": "/api/secret/[name]/reveal",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/logs/[guildId]",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/internal/accounts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/internal/config",
+      "methods": [
+        "POST",
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/internal/secret/[name]",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/guild-whitelist/[guildId]",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "path": "/api/embed/[guildId]",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/config/[guildId]/[botId]",
+      "methods": [
+        "GET",
+        "PUT"
+      ]
+    },
+    {
+      "path": "/api/bot-state/[guildId]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ]
+    }
+  ]
+}

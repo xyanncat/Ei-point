@@ -1,0 +1,13 @@
+{
+  "slug": "genshin-archon-quest",
+  "sku": "genshin-archon-quest",
+  "name": "Archon Quest",
+  "game": "Genshin Impact",
+  "category": "Quest service",
+  "description": "Complete the selected Archon Quest progression.",
+  "duration": "Around 1 week",
+  "price_minor": 49900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

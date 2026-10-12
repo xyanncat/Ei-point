@@ -7,12 +7,12 @@
 services:
   postgres: { build: null, image: "postgres:17.5@sha256:REPLACE_ME" }
   nginx: { build: null, image: "nginx:1.27.3-alpine@sha256:REPLACE_ME" }
-  api: { build: null, image: "ei-royality/api:REPLACE_ME" }
-  web: { build: null, image: "ei-royality/web:REPLACE_ME" }
-  bot-security: { build: null, image: "ei-royality/bot-security:REPLACE_ME" }
-  bot-moderation: { build: null, image: "ei-royality/bot-moderation:REPLACE_ME" }
-  bot-community: { build: null, image: "ei-royality/bot-community:REPLACE_ME" }
-  bot-ai: { build: null, image: "ei-royality/bot-ai:REPLACE_ME" }
-  bot-music: { build: null, image: "ei-royality/bot-music:REPLACE_ME" }
-  bot-commerce: { build: null, image: "ei-royality/bot-commerce:REPLACE_ME" }
-  workers: { build: null, image: "ei-royality/workers:REPLACE_ME" }
+  api: { build: null, image: "ei-point/api:REPLACE_ME" }
+  web: { build: null, image: "ei-point/web:REPLACE_ME" }
+  bot-security: { build: null, image: "ei-point/bot-security:REPLACE_ME" }
+  bot-moderation: { build: null, image: "ei-point/bot-moderation:REPLACE_ME" }
+  bot-community: { build: null, image: "ei-point/bot-community:REPLACE_ME" }
+  bot-ai: { build: null, image: "ei-point/bot-ai:REPLACE_ME" }
+  bot-music: { build: null, image: "ei-point/bot-music:REPLACE_ME" }
+  bot-commerce: { build: null, image: "ei-point/bot-commerce:REPLACE_ME" }
+  workers: { build: null, image: "ei-point/workers:REPLACE_ME" }

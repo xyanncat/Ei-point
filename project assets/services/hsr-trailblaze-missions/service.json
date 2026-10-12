@@ -1,0 +1,13 @@
+{
+  "slug": "hsr-trailblaze-missions",
+  "sku": "hsr-trailblaze-missions",
+  "name": "Trailblaze Missions",
+  "game": "Honkai: Star Rail",
+  "category": "Quest service",
+  "description": "Complete Trailblaze Missions for focused story progression.",
+  "duration": "~1 week",
+  "price_minor": 259900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

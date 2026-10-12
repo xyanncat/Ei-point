@@ -1,17 +1,16 @@
 FROM node:24.8.0-bookworm-slim AS build
 WORKDIR /app
-# Workspace manifests must exist before frozen install (coderabbit fix).
-COPY package.json pnpm-workspace.yaml ./
-COPY apps/dashboard/package.json ./apps/dashboard/
-# No pnpm-lock.yaml yet in Phase 2 — generate it on the VPS gate (see docs/phase-gates.md).
-# Release builds use --frozen-lockfile once the lockfile is committed.
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --no-frozen-lockfile --filter @ei-royality/dashboard...
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 COPY . .
-RUN pnpm --filter @ei-royality/dashboard build
-
-FROM node:24.8.0-bookworm-slim AS runtime
+ENV NEXT_STANDALONE=true
+ENV API_INTERNAL_URL=http://api:3001
+RUN pnpm install --frozen-lockfile && pnpm --filter @ei-point/contracts build && pnpm --filter @ei-point/dashboard build
+FROM node:24.8.0-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
-COPY --from=build /app ./
-CMD ["pnpm", "start"]
+ENV HOSTNAME=0.0.0.0
+COPY --from=build --chown=node:node /app/apps/dashboard/.next-production/standalone ./
+COPY --from=build --chown=node:node /app/apps/dashboard/.next-production/static ./apps/dashboard/.next-production/static
+COPY --from=build --chown=node:node /app/apps/dashboard/public ./apps/dashboard/public
+USER node
+CMD ["node", "apps/dashboard/server.js"]

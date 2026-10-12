@@ -33,8 +33,10 @@ CREATE TABLE IF NOT EXISTS access.sessions (
 CREATE INDEX IF NOT EXISTS sessions_user_idx ON access.sessions (discord_user_id);
 
 -- Bot registry: identity ≠ modules (§2). One row per bot; code reads this, never a hard-coded list.
+-- Identities: kafka (security+moderation+logging), cyrene (ai+search+tts),
+-- robin (music), cipher (commerce), silverwolf (community+games), himiko (embed+announce).
 CREATE TABLE IF NOT EXISTS config.bots (
-  bot_key TEXT PRIMARY KEY, -- security|moderation|community|ai|music|commerce
+  bot_key TEXT PRIMARY KEY, -- kafka|cyrene|robin|cipher|silverwolf|himiko
   application_id TEXT NOT NULL UNIQUE,
   modules TEXT[] NOT NULL,
   guild_ids TEXT[] NOT NULL DEFAULT '{}',

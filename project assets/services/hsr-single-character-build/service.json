@@ -1,0 +1,13 @@
+{
+  "slug": "hsr-single-character-build",
+  "sku": "hsr-single-character-build",
+  "name": "Single Character Build",
+  "game": "Honkai: Star Rail",
+  "category": "Character build",
+  "description": "Build one character for your selected account.",
+  "duration": "Advance payment required",
+  "price_minor": 49900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

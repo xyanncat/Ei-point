@@ -1,0 +1,17 @@
+{
+  "slug": "genshin-world-quests",
+  "sku": "genshin-world-quests",
+  "name": "World Quests",
+  "game": "Genshin Impact",
+  "category": "Quest service",
+  "description": "World quest support for major and minor progression paths.",
+  "duration": "30–60 days",
+  "price_minor": 199900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js",
+  "inclusions": [
+    "Up to 5 major world quests",
+    "Up to 5 minor world quests"
+  ]
+}

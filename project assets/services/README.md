@@ -1,6 +1,6 @@
 # Services — asset drop-zone (Phase 6–7 source material)
 
-> Status: **empty — awaiting asset drops.** Do not invent service content here;
+> Status: **19 original service definitions imported from Ei Paradise.zip.** Do not invent service content here;
 > this folder holds reference material for the feature inventory (`docs/feature-matrix.md` Phase 1).
 
 ## Purpose
@@ -22,3 +22,5 @@ project assets/services/<service-slug>/
   Originals stay here; the pipeline copies + checksums into the `artwork` volume.
   DB stores only `artwork_ref` + `checksum`, never inline bytes (§4).
 - Add one row per service to `docs/feature-matrix.md` when dropping files.
+
+The imported catalog preserves original INR prices and excludes the temporary INR 6 payment probe. Run `node scripts/build-project-assets.mjs` from the repository root to validate and publish definitions into the website manifest; dashboard builds run this automatically. Website publication does not mutate payment orders or database prices. See `docs/legacy-web-parity.md` for provenance and pending checkout parity.

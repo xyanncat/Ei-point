@@ -1,0 +1,13 @@
+{
+  "slug": "hsr-full-exploration",
+  "sku": "hsr-full-exploration",
+  "name": "Full Star Rail Exploration",
+  "game": "Honkai: Star Rail",
+  "category": "Exploration",
+  "description": "Complete focused exploration across the Star Rail journey.",
+  "duration": "Within 30 days",
+  "price_minor": 599900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

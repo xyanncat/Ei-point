@@ -1,0 +1,16 @@
+{
+  "slug": "genshin-teyvat-package",
+  "sku": "genshin-teyvat-package",
+  "name": "All-In-One Teyvat Package",
+  "game": "Genshin Impact",
+  "category": "All-in-one package",
+  "description": "A complete Teyvat exploration package for your account.",
+  "duration": "Up to 1 year",
+  "price_minor": 1999900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js",
+  "inclusions": [
+    "Full Teyvat exploration"
+  ]
+}

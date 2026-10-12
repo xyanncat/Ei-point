@@ -1,0 +1,13 @@
+{
+  "slug": "genshin-one-region-exploration",
+  "sku": "genshin-one-region-exploration",
+  "name": "Any 1 Region (100%)",
+  "game": "Genshin Impact",
+  "category": "Exploration",
+  "description": "Complete 100% exploration for one selected region.",
+  "duration": "Up to 30 days",
+  "price_minor": 69900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js"
+}

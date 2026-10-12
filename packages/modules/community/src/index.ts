@@ -4,11 +4,17 @@
 // --- Welcome templates: {user} {guild} {count} tokens; unknown tokens untouched. ---
 export function renderWelcome(
   template: string,
-  vars: { user: string; guild: string; count: number },
+  vars: { user: string; guild: string; count: number; username?: string },
 ): string {
   return template
     .split("{user}")
     .join(vars.user)
+    .split("{username}")
+    .join(vars.username ?? vars.user)
+    .split("{server}")
+    .join(vars.guild)
+    .split("{membercount}")
+    .join(String(vars.count))
     .split("{guild}")
     .join(vars.guild)
     .split("{count}")
@@ -36,13 +42,28 @@ export function buildEmbed(input: {
   color?: number;
 }): Embed | null {
   if (input.title.length === 0 || input.title.length > 256) return null;
-  if (input.description.length === 0 || input.description.length > 4096) return null;
+  if (input.description.length === 0 || input.description.length > 4096)
+    return null;
   const fields = input.fields ?? [];
   if (fields.length > 25) return null;
   for (const f of fields) {
     if (f.name.length === 0 || f.name.length > 256) return null;
     if (f.value.length === 0 || f.value.length > 1024) return null;
   }
+  if (
+    input.title.length +
+      input.description.length +
+      fields.reduce((n, f) => n + f.name.length + f.value.length, 0) >
+    6000
+  )
+    return null;
+  if (
+    input.color !== undefined &&
+    (!Number.isInteger(input.color) ||
+      input.color < 0 ||
+      input.color > 0xffffff)
+  )
+    return null;
   return {
     title: input.title,
     description: input.description,
@@ -54,15 +75,18 @@ export function buildEmbed(input: {
 // --- XP: cumulative triangular curve. Level n needs 50*n*(n+1) total XP. ---
 export function levelForXp(xp: number): number {
   if (!Number.isFinite(xp) || xp < 0) return 0;
-  let level = 0;
-  while (50 * (level + 1) * (level + 2) <= xp) level++;
-  return level;
+  return Math.floor((Math.sqrt(1 + 0.08 * xp) - 1) / 2);
 }
 
-export function addXp(currentXp: number, delta: number): { xp: number; level: number; leveledUp: boolean } {
+export function addXp(
+  currentXp: number,
+  delta: number,
+): { xp: number; level: number; leveledUp: boolean } {
   const before = levelForXp(currentXp);
   // Negative deltas spend XP but never below zero; NaN/non-finite deltas are ignored.
-  const xp = Number.isFinite(delta) ? Math.max(0, currentXp + Math.floor(delta)) : Math.max(0, currentXp);
+  const xp = Number.isFinite(delta)
+    ? Math.max(0, currentXp + Math.floor(delta))
+    : Math.max(0, currentXp);
   const level = levelForXp(xp);
   return { xp, level, leveledUp: level > before };
 }
@@ -81,3 +105,5 @@ export const SAVE_WELCOME_SQL = `
   INSERT INTO community.welcome_templates (guild_id, template, updated_at)
   VALUES ($1, $2, now())
   ON CONFLICT (guild_id) DO UPDATE SET template = EXCLUDED.template, updated_at = now()`;
+
+export * from "./service.js";

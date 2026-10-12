@@ -1,7 +1,7 @@
 // Server-side sessions (§6): HMAC-signed cookie payload. No dependency on fastify —
 // route wiring lives in index.ts; this module is pure and unit-testable.
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { SessionClaims } from "@ei-royality/contracts";
+import type { SessionClaims } from "@ei-point/contracts";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -16,6 +16,7 @@ export function signSession(claims: Omit<SessionClaims, "expiresAt">, secret: st
 }
 
 export function verifySession(token: string, secret: string): SessionClaims | null {
+  if (!secret || token.length > 2048 || token.split('.').length !== 2) return null;
   const [payload, sig] = token.split(".");
   if (payload == null || sig == null) return null;
   const expected = createHmac("sha256", secret).update(payload).digest();
@@ -27,7 +28,7 @@ export function verifySession(token: string, secret: string): SessionClaims | nu
   } catch {
     return null;
   }
-  if (typeof claims.discordUserId !== "string" || typeof claims.expiresAt !== "number") return null;
-  if (claims.expiresAt <= Date.now()) return null;
+  if (claims == null || typeof claims !== 'object' || typeof claims.discordUserId !== "string" || typeof claims.expiresAt !== "number") return null;
+  if (!Number.isFinite(claims.expiresAt) || claims.expiresAt <= Date.now()) return null;
   return claims;
 }

@@ -1,6 +1,6 @@
-# Ei Royality — Monorepo Root
+# Ei Point — Monorepo Root
 
-> Phase 2 — Foundation. See `project assets/cred/EI_ROYALITY_VPS_BUILD_PLAN.md` and `project assets/cred/VPS_BENCHMARK.md`.
+> Phase 2 — Foundation. See `project assets/cred/EI_POINT_VPS_BUILD_PLAN.md` and `project assets/cred/VPS_BENCHMARK.md`.
 
 ## Layout
 
@@ -11,7 +11,7 @@ apps/
   bots/            six bot applications (security, moderation, community, ai, music-py, commerce)
   workers/         jobs, outbox, backup, maintenance workers
 packages/
-  runtime/         interaction lifecycle, authorization, queues, logging
+  flow/            Ei-Flow runtime: interaction lifecycle, authorization, queues, logging
   modules/        security, moderation, games, ai, music, commerce (feature logic, no bot client)
   contracts/       OpenAPI types, event schemas, config schemas
 infra/
@@ -59,3 +59,9 @@ pnpm dev
 
 Production starts only prebuilt, tested images — never `build` on the hot path.
 See `docs/operations.md` and `infra/docker/compose.prod.yml`.
+
+Phase 6 community/economy setup, commands, persistence and remaining launch checks:
+[`docs/phase6-community-economy.md`](docs/phase6-community-economy.md).
+
+Phase 4 dashboard, OAuth/session setup, scopes and validation:
+[`docs/phase4-dashboard.md`](docs/phase4-dashboard.md).

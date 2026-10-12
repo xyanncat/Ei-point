@@ -1,5 +1,5 @@
 {
-  "name": "@ei-royality/module-games",
+  "name": "@ei-point/module-games",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,5 +17,6 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": { "@ei-point/flow": "workspace:*" },
   "devDependencies": { "typescript": "5.6.3", "@types/node": "24.3.0" }
 }

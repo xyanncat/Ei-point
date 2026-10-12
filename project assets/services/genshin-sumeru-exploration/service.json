@@ -1,0 +1,17 @@
+{
+  "slug": "genshin-sumeru-exploration",
+  "sku": "genshin-sumeru-exploration",
+  "name": "Sumeru Complete Exploration",
+  "game": "Genshin Impact",
+  "category": "Exploration",
+  "description": "Complete the Sumeru and desert exploration areas.",
+  "duration": "150–200 days",
+  "price_minor": 759900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js",
+  "inclusions": [
+    "Sumeru",
+    "Desert areas"
+  ]
+}

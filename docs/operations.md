@@ -1,8 +1,8 @@
-# Ei Royality — Operations (Phase 2 stub → expanded in Phase 9)
+# Ei Point — Operations (Phase 2 stub → expanded in Phase 9)
 
 ## Resource budget (§7) — enforced in compose + systemd slice
 
-Slice `ei-royality.slice`: `CPUQuota=800% MemoryHigh=32G MemoryMax=40G MemorySwapMax=2G`.
+Slice `ei-point.slice`: `CPUQuota=800% MemoryHigh=32G MemoryMax=40G MemorySwapMax=2G`.
 Per-service CPU/RAM caps live in `infra/docker/compose.yml` (`deploy.resources.limits` + `mem_limit`).
 Total: 8.00 CPU / 30 GiB; hard cap 40 GiB; swap is emergency headroom only.
 

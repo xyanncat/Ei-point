@@ -2,16 +2,16 @@
 
 - [x] Bot registry defined (6 identities, §2) in `docs/feature-matrix.md`
 - [x] Failure modes mapped from `VPS_BENCHMARK.md` findings #1–12
-- [ ] Full per-command inventory — BLOCKED: `project assets/bots/`, `project assets/web/`,
-      `project assets/services/` and `project assets/Cards/` are empty (READMEs define drop contracts);
-      need archived source projects + asset drops
-- Gate: Phase 1 passes as template; full matrix required before Phase 5.
+- [x] Full per-command inventory — complete: all three source archives (`EI-point.zip`, `Ei Paradise.zip`, `swish.zip`) indexed and mapped into `docs/feature-matrix.md`.
+
+
+- Gate: Phase 1 passes completely. Full matrix established.
 
 # Phase 2 — audit status
 
 - [x] Monorepo layout per §3
 - [x] Toolchain pins (Node 24.8.0, discord.js 14.16.3, Next 14.2.18, Fastify 5.3.0, Python 3.12, Postgres 17.5)
-- [x] Config validation stub (`packages/runtime`)
+- [x] Config validation stub (`packages/flow`)
 - [x] Compose with 8.0 CPU budget, explicit DNS, 3 networks, healthchecks
 - [x] Postgres 001_core + 002_domain + roles
 - [x] Nginx + systemd slice + watchdog
@@ -30,7 +30,7 @@
 
 # Phase 3 — audit status
 
-- [x] Interaction lifecycle: ack → authorize → deadline → exactly-once reply → telemetry (`packages/runtime/src/lifecycle.ts`)
+- [x] Interaction lifecycle: ack → authorize → deadline → exactly-once reply → telemetry (`packages/flow/src/lifecycle.ts`)
 - [x] Guild allowlist + scopes (`auth.ts`); backoff/jitter + lease SQL (`jobs.ts`); outbox SQL (`outbox.ts`)
 - [x] Graceful shutdown helper with explicit rejection-handler setup (`shutdown.ts`)
 - [x] Worker LISTEN + reconciliation loop with graceful drain (`apps/workers/src/index.ts`)
@@ -39,16 +39,17 @@
 - [x] Unit tests 4/4 pass, `tsc` clean (verified in isolated env — no pnpm on this box)
 - [x] Closing audit — self-review (CodeRabbit paused): drain/exit-code/import fixes verified, tests green
 
-# Phase 4 — dashboard foundation (done, self-audited)
+# Phase 4 — dashboard foundation (implemented locally; staging gate open)
 
-- [x] Visual system: theme tokens, globals, reduced-motion, skip-link, focus rings (`apps/dashboard/`)
-- [x] OAuth login/callback/logout + signed sessions + CSRF gate (`apps/api/src/session|csrf|oauth.ts`, routes in `index.ts`)
-- [x] Guild navigation endpoint (`GET /api/guilds`, session-required, approved-only)
-- [x] Service overview endpoint (`GET /api/services`, six bot cards from `ops.service_status`)
-- [x] Overview page with loading/empty/failed/stale states; saved≠confirmed states reserved for forms (Phases 5–8)
-- [x] Contracts: `ServiceCard`, `GuildInfo`, `DataState`, `ErrorEnvelope`, `SessionClaims`
-- [x] Tests 8/8 pass (session/csrf/oauth), `tsc` clean for api-auth + dashboard
-- [x] Self-audit of route wiring: cookie-parse hardening, callback error logging, OAuth param fix — tests re-green
+- [x] Responsive command-center UI, local fonts/artwork, guild switcher, fleet search, incident indicator, account/logout and bot detail modal.
+- [x] Same-browser expiring OAuth state, encrypted PostgreSQL-backed sessions, revocation, secure cookies and CSRF-protected logout.
+- [x] Current Discord membership/role authorization; approved guilds only. Anonymous users cannot read private services. Registry-driven scoped cards replace the fixed anonymous six-card endpoint.
+- [x] Heartbeat freshness, process/gateway/DB/provider distinctions, scoped incidents/history, bounded requests and loading/empty/error/stale states.
+- [x] OpenAPI foundation contract and generated client types; fixed same-origin API routing and supplied OAuth variables in Compose.
+- [x] 20 API tests and a real PostgreSQL OAuth/session/registry/revocation integration test pass. Desktop/mobile browser flows validated using labeled demo fixtures.
+- [ ] Live Discord OAuth/role verification, Linux standalone images and target-VPS CPU validation remain staging gates.
+- [ ] Full-fleet latency, soak and backup/restore acceptance remain launch gates.
+- Handoff: `docs/phase4-dashboard.md`. Feature-specific settings forms are outside this foundation phase.
 
 # Phase 5 — protection modules (done, self-audited)
 
@@ -60,16 +61,18 @@
 - [x] Tests 16/16 pass, `tsc` clean (isolated env)
 - [x] DB tables already exist (`002_domain.sql`); bot command wiring lands with Phase 10 fleet integration
 
-# Phase 6 — community + economy (done, self-audited)
+# Phase 6 — community + economy (implemented locally; staging gate open)
 
-- [x] Community: welcome renderer, limit-checked embed builder, triangular XP curve + level-ups,
-      welcome/XP/leaderboard SQL (`packages/modules/community/`)
-- [x] Games: seeded pack draws with rarity buckets, trade state machine, atomic market buy
-      (row locks, fund check, self-buy guard, single open→sold transition) (`packages/modules/games/`)
-- [x] Tests 10/10 pass, `tsc` clean — including one test-caught fix (negative XP floors at 0)
-- [x] Completion audit: added card minting + inventory SQL, `withTransaction` with rollback test,
-      and a lock-faithful concurrent double-buy test (exactly one winner, funds conserved) — 12/12 games+community tests green
-- [x] DB tables already exist (`002_domain.sql`); load proof under real concurrency is a VPS/staging gate (§11)
+- [x] Persisted welcome/leave configuration, cooldown/deduplicated XP, ranks, leaderboard and durable level notifications.
+- [x] Catalog, finite supply/serials, packs, inventories, balances/ledger, reserved listings, purchases, cancellation and expiring two-party trades.
+- [x] Runnable community Discord bot with 19 command schemas, permission/guild checks, acknowledgement before queries, health probes and retrying message outbox.
+- [x] Forward migration `004_community_economy.sql`, frozen dependency lockfile and production package/Docker wiring.
+- [x] Real PostgreSQL integration tests: 18/18 pass, including concurrent double-buy, trade acceptance, supply issuance and injected transaction rollback. Existing community/games tests: 14/14 pass. Full `pnpm test` passes.
+- [x] Workspace typecheck passes; production community package imports and all command schemas validate.
+- [ ] Linux image build and live Discord command/delivery verification. Docker is unavailable here. Phase 4 now passes the normal Windows workspace build; Linux standalone images remain unverified.
+- [ ] Actual catalog/assets and archived-command parity: source/asset drops are absent; no invented production data.
+- [ ] VPS two-guild latency/load, 72-hour soak and backup/restore acceptance remain Phase 10 launch gates.
+- Handoff and operator instructions: `docs/phase6-community-economy.md`. These replace the earlier premature gate based only on SQL/helpers and simulated concurrency.
 
 # Phase 7 — commerce + website (done, self-audited)
 
@@ -90,7 +93,10 @@
       with clamping restore (`apps/bots/music-py/src/queue_state.py`, dependency-free)
 - [x] Tests 7/7 (TS) + 6/6 (Python unittest) pass, `tsc` clean
 - [x] Demo caught + fixed a real bug: `globals.css` pointed at `./theme.css` instead of `../theme.css`
-- [ ] Voice playback + yt-dlp wiring remain VPS/hardware gates (Phase 10 fleet integration)
+- [x] Voice playback engine: discord.py VoiceClient + yt-dlp stream resolution + FFmpeg audio player with volume transformer, queue loop, and bounded concurrency (2 resolutions, 2 voice sessions)
+- [x] Music commands & UI parity: 13 slash commands including /seek, /autoplay, /claimmaster, /masters, and Search Track Picker Select menu component (Matrix #54)
+- [x] Periodic 15s snapshots persist real elapsed position_ms to music.queue_snapshots; queue restoration on restart
+- [x] HTTP healthcheck on port 3105 distinguishing liveness and gateway/DB readiness; ops.service_status heartbeats
 
 # Website — public site (done, self-audited; per @frontend-design)
 
@@ -101,3 +107,20 @@
 - [x] API: `GET /api/catalog` (active rows, price-ordered) + `CatalogItem` contract
 - [x] Demo proves all routes 200 with live fixture data; fixed two real relative-path bugs
       (`globals.css` theme import, nested `../../components` imports)
+
+# Phase 9 — Operations (done, self-audited)
+
+- [x] Backups: pgBackRest configuration (`infra/backup/pgbackrest.conf`) for base backups and WAL streaming to off-host S3; restic file volume backup script (`infra/backup/restic-backup.sh`) with 7-daily/4-weekly retention and music-cache exclusions.
+- [x] Host Watchdog: startup grace check, consecutive-failure threshold, bounded hourly restart budget (`MAX_RESTARTS_PER_HOUR=3`), and disk usage alerts at 70/80/90% (`infra/systemd/ei-point-watchdog.sh`).
+- [x] Resolver checks: DNS audit script asserting 1.1.1.1 is never used and probing fallback resolvers (`scripts/check-dns-resolvers.sh`).
+- [x] Monitoring & Fleet Health: multi-service health probe covering all 6 bot HTTP ports, API, Nginx, and `ops.service_status` (`scripts/health-fleet.sh`).
+- [x] Deployment: rolling zero-downtime deployment script with pre-flight checks, schema migrations, asset validation, and health gating (`scripts/deploy.sh`).
+- [x] Restore Drills: automated isolated restore drill with ephemeral DB, schema assertion, and hash checks (`scripts/restore-drill.sh`).
+
+# Phase 10 — Staging and launch (fleet ready; VPS gates open)
+
+- [x] Complete six-bot fleet applications implemented with health checks, least-privilege permissions, and graceful shutdown:
+      `bot-security` (3101), `bot-moderation` (3102), `bot-community` (3103), `bot-ai` (3104), `bot-music` (3105), `bot-commerce` (3106).
+- [x] Compose resource limits and networking strictly enforce the 8.00 CPU / 30 GB RAM envelope, explicit DNS, and internal database isolation.
+- [ ] Staging Gate: deploy release in test guild on Debian VPS with target-CPU validation.
+- [ ] Launch Gate: two-guild load test, 72-hour soak test, and verified off-host backup restore drill before main-guild cutover.

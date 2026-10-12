@@ -1,0 +1,11 @@
+[Unit]
+Description=Ei Point watchdog (bounded restarts + alerts, §8)
+After=docker.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Unit=ei-point-watchdog.service
+
+[Install]
+WantedBy=timers.target

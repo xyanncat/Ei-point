@@ -1,0 +1,286 @@
+{
+  "services": [
+    {
+      "slug": "account-management-membership",
+      "sku": "account-management-membership",
+      "name": "All-Games Account Management Membership (30 Days)",
+      "game": "All games",
+      "category": "Membership",
+      "description": "30-day account management for Genshin Impact, Honkai: Star Rail, Wuthering Waves, Neverness to Everness and Arknights: Endfield.",
+      "duration": "30 days",
+      "price_minor": 70000,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "inclusions": [
+        "Dailies",
+        "New events",
+        "Farming",
+        "Domain farming"
+      ],
+      "source": "Ei Paradise.zip/website/index.html"
+    },
+    {
+      "slug": "genshin-character-story-quests",
+      "sku": "genshin-character-story-quests",
+      "name": "All Character Story Quests",
+      "game": "Genshin Impact",
+      "category": "Quest service",
+      "description": "Complete character story quests for your selected account.",
+      "duration": "Up to 60 days",
+      "price_minor": 499900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    },
+    {
+      "slug": "genshin-teyvat-package",
+      "sku": "genshin-teyvat-package",
+      "name": "All-In-One Teyvat Package",
+      "game": "Genshin Impact",
+      "category": "All-in-one package",
+      "description": "A complete Teyvat exploration package for your account.",
+      "duration": "Up to 1 year",
+      "price_minor": 1999900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js",
+      "inclusions": [
+        "Full Teyvat exploration"
+      ]
+    },
+    {
+      "slug": "genshin-one-region-exploration",
+      "sku": "genshin-one-region-exploration",
+      "name": "Any 1 Region (100%)",
+      "game": "Genshin Impact",
+      "category": "Exploration",
+      "description": "Complete 100% exploration for one selected region.",
+      "duration": "Up to 30 days",
+      "price_minor": 69900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    },
+    {
+      "slug": "genshin-three-regions-exploration",
+      "sku": "genshin-three-regions-exploration",
+      "name": "Any 3 Regions (100%)",
+      "game": "Genshin Impact",
+      "category": "Exploration",
+      "description": "Complete 100% exploration across three selected regions.",
+      "duration": "3 regions · 100% exploration",
+      "price_minor": 149900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    },
+    {
+      "slug": "genshin-archon-quest",
+      "sku": "genshin-archon-quest",
+      "name": "Archon Quest",
+      "game": "Genshin Impact",
+      "category": "Quest service",
+      "description": "Complete the selected Archon Quest progression.",
+      "duration": "Around 1 week",
+      "price_minor": 49900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    },
+    {
+      "slug": "genshin-main-event",
+      "sku": "genshin-main-event",
+      "name": "Main Event",
+      "game": "Genshin Impact",
+      "category": "Event service",
+      "description": "Limited-time events are completed before they end whenever possible.",
+      "duration": "Main event",
+      "price_minor": 20000,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    },
+    {
+      "slug": "genshin-one-nation-exploration",
+      "sku": "genshin-one-nation-exploration",
+      "name": "One Nation Full Exploration",
+      "game": "Genshin Impact",
+      "category": "Exploration",
+      "description": "Complete one nation’s exploration with its key progression work.",
+      "duration": "Up to 60 days",
+      "price_minor": 499900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js",
+      "inclusions": [
+        "Character story quests",
+        "World quests",
+        "Oculus collection",
+        "Reputation quests"
+      ]
+    },
+    {
+      "slug": "genshin-reputation-quests",
+      "sku": "genshin-reputation-quests",
+      "name": "Reputation Quests",
+      "game": "Genshin Impact",
+      "category": "Quest service",
+      "description": "Focused reputation quest progression for your selected account.",
+      "duration": "Reputation progress",
+      "price_minor": 149900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    },
+    {
+      "slug": "genshin-short-event",
+      "sku": "genshin-short-event",
+      "name": "Short Event",
+      "game": "Genshin Impact",
+      "category": "Event service",
+      "description": "Limited-time events are completed before they end whenever possible.",
+      "duration": "Short event",
+      "price_minor": 15000,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    },
+    {
+      "slug": "genshin-sumeru-exploration",
+      "sku": "genshin-sumeru-exploration",
+      "name": "Sumeru Complete Exploration",
+      "game": "Genshin Impact",
+      "category": "Exploration",
+      "description": "Complete the Sumeru and desert exploration areas.",
+      "duration": "150–200 days",
+      "price_minor": 759900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js",
+      "inclusions": [
+        "Sumeru",
+        "Desert areas"
+      ]
+    },
+    {
+      "slug": "genshin-world-quests",
+      "sku": "genshin-world-quests",
+      "name": "World Quests",
+      "game": "Genshin Impact",
+      "category": "Quest service",
+      "description": "World quest support for major and minor progression paths.",
+      "duration": "30–60 days",
+      "price_minor": 199900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js",
+      "inclusions": [
+        "Up to 5 major world quests",
+        "Up to 5 minor world quests"
+      ]
+    },
+    {
+      "slug": "hsr-all-in-one-package",
+      "sku": "hsr-all-in-one-package",
+      "name": "All-In-One Package",
+      "game": "Honkai: Star Rail",
+      "category": "All-in-one package",
+      "description": "A complete progression package for the Star Rail account.",
+      "duration": "Up to 6 months",
+      "price_minor": 999900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js",
+      "inclusions": [
+        "Full exploration",
+        "All quests",
+        "Old events"
+      ]
+    },
+    {
+      "slug": "hsr-companion-world-quests",
+      "sku": "hsr-companion-world-quests",
+      "name": "Companion Missions + World Quests",
+      "game": "Honkai: Star Rail",
+      "category": "Quest service",
+      "description": "Complete companion stories and world quests for broader account progress.",
+      "duration": "15–30 days",
+      "price_minor": 299900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    },
+    {
+      "slug": "hsr-full-exploration",
+      "sku": "hsr-full-exploration",
+      "name": "Full Star Rail Exploration",
+      "game": "Honkai: Star Rail",
+      "category": "Exploration",
+      "description": "Complete focused exploration across the Star Rail journey.",
+      "duration": "Within 30 days",
+      "price_minor": 599900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    },
+    {
+      "slug": "hsr-full-team-build",
+      "sku": "hsr-full-team-build",
+      "name": "Full Team Build (4 Characters)",
+      "game": "Honkai: Star Rail",
+      "category": "Character build",
+      "description": "Build a complete four-character team for your selected account.",
+      "duration": "Up to 30 days",
+      "price_minor": 199900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js",
+      "facts": [
+        [
+          "Payment requirement",
+          "Advance payment required"
+        ]
+      ]
+    },
+    {
+      "slug": "hsr-per-planet-exploration",
+      "sku": "hsr-per-planet-exploration",
+      "name": "Per Planet Exploration",
+      "game": "Honkai: Star Rail",
+      "category": "Exploration",
+      "description": "Focused exploration support for one Star Rail planet.",
+      "duration": "1–2 weeks",
+      "price_minor": 99900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    },
+    {
+      "slug": "hsr-single-character-build",
+      "sku": "hsr-single-character-build",
+      "name": "Single Character Build",
+      "game": "Honkai: Star Rail",
+      "category": "Character build",
+      "description": "Build one character for your selected account.",
+      "duration": "Advance payment required",
+      "price_minor": 49900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    },
+    {
+      "slug": "hsr-trailblaze-missions",
+      "sku": "hsr-trailblaze-missions",
+      "name": "Trailblaze Missions",
+      "game": "Honkai: Star Rail",
+      "category": "Quest service",
+      "description": "Complete Trailblaze Missions for focused story progression.",
+      "duration": "~1 week",
+      "price_minor": 259900,
+      "currency": "INR",
+      "bot_module": "commerce",
+      "source": "Ei Paradise.zip/website/js/payment.js"
+    }
+  ],
+  "cards": []
+}

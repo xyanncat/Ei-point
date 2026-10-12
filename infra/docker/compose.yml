@@ -1,4 +1,4 @@
-name: ei-royality
+name: ei-point
 services:
   postgres:
     # Pin patch + digest at release time. Digest below is a placeholder — resolve with:
@@ -8,12 +8,12 @@ services:
     # Phase 2: archiving OFF. Phase 9 enables pgBackRest with a real archive_command + repo mount.
     command: ["postgres", "-c", "max_connections=120", "-c", "shared_buffers=2GB", "-c", "wal_level=replica"]
     environment:
-      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-ei_royality_admin}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-ei_point_admin}
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - backup-staging:/var/backups/ei-royality:ro
+      - backup-staging:/var/backups/ei-point:ro
     networks: [data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy:
@@ -28,7 +28,7 @@ services:
       start_period: 30s
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
     # Note: POSTGRES_USER here is the admin bootstrap login (see .env.example).
-    # App services connect via DATABASE_URL with the least-privilege ei_royality_app login.
+    # App services connect via DATABASE_URL with the least-privilege ei_point_app login.
 
   nginx:
     image: "nginx:1.27.3-alpine"
@@ -64,7 +64,39 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       SESSION_SECRET: ${SESSION_SECRET}
+      CSRF_SECRET: ${CSRF_SECRET}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+      OAUTH_REDIRECT_URL: ${OAUTH_REDIRECT_URL}
+      COOKIE_SECURE: "true"
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN}
+      DASHBOARD_ADMIN_IDS: ${DASHBOARD_ADMIN_IDS:-}
+      VAULT_SECRET: ${VAULT_SECRET}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      COMMERCE_GUILD_ID: ${COMMERCE_GUILD_ID:-}
+      PAYMENT_ORIGIN: ${PAYMENT_ORIGIN}
+      UPI_PAYEE_VPA: ${UPI_PAYEE_VPA:-}
+      UPI_PAYEE_NAME: ${UPI_PAYEE_NAME:-Ei point}
+      USDT_TRC20_ADDRESS: ${USDT_TRC20_ADDRESS:-}
+      INR_PER_USDT: ${INR_PER_USDT:-}
+      USDT_REFERENCE_FEE: ${USDT_REFERENCE_FEE:-1}
+      COMMERCE_REFERRAL_REWARD_MINOR: ${COMMERCE_REFERRAL_REWARD_MINOR:-0}
+      DISCORD_SECURITY_BOT_TOKEN: ${DISCORD_SECURITY_BOT_TOKEN:-}
+      DISCORD_MODERATION_BOT_TOKEN: ${DISCORD_MODERATION_BOT_TOKEN:-}
+      DISCORD_COMMUNITY_BOT_TOKEN: ${DISCORD_COMMUNITY_BOT_TOKEN:-}
+      DISCORD_AI_BOT_TOKEN: ${DISCORD_AI_BOT_TOKEN:-}
+      DISCORD_MUSIC_BOT_TOKEN: ${DISCORD_MUSIC_BOT_TOKEN:-}
+      DISCORD_COMMERCE_BOT_TOKEN: ${DISCORD_COMMERCE_BOT_TOKEN:-}
+      DISCORD_KAFKA_BOT_TOKEN: ${DISCORD_KAFKA_BOT_TOKEN:-}
+      DISCORD_CYRENE_BOT_TOKEN: ${DISCORD_CYRENE_BOT_TOKEN:-}
+      DISCORD_ROBIN_BOT_TOKEN: ${DISCORD_ROBIN_BOT_TOKEN:-}
+      DISCORD_CIPHER_BOT_TOKEN: ${DISCORD_CIPHER_BOT_TOKEN:-}
+      DISCORD_SILVERWOLF_BOT_TOKEN: ${DISCORD_SILVERWOLF_BOT_TOKEN:-}
+      DISCORD_HIMIKO_BOT_TOKEN: ${DISCORD_HIMIKO_BOT_TOKEN:-}
+      BOT_KEY: ${EMBED_WORKER_BOT_KEY:-}
+      BOT_TOKEN: ${EMBED_WORKER_BOT_TOKEN:-}
     networks: [app, data]
+    ports: ["127.0.0.1:3001:3001"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy:
       resources:
@@ -75,6 +107,9 @@ services:
   web:
     build: { context: ../.., dockerfile: apps/dashboard/Dockerfile }
     restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:3001
+      NEXT_PUBLIC_API_BASE: http://api:3001
     networks: [app]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy:
@@ -89,10 +124,19 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      BOT_TOKEN: ${DISCORD_SECURITY_BOT_TOKEN}
+      BOT_KEY: kafka
+      BOT_TOKEN: ${DISCORD_KAFKA_BOT_TOKEN:-${DISCORD_SECURITY_BOT_TOKEN:-}}
+      GUILD_ALLOWLIST: ${COMMUNITY_GUILD_ALLOWLIST}
     networks: [app, data]
+    ports: ["127.0.0.1:3101:3101"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3101/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on: { postgres: { condition: service_healthy } }
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
@@ -101,10 +145,19 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      BOT_TOKEN: ${DISCORD_MODERATION_BOT_TOKEN}
+      BOT_KEY: kafka
+      BOT_TOKEN: ${DISCORD_KAFKA_BOT_TOKEN:-${DISCORD_MODERATION_BOT_TOKEN:-}}
+      GUILD_ALLOWLIST: ${COMMUNITY_GUILD_ALLOWLIST}
     networks: [app, data]
+    ports: ["127.0.0.1:3102:3102"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3102/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on: { postgres: { condition: service_healthy } }
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
@@ -113,10 +166,22 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      BOT_TOKEN: ${DISCORD_COMMUNITY_BOT_TOKEN}
+      BOT_KEY: silverwolf
+      BOT_TOKEN: ${DISCORD_SILVERWOLF_BOT_TOKEN:-${DISCORD_COMMUNITY_BOT_TOKEN:-}}
+      GUILD_ALLOWLIST: ${COMMUNITY_GUILD_ALLOWLIST}
     networks: [app, data]
+    ports: ["127.0.0.1:3103:3103"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     volumes: ["artwork:/srv/artwork:ro"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3103/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     deploy: { resources: { limits: { cpus: "0.75", memory: 3G } } }
     depends_on: { postgres: { condition: service_healthy } }
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
@@ -126,10 +191,22 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      BOT_TOKEN: ${DISCORD_AI_BOT_TOKEN}
+      BOT_KEY: cyrene
+      BOT_TOKEN: ${DISCORD_CYRENE_BOT_TOKEN:-${DISCORD_AI_BOT_TOKEN:-}}
+      GUILD_ALLOWLIST: ${COMMUNITY_GUILD_ALLOWLIST}
+      TTS_PROVIDER_URL: ${TTS_PROVIDER_URL:-}
+      TTS_PROVIDER_KEY: ${TTS_PROVIDER_KEY:-}
+      TTS_PROVIDER_NAME: ${TTS_PROVIDER_NAME:-default}
     networks: [app, data]
+    ports: ["127.0.0.1:3104:3104"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "0.75", memory: 2G } } }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3104/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on: { postgres: { condition: service_healthy } }
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
@@ -138,11 +215,22 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      BOT_TOKEN: ${DISCORD_MUSIC_BOT_TOKEN}
+      BOT_KEY: robin
+      BOT_TOKEN: ${DISCORD_ROBIN_BOT_TOKEN:-${DISCORD_MUSIC_BOT_TOKEN:-}}
+      GUILD_ALLOWLIST: ${COMMUNITY_GUILD_ALLOWLIST}
+      MUSIC_HEALTH_PORT: 3105
+      CACHE_DIR: /srv/music-cache
     networks: [app, data]
+    ports: ["127.0.0.1:3105:3105"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     volumes: ["music-cache:/srv/music-cache"]
     deploy: { resources: { limits: { cpus: "1.00", memory: 3G } } }
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:3105/health/live')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on: { postgres: { condition: service_healthy } }
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
@@ -151,10 +239,70 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      BOT_TOKEN: ${DISCORD_COMMERCE_BOT_TOKEN}
+      BOT_KEY: cipher
+      BOT_TOKEN: ${DISCORD_CIPHER_BOT_TOKEN:-${DISCORD_COMMERCE_BOT_TOKEN:-}}
+      GUILD_ALLOWLIST: ${COMMUNITY_GUILD_ALLOWLIST}
     networks: [app, data]
+    ports: ["127.0.0.1:3106:3106"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "0.50", memory: 2G } } }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3106/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on: { postgres: { condition: service_healthy } }
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  # --- Cutover targets (profiles: cutover). Start explicitly with
+  # `docker compose --profile cutover up bot-kafka bot-himiko` in the test guild.
+  # bot-kafka replaces bot-security + bot-moderation (single Kafka token, one
+  # gateway connection). Uses port 3108 side-by-side so legacy 3101/3102 keep
+  # running until cutover; on cutover it takes 3101 and the legacy pair stops.
+  bot-kafka:
+    profiles: ["cutover"]
+    build: { context: ../.., dockerfile: apps/bots/kafka/Dockerfile }
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BOT_KEY: kafka
+      BOT_TOKEN: ${DISCORD_KAFKA_BOT_TOKEN:-}
+      GUILD_ALLOWLIST: ${COMMUNITY_GUILD_ALLOWLIST}
+      KAFKA_HEALTH_PORT: 3108
+    networks: [app, data]
+    ports: ["127.0.0.1:3108:3108"]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3108/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on: { postgres: { condition: service_healthy } }
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  bot-himiko:
+    profiles: ["cutover"]
+    build: { context: ../.., dockerfile: apps/bots/himiko/Dockerfile }
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BOT_KEY: himiko
+      BOT_TOKEN: ${DISCORD_HIMIKO_BOT_TOKEN:-}
+      GUILD_ALLOWLIST: ${COMMUNITY_GUILD_ALLOWLIST}
+      HIMIKO_HEALTH_PORT: 3107
+    networks: [app, data]
+    ports: ["127.0.0.1:3107:3107"]
+    dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    deploy: { resources: { limits: { cpus: "0.50", memory: 2G } } }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3107/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on: { postgres: { condition: service_healthy } }
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
@@ -163,6 +311,20 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      DISCORD_SECURITY_BOT_TOKEN: ${DISCORD_SECURITY_BOT_TOKEN:-}
+      DISCORD_MODERATION_BOT_TOKEN: ${DISCORD_MODERATION_BOT_TOKEN:-}
+      DISCORD_COMMUNITY_BOT_TOKEN: ${DISCORD_COMMUNITY_BOT_TOKEN:-}
+      DISCORD_AI_BOT_TOKEN: ${DISCORD_AI_BOT_TOKEN:-}
+      DISCORD_MUSIC_BOT_TOKEN: ${DISCORD_MUSIC_BOT_TOKEN:-}
+      DISCORD_COMMERCE_BOT_TOKEN: ${DISCORD_COMMERCE_BOT_TOKEN:-}
+      DISCORD_KAFKA_BOT_TOKEN: ${DISCORD_KAFKA_BOT_TOKEN:-}
+      DISCORD_CYRENE_BOT_TOKEN: ${DISCORD_CYRENE_BOT_TOKEN:-}
+      DISCORD_ROBIN_BOT_TOKEN: ${DISCORD_ROBIN_BOT_TOKEN:-}
+      DISCORD_CIPHER_BOT_TOKEN: ${DISCORD_CIPHER_BOT_TOKEN:-}
+      DISCORD_SILVERWOLF_BOT_TOKEN: ${DISCORD_SILVERWOLF_BOT_TOKEN:-}
+      DISCORD_HIMIKO_BOT_TOKEN: ${DISCORD_HIMIKO_BOT_TOKEN:-}
+      BOT_KEY: ${EMBED_WORKER_BOT_KEY:-}
+      BOT_TOKEN: ${EMBED_WORKER_BOT_TOKEN:-}
     networks: [app, data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "0.50", memory: 2G } } }
@@ -170,14 +332,14 @@ services:
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
 networks:
-  edge: { name: ei-royality_edge }
-  app: { name: ei-royality_app }
-  data: { name: ei-royality_data, internal: true }
+  edge: { name: ei-point_edge }
+  app: { name: ei-point_app }
+  data: { name: ei-point_data, internal: true }
 
 volumes:
-  pgdata: { name: ei-royality_pgdata }
-  artwork: { name: ei-royality_artwork }
-  music-cache: { name: ei-royality_music-cache }
-  logs: { name: ei-royality_logs }
-  backup-staging: { name: ei-royality_backup-staging }
-  tmp: { name: ei-royality_tmp }
+  pgdata: { name: ei-point_pgdata }
+  artwork: { name: ei-point_artwork }
+  music-cache: { name: ei-point_music-cache }
+  logs: { name: ei-point_logs }
+  backup-staging: { name: ei-point_backup-staging }
+  tmp: { name: ei-point_tmp }

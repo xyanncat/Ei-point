@@ -1,0 +1,18 @@
+{
+  "slug": "hsr-all-in-one-package",
+  "sku": "hsr-all-in-one-package",
+  "name": "All-In-One Package",
+  "game": "Honkai: Star Rail",
+  "category": "All-in-one package",
+  "description": "A complete progression package for the Star Rail account.",
+  "duration": "Up to 6 months",
+  "price_minor": 999900,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "source": "Ei Paradise.zip/website/js/payment.js",
+  "inclusions": [
+    "Full exploration",
+    "All quests",
+    "Old events"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "slug": "account-management-membership",
+  "sku": "account-management-membership",
+  "name": "All-Games Account Management Membership (30 Days)",
+  "game": "All games",
+  "category": "Membership",
+  "description": "30-day account management for Genshin Impact, Honkai: Star Rail, Wuthering Waves, Neverness to Everness and Arknights: Endfield.",
+  "duration": "30 days",
+  "price_minor": 70000,
+  "currency": "INR",
+  "bot_module": "commerce",
+  "inclusions": [
+    "Dailies",
+    "New events",
+    "Farming",
+    "Domain farming"
+  ],
+  "source": "Ei Paradise.zip/website/index.html"
+}

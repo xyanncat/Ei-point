@@ -1,21 +1,53 @@
+import { PageArt } from "../../components/page-art";
 export default function ReferralsPage() {
   return (
-    <section aria-label="Referrals">
-      <h1>Referrals</h1>
-      <p className="lede">
-        Every member gets a referral link. When friends join through it, you earn a reward reserved for
-        that calendar month — paid out by staff, then the cycle resets. Miss a month and unclaimed
-        rewards expire; nothing carries over silently.
-      </p>
-      <div className="clip-panel">
-        <h2>How a cycle works</h2>
-        <ul>
-          <li>Share your link; joins attach to the current month</li>
-          <li>Rewards are reserved, then paid by staff</li>
-          <li>Unpaid rewards expire at the month boundary</li>
-        </ul>
-        <p>Links are issued on the game servers — ask any staff member for yours.</p>
+    <section className="ei-page-layout" aria-label="Referrals">
+      <div className="ei-page-body">
+        <p>A circle that grows with you</p>
+        <h1>
+          Follow
+          <br />
+          the thread.
+        </h1>
+        <p className="lede">
+          Every member gets a referral link. Invite friends through yours and
+          earn a reward for that calendar month.
+        </p>
+        <ol className="ei-step-list">
+          <li>
+            <h2>Share your link</h2>
+            <p>
+              Ask staff on your game server for your personal link. Joins attach
+              to the current month.
+            </p>
+          </li>
+          <li>
+            <h2>Let your circle grow</h2>
+            <p>
+              Eligible rewards are reserved for that cycle, then paid out by
+              staff.
+            </p>
+          </li>
+          <li>
+            <h2>Start a fresh chapter</h2>
+            <p>
+              Unpaid rewards expire at the month boundary. Nothing carries over
+              silently.
+            </p>
+          </li>
+        </ol>
+        <div className="clip-panel">
+          <h2>Need your link?</h2>
+          <p>
+            Referral links are issued on the game servers. Ask a staff member to
+            help you get started.
+          </p>
+        </div>
       </div>
+      <PageArt
+        src="/art/kafka-floral.png"
+        caption="Every connection starts somewhere."
+      />
     </section>
   );
 }

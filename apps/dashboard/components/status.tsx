@@ -1,4 +1,4 @@
-import type { DataState, ServiceCard } from "@ei-royality/contracts";
+import type { DataState, ServiceCard } from "@ei-point/contracts";
 
 export function stateLabel(state: DataState): string {
   switch (state) {
