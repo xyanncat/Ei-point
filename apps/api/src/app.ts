@@ -123,8 +123,13 @@ export function createApp(options: AppOptions = {}) {
       return reply
         .code(err.status)
         .send(error(err.code, err.message, err.status >= 500));
-    if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500)
-      return reply.code(err.statusCode).send(error("request-denied", err.message));
+    // Fastify 5.12+ types the handler error as unknown: narrow before use.
+    const statusCode =
+      typeof err === "object" && err !== null && "statusCode" in err &&
+      typeof err.statusCode === "number" ? err.statusCode : undefined;
+    const message = err instanceof Error ? err.message : "Request failed";
+    if (statusCode && statusCode >= 400 && statusCode < 500)
+      return reply.code(statusCode).send(error("request-denied", message));
     req.log.error(
       { category: "request-failed", requestId: req.id },
       "Request failed",

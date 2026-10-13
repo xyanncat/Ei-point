@@ -37,7 +37,7 @@ docs/
 
 ```bash
 node apps/api/demo/demo-server.mjs        # fixture API on :3001 (leave running)
-cd apps/dashboard && npm install --no-save next@14.2.18 react@18.3.1 react-dom@18.3.1
+cd apps/dashboard && npm install --no-save next@14.2.35 react@18.3.1 react-dom@18.3.1
 NEXT_PUBLIC_API_BASE=http://127.0.0.1:3001 npx next dev -p 3000
 ```
 
