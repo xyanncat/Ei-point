@@ -19,6 +19,24 @@ No Aikido configuration, secret, workflow, or MCP registration remains
 Full-stack checks that need the VPS (live DB routes, `next build`, image boot,
 restore drills) are tracked as VPS gates in `docs/phase-gates.md`, never assumed.
 
+## Dependency audit residual (2026-10-13, `pnpm audit`)
+
+Counts after the bump (Next 14.2.18→14.2.35, fastify 5.3.0→5.12.7):
+info 0 / low 9 / moderate 29→22 / high 23→15 / critical 3→2.
+Cleared: middleware auth bypass (GHSA-f82v-jwr5-mffw; no `middleware.*`
+exists in `apps/dashboard`) and all 6 fastify highs (no `@fastify/*`
+plugins in use).
+
+Accepted residual — 2 criticals with no 14.x patch:
+- GHSA-p293-qw3h-jr36 (RCE, Windows-hosted servers only): production is
+  Debian; the Windows dev server is never deployed.
+- GHSA-2xp9-vwfh-vxw4 (RCE via AVIF image optimization): no `next/image`
+  use in `apps/dashboard`, no AVIF assets, no `remotePatterns` in
+  `next.config.mjs`.
+
+Re-evaluate on a Next 15 migration. A fully clean `pnpm audit` is not the
+gate; trigger absence plus patch currency is.
+
 ## Secret hygiene (enforced, audited per phase)
 
 - Real secrets live only in `.env` (gitignored, never committed) and the VPS vault.
