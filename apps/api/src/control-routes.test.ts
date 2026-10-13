@@ -347,3 +347,53 @@ test("runtime service acknowledgement updates only an existing exact version", a
   assert.ok(sqls.some((s) => s.sql.includes("control_audit")));
   await app.close();
 });
+
+test("approving a third guild is refused while two are approved", async () => {
+  const seen: string[] = [];
+  const { app } = fixture({
+    query: async (sql) => {
+      seen.push(sql);
+      if (sql.includes("COUNT")) return [{ n: 2 }];
+      if (sql.startsWith("INSERT INTO access.guilds"))
+        return [{ guild_id: "333333333333333333" }];
+      return [];
+    },
+  });
+  const r = await app.inject({
+    method: "PUT",
+    url: "/api/admin/guilds",
+    payload: {
+      guild_id: "333333333333333333",
+      owner_id: "444444444444444444",
+      name: "Third",
+      approved: true,
+    },
+  });
+  assert.equal(r.statusCode, 403);
+  assert.equal(r.json().code, "guild-locked");
+  assert.ok(seen.some((s) => s.includes("pg_advisory_xact_lock")));
+  await app.close();
+});
+
+test("re-saving an approved guild does not trip the two-guild lock", async () => {
+  const { app } = fixture({
+    query: async (sql) => {
+      if (sql.includes("COUNT")) return [{ n: 1 }];
+      if (sql.startsWith("INSERT INTO access.guilds"))
+        return [{ guild_id: "111111111111111111" }];
+      return [];
+    },
+  });
+  const r = await app.inject({
+    method: "PUT",
+    url: "/api/admin/guilds",
+    payload: {
+      guild_id: "111111111111111111",
+      owner_id: "444444444444444444",
+      name: "First",
+      approved: true,
+    },
+  });
+  assert.equal(r.statusCode, 200);
+  await app.close();
+});

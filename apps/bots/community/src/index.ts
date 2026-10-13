@@ -27,11 +27,11 @@ const allowed = (process.env.GUILD_ALLOWLIST ?? "")
 if (
   !url ||
   !token ||
-  !allowed.length ||
+  allowed.length !== 2 ||
   allowed.some((x) => !/^\d{17,20}$/.test(x))
 )
   throw new Error(
-    "Set DATABASE_URL, BOT_TOKEN and GUILD_ALLOWLIST before starting the community bot.",
+    "Set DATABASE_URL, BOT_TOKEN and GUILD_ALLOWLIST (exactly two guild IDs) before starting the community bot.",
   );
 const pool = new pg.Pool({
   connectionString: url,

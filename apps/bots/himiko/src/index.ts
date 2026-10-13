@@ -28,8 +28,8 @@ const allowed = rawAllowlist
   .map((x) => x.trim())
   .filter(Boolean);
 
-if (!url || !token || !allowed.length || allowed.some((x) => !/^\d{17,20}$/.test(x))) {
-  throw new Error("Set DATABASE_URL, BOT_TOKEN and GUILD_ALLOWLIST before starting the himiko bot.");
+if (!url || !token || allowed.length !== 2 || allowed.some((x) => !/^\d{17,20}$/.test(x))) {
+  throw new Error("Set DATABASE_URL, BOT_TOKEN and GUILD_ALLOWLIST (exactly two guild IDs) before starting the himiko bot.");
 }
 
 const pool = new pg.Pool({

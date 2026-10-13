@@ -573,6 +573,18 @@ export function registerControlRoutes(
       name = text(b.name, 200, true);
     if (typeof b.approved !== "boolean") fail(400, "invalid-approved");
     return tx(async (q) => {
+      // Serialize concurrent approvals in this transaction (advisory xact
+      // lock, same pattern as the economy guild locks) so the count below
+      // cannot race.
+      await q("SELECT pg_advisory_xact_lock(hashtext('ei-point-guild-approvals'))");
+      // Two-server hard lock: at most two approved guilds may exist.
+      if (b.approved === true) {
+        const locked = await q(
+          "SELECT COUNT(*)::int AS n FROM access.guilds WHERE approved=true AND guild_id<>$1",
+          [guild],
+        );
+        if ((locked[0]?.n ?? 0) >= 2) fail(403, "guild-locked");
+      }
       const rows = await q(
         "INSERT INTO access.guilds(guild_id,name,owner_id,approved) VALUES($1,$2,$3,$4) ON CONFLICT(guild_id) DO UPDATE SET name=$2,owner_id=$3,approved=$4,updated_at=now() RETURNING *",
         [guild, name, owner, b.approved],

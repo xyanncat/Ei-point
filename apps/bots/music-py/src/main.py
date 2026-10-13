@@ -1112,8 +1112,8 @@ def main():
         log.error("BOT_TOKEN is required to run the music bot.")
         sys.exit(1)
 
-    if not ALLOWED_GUILDS:
-        log.error("GUILD_ALLOWLIST is required to run the music bot.")
+    if len(ALLOWED_GUILDS) != 2:
+        log.error("GUILD_ALLOWLIST must contain exactly two guild IDs to run the music bot.")
         sys.exit(1)
 
     init_db()
