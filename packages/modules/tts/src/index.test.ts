@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   createTtsQueue,
+  extractVoiceChatText,
   normalizeVoice,
   ttsCacheKey,
   validateTtsInput,
@@ -78,5 +79,43 @@ describe("tts queue", () => {
     void p1;
     void p2;
     void queued;
+  });
+});
+
+describe("extractVoiceChatText", () => {
+  it("passes normal chat text through", () => {
+    assert.deepEqual(extractVoiceChatText("hello everyone, how are you"), {
+      ok: true,
+      text: "hello everyone, how are you",
+    });
+  });
+  it("drops bare links and markdown hyperlinks entirely", () => {
+    assert.deepEqual(extractVoiceChatText("see this https://example.com/x nice"), {
+      ok: true,
+      text: "see this nice",
+    });
+    assert.deepEqual(extractVoiceChatText("read [the rules](https://example.com/rules) please"), {
+      ok: true,
+      text: "read please",
+    });
+    assert.deepEqual(extractVoiceChatText("look ![meme](https://cdn.example/m.gif) wow"), {
+      ok: true,
+      text: "look wow",
+    });
+  });
+  it("drops custom and unicode emoji", () => {
+    assert.deepEqual(extractVoiceChatText("hi <:wave:123456789012345678> there"), {
+      ok: true,
+      text: "hi there",
+    });
+    assert.deepEqual(extractVoiceChatText("party \u{1F389} time \u2764\uFE0F now"), {
+      ok: true,
+      text: "party time now",
+    });
+  });
+  it("reports nothing-speakable when only ignored content remains", () => {
+    assert.deepEqual(extractVoiceChatText("https://tenor.com/x.gif"), { ok: false, reason: "nothing-speakable" });
+    assert.deepEqual(extractVoiceChatText("<:wave:123> \u{1F600}"), { ok: false, reason: "nothing-speakable" });
+    assert.deepEqual(extractVoiceChatText("   "), { ok: false, reason: "nothing-speakable" });
   });
 });

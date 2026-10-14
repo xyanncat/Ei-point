@@ -37,6 +37,28 @@ export function validateTtsInput(text: string): { ok: true; text: string } | { o
   return { ok: true, text: trimmed };
 }
 
+/**
+ * Voice-chat reader filter: keep only speakable words. Drops markdown
+ * links/images and bare links entirely, plus custom (`<:name:id>`) and
+ * unicode emoji. Stickers, attachments and GIFs never reach this function —
+ * the caller skips non-text message parts. Empty result means stay silent.
+ */
+export function extractVoiceChatText(
+  content: string,
+): { ok: true; text: string } | { ok: false; reason: "nothing-speakable" } {
+  const cleaned = content
+    .replace(/!?\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(
+      /<a?:\w+:\d+>|[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{2190}-\u{21FF}\u{2300}-\u{23FF}]/gu,
+      " ",
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length === 0) return { ok: false, reason: "nothing-speakable" };
+  return { ok: true, text: cleaned };
+}
+
 export function normalizeVoice(voice: string | null | undefined): string {
   const v = (voice ?? "default").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
   return v === "" ? "default" : v.slice(0, 40);
