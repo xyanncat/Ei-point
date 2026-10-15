@@ -124,20 +124,24 @@ export const commandDefinitions = [
         .setMaxLength(100)
         .setRequired(true),
   ),
-  simple("sell", "List a card for sale")
+  simple("sell", "List a card for sale; cancel an open listing with the cancel option")
     .addStringOption((o) =>
       o
         .setName("instance")
-        .setDescription("Card instance UUID")
-        .setMaxLength(36)
-        .setRequired(true),
+        .setDescription("Card instance UUID (required to list)")
+        .setMaxLength(36),
     )
     .addIntegerOption((o) =>
       o
         .setName("price")
-        .setDescription("Price in berries")
-        .setMinValue(1)
-        .setRequired(true),
+        .setDescription("Price in berries (required to list)")
+        .setMinValue(1),
+    )
+    .addStringOption((o) =>
+      o
+        .setName("cancel")
+        .setDescription("Listing UUID to cancel")
+        .setMaxLength(36),
     ),
   page(simple("market", "Browse open listings")),
   simple("buy", "Purchase a listing").addStringOption((o) =>
@@ -280,13 +284,6 @@ export const commandDefinitions = [
         ),
     ),
 ].concat([
-  simple("unlist", "Cancel your open listing").addStringOption((o) =>
-    o
-      .setName("listing")
-      .setDescription("Listing UUID")
-      .setRequired(true)
-      .setMaxLength(36),
-  ),
   simple("balance", "Show your berries"),
 ]);
 
@@ -466,9 +463,18 @@ export async function respondToCommand(
       case "open":
         response = `Pack opened: ${JSON.stringify(await g.openPack({ ...actor, packId: text(r, "pack"), isAdmin: r.isOwner }))}`;
         break;
-      case "sell":
-        response = `Listing created: ${(await g.createListing({ ...actor, instanceId: text(r, "instance"), price: num(r, "price", 0) })).listingId}`;
+      case "sell": {
+        const cancel = text(r, "cancel");
+        if (cancel) {
+          await g.cancelListing({ ...actor, listingId: cancel });
+          response = "Listing cancelled.";
+        } else if (!text(r, "instance") || !num(r, "price", 0)) {
+          response = "Provide instance and price to list a card, or cancel:<listing id> to cancel an open listing.";
+        } else {
+          response = `Listing created: ${(await g.createListing({ ...actor, instanceId: text(r, "instance"), price: num(r, "price", 0) })).listingId}`;
+        }
         break;
+      }
       case "market":
         response = rowsText(
           await g.market(r.guildId, num(r, "page", 1)),
@@ -477,10 +483,6 @@ export async function respondToCommand(
         break;
       case "buy":
         response = `Purchased: ${JSON.stringify(await g.buy({ ...actor, listingId: text(r, "listing") }))}`;
-        break;
-      case "unlist":
-        await g.cancelListing({ ...actor, listingId: text(r, "listing") });
-        response = "Listing cancelled.";
         break;
       case "trades":
         response = rowsText(

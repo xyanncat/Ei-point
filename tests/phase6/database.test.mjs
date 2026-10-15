@@ -223,6 +223,52 @@ test('Discord command dispatch acknowledges before work and restricts admin comm
   await bot.respondToCommand({ ...actor, name: 'score', key: 'score', options: {} }, { community: members(), economy: economy() });
   assert.match(messages.at(-1), /Rounds: 1/);
 });
+test('sell cancel is reachable, owner-scoped and race-safe against a concurrent buy', async () => {
+  const bot = await import('../../apps/bots/community/dist/commands.js').catch(() => ({}));
+  const registered = new Set(bot.commandDefinitions.map(command => command.toJSON().name));
+  assert.ok(registered.has('sell'), 'sell must stay registered');
+  assert.ok(!registered.has('unlist'), 'unlist must remain unregistered');
+  const messages = [];
+  const reply = async text => messages.push(text);
+  const context = { guildId: guild, userId: alice, key: 'cancel-1', isOwner: false, canManage: false, defer: async () => {}, reply };
+  // The owner cancels their own listing through /sell cancel.
+  const card = await issue();
+  const listing = await economy().createListing({ guildId: guild, userId: alice, instanceId: card.instanceId, price: 25, key: 'cancel-reach' });
+  await bot.respondToCommand({ ...context, name: 'sell', options: { cancel: listing.listingId } }, { community: members(), economy: economy() });
+  assert.match(messages.at(-1), /cancelled/i);
+  assert.equal((await economy().market(guild)).length, 0);
+  assert.equal((await economy().inventory(guild, alice))[0].reserved, false);
+  // Non-owner and repeated cancels fail without touching the listing.
+  await economy().credit({ guildId: guild, userId: alice, amount: 10, key: 'seller-credit' });
+  const card2 = await economy().issueCard({ guildId: guild, userId: alice, cardId: 'test-card', key: 'issue-2' });
+  const listing2 = await economy().createListing({ guildId: guild, userId: alice, instanceId: card2.instanceId, price: 30, key: 'cancel-guard' });
+  await bot.respondToCommand({ ...context, userId: bob, key: 'cancel-2', name: 'sell', options: { cancel: listing2.listingId } }, { community: members(), economy: economy() });
+  assert.doesNotMatch(messages.at(-1), /cancelled/i);
+  await bot.respondToCommand({ ...context, key: 'cancel-3', name: 'sell', options: { cancel: listing2.listingId } }, { community: members(), economy: economy() });
+  assert.match(messages.at(-1), /cancelled/i);
+  await bot.respondToCommand({ ...context, key: 'cancel-4', name: 'sell', options: { cancel: listing2.listingId } }, { community: members(), economy: economy() });
+  assert.doesNotMatch(messages.at(-1), /cancelled/i);
+  assert.equal((await pool.query('SELECT status FROM games.listings WHERE listing_id=$1', [listing2.listingId])).rows[0].status, 'cancelled');
+  // Concurrent buy and cancel: exactly one winner, funds conserved.
+  await fund(bob, 100, 'fund-bob-race');
+  const card3 = await economy().issueCard({ guildId: guild, userId: alice, cardId: 'test-card', key: 'issue-3' });
+  const listing3 = await economy().createListing({ guildId: guild, userId: alice, instanceId: card3.instanceId, price: 40, key: 'race-list' });
+  const before = { alice: await economy().balance(guild, alice), bob: await economy().balance(guild, bob) };
+  const race = await Promise.allSettled([
+    economy().buy({ guildId: guild, userId: bob, listingId: listing3.listingId, key: 'race-buy' }),
+    economy().cancelListing({ guildId: guild, userId: alice, listingId: listing3.listingId, key: 'race-cancel' }),
+  ]);
+  assert.equal(race.filter(result => result.status === 'fulfilled').length, 1);
+  const status = (await pool.query('SELECT status FROM games.listings WHERE listing_id=$1', [listing3.listingId])).rows[0].status;
+  assert.ok(['sold', 'cancelled'].includes(status));
+  const after = { alice: await economy().balance(guild, alice), bob: await economy().balance(guild, bob) };
+  if (status === 'sold') {
+    assert.equal(after.alice, String(BigInt(before.alice) + 40n));
+    assert.equal(after.bob, String(BigInt(before.bob) - 40n));
+  } else {
+    assert.deepEqual(after, before);
+  }
+});
 test('opening an unaffordable pack rolls back minted cards and supply counters', async () => {
   await catalog(2);
   await economy().definePack({ packId: 'starter', name: 'Starter', price: 10, size: 1, adminOnly: false, items: [{ cardId: 'test-card', weight: 1 }] });
