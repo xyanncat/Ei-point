@@ -42,7 +42,7 @@ Ei Point is a TypeScript and Python monorepo for a coordinated fleet of Discord 
   </tr>
   <tr>
     <td width="50%"><h3>◈ Commerce &amp; referrals</h3><p>Catalog and order flows, payment claims and settlement, verification, referral cycles, and guarded fulfillment.</p></td>
-    <td width="50%"><h3>✦ AI, voice &amp; music</h3><p>Bounded provider routing and memory, Cyrene TTS, and Robin playback with queue snapshots and a bounded media cache.</p></td>
+    <td width="50%"><h3>✦ AI, voice &amp; music</h3><p>Bounded AI provider routing and memory, offline local Qwen voice cloning for Cyrene, and Robin playback with queue snapshots and a bounded media cache.</p></td>
   </tr>
   <tr>
     <td width="50%"><h3>⌘ Website &amp; API</h3><p>A Kafka-themed public site and dashboard foundation with OAuth/session controls, commerce endpoints, and readiness routes.</p></td>
@@ -57,7 +57,7 @@ These describe the implemented product surface, not a claim that every archived 
 | Identity | Service key | Intended responsibilities | Current acceptance status |
 |---|---|---|---|
 | **Kafka** | `kafka` | Security, moderation, logging | Local implementation; full shared-dispatch lifecycle and live Discord acceptance remain open |
-| **Cyrene** | `cyrene` | AI, search, TTS | Provider, voice playback, restart, and lifecycle acceptance remain open |
+| **Cyrene** | `cyrene` | AI, search, local Qwen TTS | AI-provider, model-provisioning, target-CPU and voice-playback acceptance remain open |
 | **Robin** | `robin` | Music and playback | Target-platform playback and lifecycle acceptance remain open |
 | **Cipher** | `cipher` | Commerce and referrals | Local guarded flows; live provider/payment and full acceptance remain open |
 | **SilverWolf** | `silverwolf` | Game economy and rank readout | Local implementation; catalog/legacy parity and staging acceptance remain open |
@@ -68,6 +68,8 @@ The bot count is configurable through the release roster. A manifest cannot crea
 Browse the [individual command and function catalog for all six bots](docs/bot-command-catalog.md). It follows checked-in command definitions and distinguishes implemented source behavior from the still-open legacy parity and live acceptance gates.
 
 The owner-approved target command set is documented command by command in the [product command and runtime spec](docs/product/bot-command-and-runtime-spec.md). This spec records requested behavior separately from code that has passed its implementation gates.
+
+Cyrene's local model provisioning, offline startup, reference-clip handling, and readiness checks are documented in the [Qwen TTS operations guide](docs/operations/qwen-tts.md). The model files and voice reference stay in local read-only mounts; they are not committed to this repository.
 
 ## ⚙️ Architecture
 
@@ -83,7 +85,9 @@ flowchart TB
   subgraph Services["02 · APPLICATION SERVICES"]
     direction LR
     API[Fastify API]
-    Fleet[Six bot identities]
+    Fleet[Bot fleet]
+    Cyrene[Cyrene AI bot]
+    Qwen[Offline Qwen TTS]
     Workers[Workers & outbox]
   end
   subgraph Core["03 · SHARED PLATFORM"]
@@ -97,6 +101,8 @@ flowchart TB
   Members --> Site
   Site --> API
   Discord --> Fleet
+  Fleet --> Cyrene
+  Cyrene --> Qwen
   Fleet --> Flow
   Flow --> Domain
   API --> DB
@@ -113,7 +119,7 @@ flowchart TB
   classDef service fill:#21273a,stroke:#bc6559,color:#fff1e8,stroke-width:2px
   classDef durable fill:#212b36,stroke:#d3ac6c,color:#fff8e8,stroke-width:2px
   class Members,Discord,Site actor
-  class API,Fleet,Workers,Flow,Domain,Ops service
+  class API,Fleet,Qwen,Workers,Flow,Domain,Ops service
   class DB durable
 ```
 

@@ -6,10 +6,11 @@ These procedures require Linux, Docker Compose, Bash, Node.js, Python 3, GNU tim
 
 Build every application image and the custom PostgreSQL image from this checkout on Linux. Publish them and record their actual repository digests. The PostgreSQL image must come from `infra/backup/Dockerfile`, because a plain upstream image lacks the configured pgBackRest executable. Do not use sample or invented digests.
 
-Create a root-readable release JSON with `id`, `images` and optional `bots`. `images` maps every selected Compose service to its published `repository@sha256:<64 hexadecimal characters>` reference. Required foundation services are `postgres`, `nginx`, `api`, `web` and `workers`. Include each selected bot service as well. Omitting `bots` selects the six currently implemented identities:
+Create a root-readable release JSON with `id`, `images` and optional `bots`. `images` maps every selected Compose service to its published `repository@sha256:<64 hexadecimal characters>` reference. Required foundation services are `postgres`, `nginx`, `api`, `web`, `workers` and `tts-qwen`. Include each selected bot service as well. Omitting `bots` selects the six currently implemented identities:
 
 | Compose service | Registry key | Readiness port |
 |---|---|---:|
+| tts-qwen | local Qwen TTS runtime | 3120 |
 | bot-kafka | kafka | 3108 |
 | bot-himiko | himiko | 3107 |
 | bot-community | silverwolf | 3103 |
@@ -27,7 +28,7 @@ node scripts/release-manifest.mjs /secure/release.json /secure/release.compose.j
 
 Set `ENV_FILE` explicitly. Use separate administrative `MIGRATION_DATABASE_URL` and least-privilege `DATABASE_URL`, both pointing to `ei_point` on the same server. The application username must be `ei_point_app`; its URL-encoded password must contain at least 24 characters and no placeholder. The migration service runs schema migrations and provisions application-role credentials/grants. Administrative credentials belong only to this one-shot service and PostgreSQL bootstrap.
 
-Configure OAuth, approved registry identities/guilds, tokens, payment destinations and provider URLs/keys/models. AI primary URL/key/model are required when its service is selected; a fallback needs all three values. Set the real UPI payee and payment origin before exposing checkout. Configure public TLS and ingress separately; nginx binds loopback port 8080 in this Compose setup. Set the trusted proxy IP/subnet consistently if changing the default network.
+Configure OAuth, approved registry identities/guilds, tokens, payment destinations and provider URLs/keys/models. AI primary URL/key/model are required when its service is selected; a fallback needs all three values. Cyrene TTS requires the pinned local Qwen model directory and reference audio described in the [Qwen TTS operations guide](operations/qwen-tts.md); its startup is offline. Set the real UPI payee and payment origin before exposing checkout. Configure public TLS and ingress separately; nginx binds loopback port 8080 in this Compose setup. Set the trusted proxy IP/subnet consistently if changing the default network.
 
 ## First provisioning and later releases
 
@@ -40,7 +41,7 @@ ENV_FILE=/srv/ei-point/.env BACKUP_SNAPSHOT=/srv/backups/<published-timestamp> \
   bash scripts/deploy.sh /secure/release.json
 ```
 
-Use the actual backup root configured in the environment; the path above is illustrative. Deployment requires disk usage below 85%, immutable images, a hash-verified backup within the configured age, pgBackRest stanza creation/check, migration success, container readiness, HTTP readiness and fresh identity-scoped database heartbeats. The selected bundle's age does not prove that an independent off-host copy is current. Current/previous manifest pointers advance only after health succeeds. Schema migration and process replacement can interrupt service; there is no zero-downtime guarantee. Do not run incompatible old application code across destructive schema changes; use expand/contract migrations and review compatibility before release.
+Use the actual backup root configured in the environment; the path above is illustrative. Deployment requires disk usage below 85%, immutable images, a hash-verified backup within the configured age, pgBackRest stanza creation/check, migration success, container readiness, HTTP readiness and fresh identity-scoped database heartbeats. The release readiness loop may wait up to 15 minutes for the local Qwen model to preload; set `RELEASE_HEALTH_ATTEMPTS` only to shorten that bound for an environment whose model load time is already known. The selected bundle's age does not prove that an independent off-host copy is current. Current/previous manifest pointers advance only after health succeeds. Schema migration and process replacement can interrupt service; there is no zero-downtime guarantee. Do not run incompatible old application code across destructive schema changes; use expand/contract migrations and review compatibility before release.
 
 On failure, inspect the cause and select a known compatible previous manifest:
 

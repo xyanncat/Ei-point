@@ -5,6 +5,7 @@ dist/
 out/
 __pycache__/
 .env
+.models/
 *.local
 pgdata/
 backup-staging/

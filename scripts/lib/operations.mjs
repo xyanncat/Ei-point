@@ -2,13 +2,13 @@ import {readFile,stat,realpath} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {resolve,join,basename,sep} from 'node:path';
-export const releaseServices=['postgres','nginx','api','web','workers','bot-kafka','bot-himiko','bot-community','bot-ai','bot-music','bot-commerce'];
+export const releaseServices=['postgres','nginx','api','web','workers','tts-qwen','bot-kafka','bot-himiko','bot-community','bot-ai','bot-music','bot-commerce'];
 export const defaultBots=[['bot-kafka','kafka',3108],['bot-himiko','himiko',3107],['bot-community','silverwolf',3103],['bot-ai','cyrene',3104],['bot-music','robin',3105],['bot-commerce','cipher',3106]].map(([service,botKey,port])=>({service,botKey,port}));
-export function validateRelease(value){
+export function validateRelease(value,{allowMissingTts=false}={}){
  if(!value||typeof value.id!=='string'||!/^[-a-zA-Z0-9_.]{1,80}$/.test(value.id)||!value.images||typeof value.images!=='object')throw Error('Invalid release manifest');
  const bots=value.bots??defaultBots;
  if(!Array.isArray(bots)||bots.some(b=>!/^bot-[a-z0-9-]+$/.test(b.service)||['bot-security','bot-moderation'].includes(b.service)||!/^[-a-z0-9]+$/.test(b.botKey)||!Number.isInteger(b.port)||b.port<1024||b.port>65535)||new Set(bots.map(b=>b.service)).size!==bots.length||new Set(bots.map(b=>b.botKey)).size!==bots.length||new Set(bots.map(b=>b.port)).size!==bots.length)throw Error('Invalid or overlapping bot roster');
- const expected=['postgres','nginx','api','web','workers',...bots.map(b=>b.service)];
+ const expected=['postgres','nginx','api','web','workers',...(allowMissingTts&&!Object.hasOwn(value.images,'tts-qwen')?[]:['tts-qwen']),...bots.map(b=>b.service)];
  if(Object.keys(value.images).some(key=>!expected.includes(key)))throw Error('Unsupported or overlapping release service');
  for(const name of expected)if(typeof value.images[name]!=='string'||!/^[-a-zA-Z0-9._/:]+@sha256:[a-f0-9]{64}$/.test(value.images[name]))throw Error(`Immutable image digest required: ${name}`);
  value.bots=bots;

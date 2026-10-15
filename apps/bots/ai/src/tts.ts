@@ -37,28 +37,58 @@ export const ttsCommandDefinitions = [
     .addStringOption((opt) => opt.setName("query").setDescription("Search query").setRequired(true).setMaxLength(300)),
 ];
 
+const MAX_TTS_AUDIO_BYTES = 8 * 1024 * 1024;
+const WAV_MIME_TYPES = new Set(["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"]);
+
 function makeTtsProvider(): TtsSynthesizeFn {
-  const apiUrl = process.env.TTS_PROVIDER_URL;
-  const apiKey = process.env.TTS_PROVIDER_KEY;
+  const apiUrl = process.env.QWEN_TTS_URL ?? "http://127.0.0.1:3120/v1/audio/speech";
   return async (text, voice, signal) => {
-    if (apiUrl) {
-      const res = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
-        body: JSON.stringify({ text, voice, format: "mp3" }),
-        signal,
-      });
-      if (!res.ok) throw new Error(`tts-provider-${res.status}`);
-      const buf = new Uint8Array(await res.arrayBuffer());
-      if (buf.length === 0) throw new Error("tts-empty-audio");
-      return { mime: "audio/mpeg", bytes: buf };
+    const res = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "audio/wav" },
+      body: JSON.stringify({ text, voice, format: "wav" }),
+      signal,
+    });
+    if (res.status === 429) {
+      const error = new Error("qwen-tts-queue-full");
+      Object.assign(error, { code: "TTS_QUEUE_FULL" });
+      throw error;
     }
-    throw new Error("tts-provider-not-configured");
+    if (!res.ok) throw new Error(`qwen-tts-${res.status}`);
+    const mime = res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+    if (!mime || !WAV_MIME_TYPES.has(mime)) throw new Error("qwen-tts-invalid-content-type");
+    const contentLength = Number(res.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > MAX_TTS_AUDIO_BYTES) {
+      await res.body?.cancel();
+      throw new Error("qwen-tts-audio-too-large");
+    }
+    if (!res.body) throw new Error("qwen-tts-empty-audio");
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_TTS_AUDIO_BYTES) {
+        await reader.cancel();
+        throw new Error("qwen-tts-audio-too-large");
+      }
+      chunks.push(value);
+    }
+    if (size === 0) throw new Error("qwen-tts-empty-audio");
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { mime: "audio/wav", bytes };
   };
 }
 
 const ttsQueue = createTtsQueue({
-  provider: process.env.TTS_PROVIDER_NAME ?? "default",
+  provider: "qwen3-local",
   synthesize: makeTtsProvider(),
 });
 

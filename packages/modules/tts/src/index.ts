@@ -1,13 +1,13 @@
 // TTS module: Cyrene voice TTS playback (pure logic, no Discord/voice imports).
 // Provider-agnostic: synthesis fn is injected by the bot entrypoint.
 // Budgets mirror §5 voice envelope: 2 concurrent syntheses, bounded queue,
-// 30s synthesis deadline, 500-char input cap, 2 concurrent voice sessions.
+// 90s synthesis deadline, 500-char input cap, 2 concurrent voice sessions.
 
 import { createHash } from "node:crypto";
 
 export const TTS_CONCURRENT = 2;
 export const TTS_QUEUE_MAX = 10;
-export const TTS_DEADLINE_MS = 30_000;
+export const TTS_DEADLINE_MS = 90_000;
 export const TTS_MAX_CHARS = 500;
 export const TTS_MAX_SESSIONS = 2;
 export const TTS_CACHE_VERSION = 1;
@@ -111,7 +111,10 @@ export function createTtsQueue(opts: {
     try {
       const audio = await run(validated.text, normalizeVoice(voice));
       return { ok: true as const, audio, cacheKey: ttsCacheKey(opts.provider, voice, validated.text) };
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "TTS_QUEUE_FULL") {
+        return { ok: false as const, reason: "queue-full" as const };
+      }
       return { ok: false as const, reason: "all-failed" as const };
     } finally {
       active--;

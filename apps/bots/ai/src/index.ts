@@ -22,6 +22,7 @@ import {
   processConversation,
 } from "./commands.js";
 import { synthesizeSpeech, ttsCommandDefinitions, respondToTtsCommand } from "./tts.js";
+import { extractVoiceChatText, TTS_MAX_CHARS } from "@ei-point/module-tts";
 
 const ALL_AI_COMMANDS = [...commonCommandDefinitions(), ...ttsCommandDefinitions];
 const TTS_NAMES = new Set(ttsCommandDefinitions.map((c) => c.name));
@@ -274,12 +275,13 @@ const voiceChatPending = new Set<string>();
 client.on(Events.MessageCreate, async (message) => {
   const session = message.guildId ? cyreneVoiceSessions.get(message.guildId) : undefined;
   if (!session || message.channelId !== session.channelId || message.author.bot || !message.guild) return;
-  const spoken = message.content.trim();
-  if (!spoken) return;
-  if (spoken.length > 500) {
-    void message.reply(toEiEmbedPayload("I skipped that message because voice chat messages must be 500 characters or shorter.", "Cyrene")).catch(() => {});
+  if (message.content.length > TTS_MAX_CHARS) {
+    void message.reply(toEiEmbedPayload(`I skipped that message because voice chat messages must be ${TTS_MAX_CHARS} characters or shorter.`, "Cyrene")).catch(() => {});
     return;
   }
+  const extracted = extractVoiceChatText(message.content);
+  if (!extracted.ok) return;
+  const spoken = extracted.text;
   const cooldownKey = `${message.guildId}:${message.author.id}`;
   const now = Date.now();
   const lastSpokenAt = voiceChatCooldown.get(cooldownKey) ?? 0;

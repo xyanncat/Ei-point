@@ -78,6 +78,17 @@ describe("tts queue", () => {
     assert.equal(q.queued(), 10);
     await Promise.all([p1,p2,...queued]);
   });
+  it("returns the overload result when the local service rejects its bounded queue", async () => {
+    const q = createTtsQueue({
+      provider: "qwen3-local",
+      synthesize: async () => {
+        const error = new Error("queue-full");
+        Object.assign(error, { code: "TTS_QUEUE_FULL" });
+        throw error;
+      },
+    });
+    assert.deepEqual(await q.synthesize("hello", "default"), { ok: false, reason: "queue-full" });
+  });
 });
 
 describe("extractVoiceChatText", () => {

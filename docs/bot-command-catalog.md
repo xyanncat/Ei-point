@@ -78,8 +78,8 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 
 - Route AI mentions through a configured OpenAI-compatible primary provider and optional fallback; local compatible endpoints may omit API keys.
 - Keep guild/user conversation threads, recent messages, summaries, persona preferences, and usage records in PostgreSQL.
-- Bound synthesis concurrency, queue depth, message length, and request deadline; coordinate voice admission with Robin through database leases.
-- Local Qwen model hosting and target-VPS qualification remain open; current TTS still calls a configured HTTP endpoint.
+- Read new messages from the active voice channel's text chat, enforce Ei-Flow authorization, rate and queue limits, and coordinate voice admission with Robin through database leases.
+- Synthesize through the private, offline local Qwen service. Provisioning model weights and target-VPS CPU/audible acceptance remain open.
 
 ## Robin
 
@@ -189,13 +189,12 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 
 ## API-key configuration count
 
-The supplied completion plan names **zero specific third-party API keys** as required configuration; it refers to external credentials generally without naming providers. In the current `.env.example`, there are three optional provider-key slots:
+The supplied completion plan names **zero specific third-party API keys** as required configuration; it refers to external credentials generally without naming providers. In the current `.env.example`, there are two optional provider-key slots:
 
 | Variable | Requirement | Used for |
 |---|---|---|
 | `AI_PROVIDER_PRIMARY_KEY` | Optional for a local compatible endpoint | Primary AI provider authentication |
 | `AI_PROVIDER_FALLBACK_KEY` | Optional for a local fallback endpoint | AI fallback provider authentication |
-| `TTS_PROVIDER_KEY` | Optional for a local TTS endpoint | Cyrene speech synthesis authentication |
 
 This count excludes Discord bot tokens, database credentials, payment addresses, and OAuth secrets because they are not provider API keys. See [.env.example](../.env.example) and the [bot identity runbook](bot-identities.md) for configuration context.
 

@@ -7,6 +7,8 @@ cd "$ROOT_DIR"
 RELEASE_MANIFEST=${1:?Usage: deploy.sh release.json}
 ENV_FILE=${ENV_FILE:-$ROOT_DIR/.env}
 STATE_DIR=${RELEASE_STATE_DIR:-$ROOT_DIR/.releases}
+HEALTH_ATTEMPTS=${RELEASE_HEALTH_ATTEMPTS:-180}
+[[ "$HEALTH_ATTEMPTS" =~ ^[1-9][0-9]{0,2}$ ]] && (( HEALTH_ATTEMPTS<=180 )) || { echo 'RELEASE_HEALTH_ATTEMPTS must be between 1 and 180' >&2; exit 1; }
 [[ -f "$ENV_FILE" && -f "$RELEASE_MANIFEST" ]] || { echo 'Release and environment files required' >&2; exit 1; }
 : "${BACKUP_SNAPSHOT:?Select a verified BACKUP_SNAPSHOT before deployment}"
 node scripts/verify-backup.mjs "$BACKUP_SNAPSHOT" --max-age-hours "${DEPLOY_BACKUP_MAX_AGE_HOURS:-24}" >/dev/null
@@ -21,7 +23,7 @@ node scripts/release-manifest.mjs "$RELEASE_MANIFEST" "$WORK/release.compose.jso
 mapfile -t BOTS < <(sed '/^$/d' "$WORK/release.compose.json.bots")
 COMPOSE=(docker compose --project-name ei-point --env-file "$ENV_FILE" -f infra/docker/compose.yml -f "$WORK/release.compose.json")
 "${COMPOSE[@]}" config --quiet
-"${COMPOSE[@]}" pull postgres nginx api web workers "${BOTS[@]}" migrate
+"${COMPOSE[@]}" pull postgres nginx api web workers tts-qwen "${BOTS[@]}" migrate
 # A single identity must never have old and replacement handlers running together.
 "${COMPOSE[@]}" --profile legacy-disabled stop bot-security bot-moderation
 bash scripts/stop-retired-bots.sh "$WORK/release.compose.json.bots"
@@ -31,9 +33,10 @@ docker exec --user postgres "$pgid" sh -c 'exec pgbackrest --stanza=ei-point --p
 docker exec --user postgres "$pgid" sh -c 'exec pgbackrest --stanza=ei-point --pg1-user="$POSTGRES_USER" check'
 # Do not mutate the schema until WAL archiving has a usable repository.
 "${COMPOSE[@]}" --profile maintenance run --rm --no-deps migrate
+"${COMPOSE[@]}" up -d --no-build --wait --wait-timeout 900 tts-qwen
 "${COMPOSE[@]}" up -d --no-build --remove-orphans --wait --wait-timeout 120 api web workers "${BOTS[@]}" nginx
 healthy=false
-for attempt in {1..12}; do
+for ((attempt=1; attempt<=HEALTH_ATTEMPTS; attempt++)); do
  if bash scripts/health-fleet.sh "$RELEASE_MANIFEST"; then healthy=true; break; fi
  sleep 5
 done

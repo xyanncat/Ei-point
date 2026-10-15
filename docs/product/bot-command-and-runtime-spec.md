@@ -90,7 +90,7 @@ Local inference removes third-party inference API quotas from these two features
 
 ## API-key requirement count
 
-The supplied `EI_POINT_COMPLETION_BUILD_PLAN.md` names **zero specific third-party API keys** as required configuration. It refers to external credentials generally, without listing a provider or key count. The existing `.env.example` has three optional provider-key slots (`AI_PROVIDER_PRIMARY_KEY`, `AI_PROVIDER_FALLBACK_KEY`, and `TTS_PROVIDER_KEY`); those are current implementation configuration, not key requirements stated in the supplied plan. The plan separately calls for Discord bot tokens and deployment secrets, which are not API-key requirements. Local Qwen TTS and Hy-MT2 translation should not need a metered inference-provider key.
+The supplied `EI_POINT_COMPLETION_BUILD_PLAN.md` names **zero specific third-party API keys** as required configuration. It refers to external credentials generally, without listing a provider or key count. The current `.env.example` has two optional provider-key slots (`AI_PROVIDER_PRIMARY_KEY` and `AI_PROVIDER_FALLBACK_KEY`); those are implementation configuration, not key requirements stated in the supplied plan. The plan separately calls for Discord bot tokens and deployment secrets, which are not API-key requirements. Local Qwen TTS and Hy-MT2 translation do not need a metered inference-provider key.
 
 ## Implementation gates
 
@@ -115,8 +115,8 @@ This table reflects repository work in progress. A slash command appearing in so
 | Shared `/botinfo`, `/ping`, `/about` | Partial | Registered in the six bot command arrays; identity-specific details, owner mention, and runtime behavior still need per-bot acceptance. |
 | Common embed replies | Partial | Shared TypeScript interaction wrapper is in place; outbound event messages and Robin's direct response paths still need conversion and verification. |
 | Kafka permissions | Partial | Administrator default command permissions, owner-or-Administrator interaction gate, `/kick`, warning/timeout removals, and all four `/temp` actions are implemented. Disposable-guild effect/recovery tests, other security callbacks, and live authorization checks remain open. |
-| Cyrene `/tts` session | Partial | Reads new messages from the joined voice channel's text chat, caps each message at 500 characters, bounds the queue, and leaves after humans exit; it still uses the configured HTTP TTS endpoint rather than the required pinned local Qwen service. |
-| Cyrene `/speak` and `/search` | Partial | The command surface is registered; local audio model/service and an approved search provider have not passed acceptance. |
+| Cyrene `/tts` session | Partial | Reads new messages from the joined voice channel's text chat, caps each message at 500 characters, bounds the queue, and leaves after humans exit. A private, offline-only local Qwen service with preloaded reference conditioning, pinned model manifest verification, bounded WAV cache/queue, health checks and metrics is implemented; model provisioning, target-VPS CPU benchmark and audible Discord acceptance remain open. |
+| Cyrene `/speak` and `/search` | Partial | `/speak` now uses the local Qwen service and attaches WAV output. Model provisioning and live Discord acceptance remain open; `/search` still needs an approved source. |
 | Robin | Partial | Requested common commands are added and disallowed slash commands are removed from sync; several older direct responses still bypass embed formatting. |
 | Cipher | Partial | `/orders` and `/payment` plus one-time transactional referral redemption are implemented. `/orders list` lists the service catalog rather than the caller's order history; Razorpay card/wallet checkout, webhook verification, and sandbox acceptance remain open. |
 | SilverWolf | Partial | Requested game/economy commands are now the registered allowlist; integration tests and common reply/event formatting remain open. |
