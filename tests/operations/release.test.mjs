@@ -33,7 +33,7 @@ test('release roster omits local models from old manifests but includes them for
   assert.equal(currentResult.status,0,currentResult.stderr);assert.match(currentResult.stdout,/tts-qwen/);assert.match(currentResult.stdout,/hy-mt2/);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
-test('release compose wires legacy TTS to Qwen only when the manifest includes Qwen',async()=>{
+test('release compose wires actual local-model client keys only when the manifest includes the models',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'ei-release-compose-'));
  try{
   const script=fileURLToPath(new URL('../../scripts/release-manifest.mjs',import.meta.url));
@@ -51,9 +51,58 @@ test('release compose wires legacy TTS to Qwen only when the manifest includes Q
   const currentResult=spawnSync(process.execPath,[script,currentPath,currentOutput],{encoding:'utf8'});
   assert.equal(currentResult.status,0,currentResult.stderr);
   const currentCompose=JSON.parse(await readFile(currentOutput,'utf8'));
-  assert.deepEqual(currentCompose.services['bot-ai'].environment,{TTS_PROVIDER_URL:'http://tts-qwen:3120/v1/audio/speech',TTS_PROVIDER_KEY:'',TTS_PROVIDER_NAME:'qwen3-local'});
+  assert.deepEqual(currentCompose.services['bot-ai'].environment,{QWEN_TTS_URL:'http://tts-qwen:3120/v1/audio/speech',HY_MT2_URL:'http://hy-mt2:3121/v1/chat/completions'});
   assert.equal(await readFile(`${currentOutput}.hy-mt2`,'utf8'),'1\n');
  }finally{await rm(dir,{recursive:true,force:true});}
+});
+test('release manifest generation survives an empty roster without inventing bot services',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'ei-release-empty-'));
+ try{
+  const script=fileURLToPath(new URL('../../scripts/release-manifest.mjs',import.meta.url));
+  const images=Object.fromEntries(['postgres','nginx','api','web','workers','tts-qwen','hy-mt2'].map(s=>[s,`example/${s}@sha256:${'5'.repeat(64)}`]));
+  const source=join(dir,'empty.json');await writeFile(source,JSON.stringify({id:'empty-roster',bots:[],images}));
+  const output=join(dir,'empty.compose.json');
+  const result=spawnSync(process.execPath,[script,source,output],{encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);
+  const compose=JSON.parse(await readFile(output,'utf8'));
+  assert.equal(compose.services['bot-ai'],undefined);
+  assert.equal(compose.services['bot-kafka'],undefined);
+  assert.equal(await readFile(`${output}.bots`,'utf8'),'\n');
+  assert.equal(await readFile(`${output}.tts`,'utf8'),'1\n');
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
+test('Kafka-only and Robin-only rosters render without attempting a Cyrene environment',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'ei-release-single-'));
+ try{
+  const script=fileURLToPath(new URL('../../scripts/release-manifest.mjs',import.meta.url));
+  for(const [id,bot] of [['kafka-only',{service:'bot-kafka',botKey:'kafka',port:3108}],['robin-only',{service:'bot-music',botKey:'robin',port:3105}]]){
+   const names=['postgres','nginx','api','web','workers','tts-qwen','hy-mt2',bot.service];
+   const source=join(dir,`${id}.json`);await writeFile(source,JSON.stringify({id,bots:[bot],images:Object.fromEntries(names.map(s=>[s,`example/${s}@sha256:${'6'.repeat(64)}`]))}));
+   const output=join(dir,`${id}.compose.json`);
+   const result=spawnSync(process.execPath,[script,source,output],{encoding:'utf8'});
+   assert.equal(result.status,0,`${id}: ${result.stderr}`);
+   const compose=JSON.parse(await readFile(output,'utf8'));
+   assert.equal(compose.services['bot-ai'],undefined,id);
+   assert.equal(compose.services[bot.service].image,`example/${bot.service}@sha256:${'6'.repeat(64)}`,id);
+  }
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
+test('Cyrene-only roster wires Qwen and Hy-MT2 client keys for the one bot',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'ei-release-cyrene-'));
+ try{
+  const script=fileURLToPath(new URL('../../scripts/release-manifest.mjs',import.meta.url));
+  const names=['postgres','nginx','api','web','workers','tts-qwen','hy-mt2','bot-ai'];
+  const source=join(dir,'cyrene.json');await writeFile(source,JSON.stringify({id:'cyrene-only',bots:[{service:'bot-ai',botKey:'cyrene',port:3104}],images:Object.fromEntries(names.map(s=>[s,`example/${s}@sha256:${'7'.repeat(64)}`]))}));
+  const output=join(dir,'cyrene.compose.json');
+  const result=spawnSync(process.execPath,[script,source,output],{encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);
+  const compose=JSON.parse(await readFile(output,'utf8'));
+  assert.deepEqual(compose.services['bot-ai'].environment,{QWEN_TTS_URL:'http://tts-qwen:3120/v1/audio/speech',HY_MT2_URL:'http://hy-mt2:3121/v1/chat/completions'});
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
+test('a roster that includes Cyrene without the local model images is rejected before render',()=>{
+ const images=Object.fromEntries(['postgres','nginx','api','web','workers','bot-ai'].map(s=>[s,`example/${s}@sha256:${'8'.repeat(64)}`]));
+ assert.throws(()=>validateRelease({id:'cyrene-without-models',bots:[{service:'bot-ai',botKey:'cyrene',port:3104}],images}),/tts-qwen/);
 });
 test('an explicit release roster supports a variable number of registered bot services',()=>{
  const names=['postgres','nginx','api','web','workers','tts-qwen','hy-mt2','bot-custom'];

@@ -6,7 +6,13 @@ if(!source||!output)throw Error('Usage: node scripts/release-manifest.mjs releas
 const release=validateRelease(JSON.parse(await readFile(source,'utf8')),{allowMissingTts:process.argv.includes('--allow-missing-tts'),allowMissingHyMt2:process.argv.includes('--allow-missing-hy-mt2')});
 const services=Object.fromEntries(Object.entries(release.images).map(([name,image])=>[name,{image,build:null}]));
 services.migrate={image:release.images.api,build:null};
-if(release.images['tts-qwen'])services['bot-ai'].environment={TTS_PROVIDER_URL:'http://tts-qwen:3120/v1/audio/speech',TTS_PROVIDER_KEY:'',TTS_PROVIDER_NAME:'qwen3-local'};
+// Wire only client keys the bot consumes, and only for bot services actually in this release.
+if(services['bot-ai']){
+ const aiEnvironment={};
+ if(release.images['tts-qwen'])aiEnvironment.QWEN_TTS_URL='http://tts-qwen:3120/v1/audio/speech';
+ if(release.images['hy-mt2'])aiEnvironment.HY_MT2_URL='http://hy-mt2:3121/v1/chat/completions';
+ if(Object.keys(aiEnvironment).length)services['bot-ai'].environment=aiEnvironment;
+}
 await mkdir(dirname(resolve(output)),{recursive:true});
 await writeFile(output,JSON.stringify({services},null,2)+'\n',{mode:0o600});
 console.log(`Validated immutable release ${release.id}; ${Object.keys(release.images).length} services`);
