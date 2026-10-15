@@ -18,6 +18,7 @@ function safeWorkspacePath(value, workspace = root) {
 }
 
 export function validateFeatureCoverage(document, options = {}) {
+  const mode = options.mode === "release" ? "release" : "structural";
   const workspace = resolve(options.root ?? root);
   const realWorkspace = realpathSync(workspace);
   const fileExists = options.fileExists ?? (path => {
@@ -92,6 +93,17 @@ export function validateFeatureCoverage(document, options = {}) {
         issue("replacement-without-decision", `${row.id}: decisionReason must name an existing approved decision record as "approved: path".`);
       }
     }
+
+    if (mode === "release") {
+      // Release coverage accepts only fully verified behavior or approved replacements
+      // with a reachable acceptance test; structural completeness is not enough.
+      if (row.status !== "verified" && row.status !== "replaced") {
+        issue("release-unverified-row", `${row.id}: status ${row.status} is not release-ready (verified or approved replacement required).`);
+      }
+      if (row.status === "verified" && row.decisionReason.trim().length < 12) {
+        issue("release-missing-evidence", `${row.id}: verified rows must carry an evidence note in decisionReason.`);
+      }
+    }
   }
 
   return issues;
@@ -108,7 +120,15 @@ function sourceRowExists(sourceIndex, row) {
 
 async function main() {
   const args = process.argv.slice(2);
-  const file = args[0] && !args[0].startsWith("-") ? resolve(args[0]) : resolve(root, "docs/audits/legacy-behavior-map.json");
+  const modeIndex = args.indexOf("--mode");
+  const mode = modeIndex !== -1 ? args[modeIndex + 1] : "structural";
+  if (mode !== "structural" && mode !== "release") {
+    console.error('Usage: check-feature-coverage.mjs [map.json] [--mode structural|release]');
+    process.exitCode = 2;
+    return;
+  }
+  const fileArg = args.find((arg, index) => !arg.startsWith("-") && index !== modeIndex + 1);
+  const file = fileArg ? resolve(fileArg) : resolve(root, "docs/audits/legacy-behavior-map.json");
   let document;
   try {
     document = JSON.parse(await readFile(file, "utf8"));
@@ -118,10 +138,10 @@ async function main() {
     return;
   }
 
-  const issues = validateFeatureCoverage(document);
+  const issues = validateFeatureCoverage(document, { mode });
   if (issues.length) {
     const counts = Object.groupBy(issues, entry => entry.code);
-    console.error(`Feature coverage check failed: ${issues.length} issue(s) across ${document.rows.length} rows.`);
+    console.error(`Feature coverage check failed (${mode} mode): ${issues.length} issue(s) across ${document.rows.length} rows.`);
     for (const [code, entries] of Object.entries(counts)) console.error(`- ${code}: ${entries.length}`);
     for (const entry of issues.slice(0, 12)) console.error(`  ${entry.code}: ${entry.detail}`);
     if (issues.length > 12) console.error(`  ... ${issues.length - 12} more; inspect the JSON map for row-level status.`);
@@ -129,7 +149,7 @@ async function main() {
     return;
   }
 
-  console.log(`Feature coverage structure is valid: ${document.rows.length} rows; all rows map to existing targets and tests.`);
+  console.log(`Feature coverage structure is valid (${mode} mode): ${document.rows.length} rows; all rows map to existing targets and tests.`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

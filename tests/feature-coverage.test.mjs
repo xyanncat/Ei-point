@@ -97,3 +97,24 @@ test("archive parser records command descriptions and non-command capability dec
   assert.ok(parsed.symbols.some(symbol => symbol.kind === "component" && symbol.name === "confirm-order"));
   assert.ok(parsed.symbols.some(symbol => symbol.kind === "scheduled job"));
 });
+
+test("release mode rejects implemented-unverified rows", () => {
+  const issues = validateFeatureCoverage(map([row()]), { mode: "release" });
+  assert.ok(issues.some(issue => issue.code === "release-unverified-row"));
+});
+test("release mode rejects missing evidence notes for verified rows", () => {
+  const issues = validateFeatureCoverage(map([row({ status: "verified", decisionReason: "" })]), { mode: "release" });
+  assert.ok(issues.some(issue => issue.code === "release-missing-evidence"));
+});
+test("release mode accepts a verified row carrying an evidence note", () => {
+  const issues = validateFeatureCoverage(map([row({ status: "verified", decisionReason: "Trace: handler plus named regression test." })]), { mode: "release" });
+  assert.deepEqual(issues, []);
+});
+test("release mode requires replacements to keep an approved decision and a reachable test", () => {
+  const decision = "approved: docs/product/bot-command-and-runtime-spec.md";
+  assert.deepEqual(validateFeatureCoverage(map([row({ status: "replaced", decisionReason: decision })]), { mode: "release" }), []);
+  const withoutTest = validateFeatureCoverage(map([row({ status: "replaced", decisionReason: decision, testReferences: [] })]), { mode: "release" });
+  assert.ok(withoutTest.some(issue => issue.code === "unresolved-mapping"));
+  const withoutDecision = validateFeatureCoverage(map([row({ status: "replaced", decisionReason: "we felt like it" })]), { mode: "release" });
+  assert.ok(withoutDecision.some(issue => issue.code === "replacement-without-decision"));
+});
