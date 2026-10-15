@@ -15,9 +15,11 @@ from src.main import (
     BoundedAudioCache,
     BoundedHttpServer,
     InvalidRequest,
+    ModelNotReady,
     QueueFull,
     RequestTimedOut,
     RuntimeState,
+    ServiceDegraded,
     TtsService,
     QwenRuntime,
     cache_key,
@@ -159,6 +161,79 @@ class ServiceQueueTests(unittest.TestCase):
         first.join(timeout=1)
         self.assertTrue(first_done.is_set())
         self.assertEqual(runtime.calls, 1)
+
+
+class HardInferenceSupervisionTests(unittest.TestCase):
+    def test_stuck_inference_degrades_readiness_and_recovers_for_later_work(self):
+        gate = threading.Event()
+        runtime = FakeRuntime(gate)
+        service = TtsService(runtime, queue_max=2, request_timeout=0.1, hard_timeout=0.3)
+        service.start_worker()
+        first = threading.Thread(target=lambda: _swallow_timeout(service, "stuck", "default"), daemon=True)
+        first.start()
+        deadline = time.monotonic() + 1
+        while runtime.calls == 0 and time.monotonic() < deadline:
+            time.sleep(0.005)
+        # After the hard deadline the worker is considered stuck: readiness must degrade
+        # and new work must be refused instead of silently queueing behind the hang.
+        deadline = time.monotonic() + 2
+        while service.snapshot_ready() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertFalse(service.snapshot_ready())
+        self.assertTrue(service.worker_stuck)
+        with self.assertRaises(ServiceDegraded):
+            service.synthesize("second", "default")
+        # Releasing the stuck inference restores bounded service and later work succeeds.
+        gate.set()
+        first.join(timeout=2)
+        self.assertFalse(first.is_alive())
+        deadline = time.monotonic() + 2
+        while not service.snapshot_ready() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertTrue(service.snapshot_ready())
+        self.assertEqual(service.synthesize("later", "default"), b"RIFF\x00\x00\x00\x00WAVE" + b"later")
+
+    def test_repeated_inference_crashes_stay_bounded_and_the_worker_recovers(self):
+        class CrashingRuntime(FakeRuntime):
+            def __init__(self):
+                super().__init__()
+                self.fail = 2
+
+            def synthesize(self, text):
+                self.calls += 1
+                if self.fail > 0:
+                    self.fail -= 1
+                    raise RuntimeError("transient-inference-crash")
+                return b"RIFF\x00\x00\x00\x00WAVE" + text.encode("utf-8")
+
+        runtime = CrashingRuntime()
+        service = TtsService(runtime, queue_max=4, request_timeout=1, hard_timeout=1)
+        service.start_worker()
+        for i in range(2):
+            with self.assertRaises(RuntimeError):
+                service.synthesize(f"crash-{i}", "default")
+        self.assertTrue(service.snapshot_ready())
+        self.assertEqual(service.synthesize("after-crashes", "default"), b"RIFF\x00\x00\x00\x00WAVE" + b"after-crashes")
+        self.assertIn('ei_tts_requests_total{result="failure"} 2', service.metrics())
+
+    def test_shutdown_marks_not_ready_and_worker_exits(self):
+        runtime = FakeRuntime()
+        service = TtsService(runtime, queue_max=1, request_timeout=1, hard_timeout=1)
+        service.start_worker()
+        self.assertEqual(service.synthesize("hello", "default")[:4], b"RIFF")
+        service.shutdown()
+        self.assertFalse(service.snapshot_ready())
+        with self.assertRaises(ModelNotReady):
+            service.synthesize("after-shutdown", "default")
+        service.wait_worker_stopped(timeout=2)
+        self.assertFalse(service.worker_alive)
+
+
+def _swallow_timeout(service, text, voice):
+    try:
+        service.synthesize(text, voice)
+    except Exception:
+        pass
 
 
 class ModelManifestTests(unittest.TestCase):

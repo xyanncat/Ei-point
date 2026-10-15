@@ -41,6 +41,10 @@ class ModelNotReady(Exception):
     pass
 
 
+class ServiceDegraded(Exception):
+    """The inference worker exceeded its hard deadline and has not yet recovered."""
+
+
 class QueueFull(Exception):
     pass
 
@@ -300,16 +304,22 @@ class WorkItem:
 
 
 class TtsService:
-    def __init__(self, runtime: QwenRuntime, queue_max: int, request_timeout: float):
+    def __init__(self, runtime: QwenRuntime, queue_max: int, request_timeout: float, hard_timeout: float | None = None):
         self.runtime = runtime
         self.queue: queue.Queue[WorkItem] = queue.Queue(maxsize=queue_max)
         self.request_timeout = request_timeout
+        # Hard deadline: a request that outlives it marks the worker stuck, degrades
+        # readiness, and refuses new work until the stuck inference actually settles.
+        self.hard_timeout = hard_timeout if hard_timeout is not None else request_timeout + 30.0
         self.cache = BoundedAudioCache()
         self._lock = threading.Lock()
-        self._requests: dict[str, int] = {"success": 0, "invalid": 0, "overload": 0, "timeout": 0, "failure": 0}
+        self._requests: dict[str, int] = {"success": 0, "invalid": 0, "overload": 0, "timeout": 0, "failure": 0, "degraded": 0}
         self._inference_seconds_sum = 0.0
         self._inference_count = 0
         self._inference_active = False
+        self._inference_started_at = 0.0
+        self._worker_stuck = False
+        self._shutdown = False
         self._worker = threading.Thread(target=self._run_worker, name="qwen-inference", daemon=True)
 
     def start(self) -> None:
@@ -319,10 +329,41 @@ class TtsService:
     def start_worker(self) -> None:
         self._worker.start()
 
+    def shutdown(self) -> None:
+        with self._lock:
+            self._shutdown = True
+            self._worker_stuck = False
+        self.queue.put(WorkItem(key="__shutdown__", text="", output_format="wav", done=threading.Event()))
+
+    def wait_worker_stopped(self, timeout: float = 5.0) -> None:
+        self._worker.join(timeout=timeout)
+
+    @property
+    def worker_alive(self) -> bool:
+        return self._worker.is_alive()
+
+    @property
+    def worker_stuck(self) -> bool:
+        with self._lock:
+            return self._worker_stuck
+
+    def snapshot_ready(self) -> bool:
+        self.check_hard_deadline()
+        state = self.runtime.snapshot()
+        with self._lock:
+            return bool(state.ready and not self._worker_stuck and not self._shutdown)
+
     def synthesize(self, text: str, voice: str, output_format: str = "wav") -> bytes:
         state = self.runtime.snapshot()
         if not state.ready:
             raise ModelNotReady()
+        self.check_hard_deadline()
+        with self._lock:
+            if self._shutdown:
+                raise ModelNotReady()
+            if self._worker_stuck:
+                self._requests["degraded"] = self._requests.get("degraded", 0) + 1
+                raise ServiceDegraded()
         key = cache_key(state.revision, voice, text, output_format)
         cached = self.cache.get(key)
         if cached is not None:
@@ -350,12 +391,16 @@ class TtsService:
     def _run_worker(self) -> None:
         while True:
             item = self.queue.get()
+            if item.key == "__shutdown__":
+                self.queue.task_done()
+                return
             if item.cancelled:
                 item.done.set()
                 self.queue.task_done()
                 continue
             with self._lock:
                 self._inference_active = True
+                self._inference_started_at = time.monotonic()
             started = time.monotonic()
             try:
                 wav_audio = self.runtime.synthesize(item.text)
@@ -367,10 +412,25 @@ class TtsService:
                 elapsed = time.monotonic() - started
                 with self._lock:
                     self._inference_active = False
+                    self._worker_stuck = False
                     self._inference_seconds_sum += elapsed
                     self._inference_count += 1
                 item.done.set()
                 self.queue.task_done()
+                # Watchdog: sets the stuck flag from outside when the hard deadline elapses.
+                # Clearing it here is correct only because the inference actually settled.
+
+    def check_hard_deadline(self, now: float | None = None) -> bool:
+        """Mark the worker stuck when the active inference exceeded its hard deadline.
+        Returns True when the service is degraded by this check."""
+        moment = now if now is not None else time.monotonic()
+        with self._lock:
+            if self._shutdown:
+                return False
+            if self._inference_active and not self._worker_stuck and moment - self._inference_started_at > self.hard_timeout:
+                self._worker_stuck = True
+                logger.error("TTS inference exceeded its hard deadline; readiness degraded until it settles")
+            return self._worker_stuck
 
     def _count(self, result: str) -> None:
         with self._lock:
@@ -495,8 +555,9 @@ def make_handler(service: TtsService) -> type[BaseHTTPRequestHandler]:
             if self.path == "/health/live":
                 self._json(200, {"ok": True})
             elif self.path == "/health/ready":
+                ready = service.snapshot_ready()
                 state = service.runtime.snapshot()
-                self._json(200 if state.ready else 503, {"ready": state.ready, **({"error": state.load_error} if state.load_error else {})})
+                self._json(200 if ready else 503, {"ready": ready, **({"error": state.load_error} if state.load_error else {}), **({"degraded": True} if not ready and service.worker_stuck else {})})
             elif self.path == "/metrics":
                 body = service.metrics().encode("utf-8")
                 self.send_response(200)
@@ -536,6 +597,9 @@ def make_handler(service: TtsService) -> type[BaseHTTPRequestHandler]:
             except ModelNotReady:
                 service._count("failure")
                 self._json(503, {"error": "model-not-ready"})
+                return
+            except ServiceDegraded:
+                self._json(503, {"error": "service-degraded"}, {"Retry-After": "5"})
                 return
             except QueueFull:
                 self._json(429, {"error": "queue-full"}, {"Retry-After": "2"})
@@ -600,9 +664,12 @@ def main() -> None:
     threads = _positive_int("QWEN_TTS_TORCH_THREADS", 2, 1, 8)
     queue_max = _positive_int("QWEN_TTS_QUEUE_MAX", 8, 1, 32)
     request_timeout = _positive_int("QWEN_TTS_REQUEST_TIMEOUT_SECONDS", 90, 5, 300)
+    hard_timeout = _positive_int("QWEN_TTS_HARD_TIMEOUT_SECONDS", request_timeout + 30, 5, 600)
+    if hard_timeout < request_timeout:
+        hard_timeout = request_timeout + 30
     port = _positive_int("QWEN_TTS_PORT", 3120, 1024, 65535)
     runtime = QwenRuntime(model_dir, model_revision, reference_audio, reference_text, threads)
-    service = TtsService(runtime, queue_max=queue_max, request_timeout=request_timeout)
+    service = TtsService(runtime, queue_max=queue_max, request_timeout=request_timeout, hard_timeout=hard_timeout)
     service.start()
     server = BoundedHttpServer(("0.0.0.0", port), make_handler(service))
     logger.info("local Qwen TTS HTTP service listening on port %s; model loading is offline", port)
