@@ -61,4 +61,4 @@ The source implementation and documentation do not by themselves prove productio
 
 ## Git publication status
 
-At the time this report was first written, the implementation was being reviewed and verified locally on `main`. No production deployment was performed. The original build plan and skills archive were not edited. Update this section with the resulting commit and push status after publication to `origin/main`.
+The implementation was committed and pushed to `origin/main` as `16e16ce` (`feat(ai): add local Cyrene translation and voice chat`). No production deployment was performed. The original build plan and skills archive were not edited.
