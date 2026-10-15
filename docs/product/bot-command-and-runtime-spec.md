@@ -16,8 +16,8 @@ This is the requested product behavior supplied by the project owner on 2026-10-
 Required commands:
 
 - `/kick`, `/ban`, `/unban`
-- `/timeout` and `/timeout remove`
-- `/warn` and `/warn remove`
+- `/timeout apply` and `/timeout remove`
+- `/warn add` and `/warn remove`
 - `/purge`
 - `/temp ban`, `/temp restriction`, `/temp role`, `/temp mute`
 - `/security` and the remaining security/moderation operations approved in the feature map
@@ -114,7 +114,7 @@ This table reflects repository work in progress. A slash command appearing in so
 |---|---|---|
 | Shared `/botinfo`, `/ping`, `/about` | Partial | Registered in the six bot command arrays; identity-specific details, owner mention, and runtime behavior still need per-bot acceptance. |
 | Common embed replies | Partial | Shared TypeScript interaction wrapper is in place; outbound event messages and Robin's direct response paths still need conversion and verification. |
-| Kafka permissions | Partial | Administrator default command permissions and owner-or-Administrator interaction gate are in place; authorization tests and every callback path remain open. |
+| Kafka permissions | Partial | Administrator default command permissions, owner-or-Administrator interaction gate, `/kick`, warning/timeout removals, and all four `/temp` actions are implemented. Disposable-guild effect/recovery tests, other security callbacks, and live authorization checks remain open. |
 | Cyrene `/tts` session | Partial | Reads new messages from the joined voice channel's text chat, caps each message at 500 characters, bounds the queue, and leaves after humans exit; it still uses the configured HTTP TTS endpoint rather than the required pinned local Qwen service. |
 | Cyrene `/speak` and `/search` | Partial | The command surface is registered; local audio model/service and an approved search provider have not passed acceptance. |
 | Robin | Partial | Requested common commands are added and disallowed slash commands are removed from sync; several older direct responses still bypass embed formatting. |
@@ -142,15 +142,15 @@ This is the requested operator-facing inventory. Root commands with subcommands 
 | `/kick` | Remove a guild member and write an audit case. |
 | `/ban` | Ban a member/user and record the reason and audit case. |
 | `/unban` | Remove a guild ban and record the action. |
-| `/timeout` | Apply a bounded member timeout and record expiry metadata. |
+| `/timeout apply` | Apply a bounded member timeout and record expiry metadata. |
 | `/timeout remove` | Remove an active timeout. |
-| `/warn` | Add a warning case for a member. |
+| `/warn add` | Add a warning case for a member. |
 | `/warn remove` | Remove or void a warning case with an audit reason. |
 | `/purge` | Bulk-delete eligible recent messages and report the confirmed count. |
-| `/temp ban` | Ban a user until a durable expiry is reached. |
-| `/temp restriction` | Apply a configured temporary channel/role restriction and expiry. |
-| `/temp role` | Assign a role until a durable expiry is reached. |
-| `/temp mute` | Apply a mute restriction until a durable expiry is reached. |
+| `/temp ban` | Temporarily ban a user and unban through durable expiry reconciliation. |
+| `/temp restriction` | Deny message/thread posting temporarily, recording the original channel overwrite bits for restoration. |
+| `/temp role` | Grant a manageable, non-administrator role until durable expiry cleanup. |
+| `/temp mute` | Apply a Discord timeout for up to 28 days. |
 | `/security` | Inspect security posture, lockdown, trust, whitelist, snapshots, and incidents. |
 
 All Kafka rows above are owner-or-Administrator only. Temporary actions need retries and reconciliation; do not treat a queued expiry as a completed Discord action.

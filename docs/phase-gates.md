@@ -59,10 +59,10 @@
 - [x] Security: raid detection, trust scoring + bands, antinuke verdicts, whitelist/lockdown/incident/snapshot SQL,
       checksum-guarded snapshots + restore planner (`packages/modules/security/`)
 - [x] Moderation: scoped permission checks, 28-day timeout bounds, purge planner (bulk/manual/rejected),
-      case SQL with idempotency (`packages/modules/moderation/`)
+      durable kick/timeout/warning intents, warning removal audit history, and temporary ban/mute/role/restriction expiry (`packages/modules/moderation/`, `apps/bots/kafka/`)
 - [x] Logging: stream allowlist, credential redaction, outbox-shaped events (`packages/modules/logging/`)
 - [x] Tests 16/16 pass, `tsc` clean (isolated env)
-- [x] DB tables already exist (`002_domain.sql`); bot command wiring lands with Phase 10 fleet integration
+- [x] DB tables already exist (`002_domain.sql`); Kafka registers and authorizes the current moderation/security command tree. Live disposable-guild recovery and role-restoration acceptance remain open.
 
 # Phase 6 — community + economy (implemented locally; staging gate open)
 

@@ -36,10 +36,17 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 | `/security snapshot plan <snapshot_id>` | Produce a non-mutating restore plan. |
 | `/security snapshot restore <snapshot_id>` | Request owner-only configuration restoration from a snapshot. Supported restoration boundaries and live recovery remain to be accepted. |
 | `/security incidents [limit]` | Show recent recorded security incidents, with a bounded result count. |
-| `/warn <user> <reason>` | Record and issue a formal warning. |
+| `/kick <user> <reason>` | Remove a manageable guild member and create a durable, idempotent audit case. |
+| `/warn add <user> <reason>` | Record and issue a formal warning. |
+| `/warn remove <case_id> <reason>` | Void a guild-scoped warning case and write a removal audit case. |
 | `/ban <user> <reason> [days]` | Ban a user and optionally delete up to seven days of message history. |
 | `/unban <user_id> <reason>` | Unban a user by ID and record the moderation action. |
-| `/timeout <user> <minutes> <reason>` | Apply a bounded member timeout. |
+| `/timeout apply <user> <minutes> <reason>` | Apply a bounded member timeout. |
+| `/timeout remove <user> <reason>` | Clear a member timeout after persisting a durable moderation intent. |
+| `/temp ban <user> <minutes> <reason>` | Apply a temporary ban and unban it through durable expiry reconciliation. |
+| `/temp mute <user> <minutes> <reason>` | Apply a temporary Discord timeout, capped at 28 days. |
+| `/temp role <user> <role> <minutes> <reason>` | Grant a manageable non-administrator role with a durable expiry record. |
+| `/temp restriction <user> <channel> <minutes> <reason>` | Deny message and thread posting temporarily, snapshotting prior overwrite bits for restoration. |
 | `/purge <count>` | Bulk-delete up to 100 recent messages. |
 | `/cases <user> [limit]` | List moderation cases for a target user. |
 | `/note <user> <text>` | Add an internal staff note to the user's moderation record. |

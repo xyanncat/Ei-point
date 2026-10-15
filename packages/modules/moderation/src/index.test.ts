@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { canModerate, planPurge, requiredScope, validateTimeout } from "./index.js";
+import { canModerate, DUE_EXPIRY_SQL, planPurge, reconcileTemporaryEffect, requiredScope, validateTimeout } from "./index.js";
 
 describe("moderation permissions", () => {
   it("denies without the exact scope", () => {
@@ -36,5 +36,21 @@ describe("purge planner", () => {
     assert.equal(planPurge(0, DAY).mode, "rejected");
     assert.equal(planPurge(101, DAY).mode, "rejected");
     assert.equal(planPurge(50, 15 * DAY).mode, "manual");
+  });
+});
+
+describe("temporary moderation expiry", () => {
+  it("leases temporary role and restriction cases only after their recorded expiry", () => {
+    assert.match(DUE_EXPIRY_SQL, /kind IN \('ban', 'timeout', 'temp_role', 'temp_restriction'\)/);
+    assert.match(DUE_EXPIRY_SQL, /expires_at <= now\(\)/);
+  });
+
+  it("does not acknowledge a Discord failure and records conflicts without retrying them", async () => {
+    let finished = "";
+    assert.equal(await reconcileTemporaryEffect("temp_role", async () => { throw new Error("Discord unavailable"); }, async () => { finished = "wrong"; }), false);
+    assert.equal(finished, "");
+    assert.equal(await reconcileTemporaryEffect("temp_restriction", async () => "conflict", async (outcome) => { finished = outcome; }), true);
+    assert.equal(finished, "conflict");
+    assert.equal(await reconcileTemporaryEffect("warn", async () => "restored", async () => { finished = "wrong"; }), false);
   });
 });

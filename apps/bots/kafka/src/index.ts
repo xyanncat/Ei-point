@@ -9,6 +9,7 @@ import { isControlEnabled } from "@ei-point/flow";
 import { createServer } from "node:http";
 import {
   AuditLogEvent,
+  ChannelType,
   Client,
   Events,
   GatewayIntentBits,
@@ -25,7 +26,7 @@ import {
   type GuardedAction,
 } from "@ei-point/module-security";
 import { buildLogEvent } from "@ei-point/module-logging";
-import { DUE_EXPIRY_SQL, reconcileExpiry } from "@ei-point/module-moderation";
+import { DUE_EXPIRY_SQL, reconcileExpiry, reconcileTemporaryEffect } from "@ei-point/module-moderation";
 import { securityCommandDefinitions, respondToSecurityCommand } from "@ei-point/bot-security/dist/commands.js";
 import { moderationCommandDefinitions, respondToModerationCommand } from "@ei-point/bot-moderation/dist/commands.js";
 import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
@@ -358,17 +359,24 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
       }
 
       const options: Record<string, string | number | boolean> = {};
-      for (const opt of interaction.options.data) {
-        if (opt.value !== undefined) options[opt.name] = opt.value;
-      }
+      const collectOptions = (items: Array<{ name: string; value?: unknown; options?: Array<{ name: string; value?: unknown; options?: unknown[] }> }>) => {
+        for (const opt of items) {
+          if (opt.options) collectOptions(opt.options as typeof items);
+          else if (typeof opt.value === "string" || typeof opt.value === "number" || typeof opt.value === "boolean") options[opt.name] = opt.value;
+        }
+      };
+      collectOptions(interaction.options.data as unknown as Parameters<typeof collectOptions>[0]);
       const memberRoleIds = [...interaction.member.roles.cache.keys()];
       const userScopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
       const targetMember = options.user
         ? await interaction.guild.members.fetch(String(options.user)).catch(() => null)
         : null;
+      const targetRole = options.role ? interaction.guild.roles.cache.get(String(options.role)) ?? null : null;
+      const channelId = options.channel ? String(options.channel) : undefined;
       await respondToModerationCommand(
         {
           name: interaction.commandName,
+          subcommand: interaction.options.getSubcommand(false) ?? undefined,
           options,
           guildId: interaction.guildId,
           userId: interaction.user.id,
@@ -377,6 +385,8 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
           canManage: interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild),
           userScopes,
           targetMember,
+          targetRole,
+          channelId,
           defer: async () => {},
           reply: async (text) => {
             await interaction.editReply({ content: text, allowedMentions: { parse: [] } });
@@ -389,6 +399,29 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
           },
           timeoutMember: async (member, durationMs, reason) => {
             await member.timeout(durationMs, reason);
+          },
+          kickMember: async (member, reason) => { await member.kick(reason); },
+          addMemberRole: async (member, role, reason) => { await member.roles.add(role, reason); },
+          removeMemberRole: async (guildId, userId, roleId, reason) => {
+            const guild = client.guilds.cache.get(guildId);
+            const role = guild?.roles.cache.get(roleId);
+            const member = guild ? await guild.members.fetch(userId).catch(() => null) : null;
+            if (role && member?.roles.cache.has(roleId)) await member.roles.remove(role, reason);
+          },
+          clearTimeout: async (member, reason) => {
+            await member.timeout(0, reason);
+          },
+          getRestrictionState: async (targetChannelId, targetUserId) => {
+            const channel = interaction.guild.channels.cache.get(targetChannelId);
+            if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) throw new Error("Unsupported restriction channel");
+            const overwrite = channel.permissionOverwrites.cache.get(targetUserId);
+            const state = (flag: bigint): boolean | null => overwrite?.deny.has(flag) ? false : overwrite?.allow.has(flag) ? true : null;
+            return { sendMessages: state(PermissionFlagsBits.SendMessages), sendMessagesInThreads: state(PermissionFlagsBits.SendMessagesInThreads) };
+          },
+          setRestrictionState: async (targetChannelId, targetUserId, state, reason) => {
+            const channel = interaction.guild.channels.cache.get(targetChannelId);
+            if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) throw new Error("Unsupported restriction channel");
+            await channel.permissionOverwrites.edit(targetUserId, { SendMessages: state.sendMessages, SendMessagesInThreads: state.sendMessagesInThreads }, { reason });
           },
           bulkDeleteMessages: async (count) => {
             if (interaction.channel && "bulkDelete" in interaction.channel) {
@@ -431,12 +464,54 @@ client.on(Events.GuildCreate, (guild) => {
 async function runMaintenance(): Promise<void> {
   if (stopping || !identityVerified || !client.isReady()) return;
   try {
-    const dueCases = await pool.query<{ case_id: string; guild_id: string; user_id: string; kind: string }>(
+    const dueCases = await pool.query<{ case_id: string; guild_id: string; user_id: string; kind: string; metadata: Record<string, unknown> | null }>(
       DUE_EXPIRY_SQL,
       [10],
     );
     for (const c of dueCases.rows) {
-      if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, c.guild_id, botKey))) continue;
+      // Expiry cleanup is a compensating action for a previously authorized sanction.
+      // Do not strand temporary effects when an operator pauses the bot or guild.
+      if (c.kind === "temp_role" || c.kind === "temp_restriction") {
+        const metadata = c.metadata ?? {};
+        await reconcileTemporaryEffect(c.kind, async () => {
+          const guild = client.guilds.cache.get(c.guild_id);
+          if (!guild) throw new Error("Guild unavailable for temporary moderation expiry");
+          if (c.kind === "temp_role") {
+            const roleId = typeof metadata.roleId === "string" ? metadata.roleId : "";
+            if (!roleId) return "conflict";
+            const [role, member] = await Promise.all([
+              Promise.resolve(guild.roles.cache.get(roleId)),
+              guild.members.fetch(c.user_id).catch(() => null),
+            ]);
+            if (role && member?.roles.cache.has(roleId)) await member.roles.remove(role, "Temporary role expired");
+            return "restored";
+          }
+          const channelId = typeof metadata.channelId === "string" ? metadata.channelId : "";
+          if (!channelId) return "conflict";
+          const channel = guild.channels.cache.get(channelId);
+          if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) return "restored";
+          const overwrite = channel.permissionOverwrites.cache.get(c.user_id);
+          const current = {
+            sendMessages: overwrite?.deny.has(PermissionFlagsBits.SendMessages) ? false : overwrite?.allow.has(PermissionFlagsBits.SendMessages) ? true : null,
+            sendMessagesInThreads: overwrite?.deny.has(PermissionFlagsBits.SendMessagesInThreads) ? false : overwrite?.allow.has(PermissionFlagsBits.SendMessagesInThreads) ? true : null,
+          };
+          const previous = {
+            sendMessages: typeof metadata.previousSendMessages === "boolean" ? metadata.previousSendMessages : null,
+            sendMessagesInThreads: typeof metadata.previousSendMessagesInThreads === "boolean" ? metadata.previousSendMessagesInThreads : null,
+          };
+          if (current.sendMessages === previous.sendMessages && current.sendMessagesInThreads === previous.sendMessagesInThreads) return "restored";
+          if (current.sendMessages !== false || current.sendMessagesInThreads !== false) return "conflict";
+          await channel.permissionOverwrites.edit(c.user_id, { SendMessages: previous.sendMessages, SendMessagesInThreads: previous.sendMessagesInThreads }, { reason: "Temporary restriction expired" });
+          return "restored";
+        }, async (outcome) => {
+          await pool.query(
+            "UPDATE moderation.cases SET execution_status=$2, expires_at=NULL WHERE case_id=$1 AND execution_status='applied'",
+            [c.case_id, outcome === "restored" ? "expired" : "conflict"],
+          );
+          if (outcome === "conflict") console.warn(`temporary moderation case ${c.case_id} (${c.kind}) requires manual reconciliation`);
+        });
+        continue;
+      }
       await reconcileExpiry(c.kind, async () => {
         const guild = client.guilds.cache.get(c.guild_id);
         if (!guild) throw new Error("Guild unavailable for expiry reconciliation");

@@ -1,7 +1,7 @@
 // Moderation module: cases, sanctions, expiry, purge planning, permission checks
 // (§2 moderation bot, §4 moderation.*). Pure logic + SQL; no discord.js here.
 
-export type CaseKind = "warn" | "ban" | "unban" | "timeout" | "purge" | "note";
+export type CaseKind = "warn" | "warn_remove" | "kick" | "ban" | "unban" | "timeout" | "timeout_remove" | "temp_role" | "temp_restriction" | "purge" | "note";
 
 export interface NewCase {
   guildId: string;
@@ -16,9 +16,14 @@ export interface NewCase {
 // Staff scopes (see access.staff_roles). Least privilege: each action names its scope.
 const ACTION_SCOPES: Record<CaseKind, string> = {
   warn: "moderation-warn",
+  warn_remove: "moderation-warn",
+  kick: "moderation-kick",
   ban: "moderation-ban",
   unban: "moderation-ban",
   timeout: "moderation-timeout",
+  timeout_remove: "moderation-timeout",
+  temp_role: "moderation-role",
+  temp_restriction: "moderation-restriction",
   purge: "moderation-purge",
   note: "moderation-note",
 };
@@ -66,9 +71,26 @@ export const LIST_CASES_SQL = `
   ORDER BY created_at DESC LIMIT $3`;
 
 export const DUE_EXPIRY_SQL = `
-  SELECT case_id, guild_id, user_id, kind FROM moderation.cases
+  SELECT case_id, guild_id, user_id, kind, metadata FROM moderation.cases
   WHERE execution_status = 'applied' AND expires_at IS NOT NULL AND expires_at <= now()
+    AND kind IN ('ban', 'timeout', 'temp_role', 'temp_restriction')
   ORDER BY expires_at LIMIT $1`;
+
+export type TemporaryExpiryOutcome = "restored" | "conflict";
+
+/** Run one temporary Discord cleanup and durably acknowledge its outcome. */
+export async function reconcileTemporaryEffect(
+  kind: string,
+  effect: () => Promise<TemporaryExpiryOutcome>,
+  finish: (outcome: TemporaryExpiryOutcome) => Promise<void>,
+): Promise<boolean> {
+  if (kind !== "temp_role" && kind !== "temp_restriction") return false;
+  let outcome: TemporaryExpiryOutcome;
+  try { outcome = await effect(); }
+  catch { return false; }
+  await finish(outcome);
+  return true;
+}
 
 /** An unconfirmed Discord failure must not consume the expiry retry. Discord 10026 means already unbanned. */
 export async function reconcileExpiry(

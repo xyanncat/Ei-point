@@ -214,9 +214,13 @@ client.on(Events.InteractionCreate, (interaction) => {
       }
 
       const options: Record<string, string | number | boolean> = {};
-      for (const opt of interaction.options.data) {
-        if (opt.value !== undefined) options[opt.name] = opt.value;
-      }
+      const collectOptions = (items: Array<{ name: string; value?: unknown; options?: unknown[] }>) => {
+        for (const item of items) {
+          if (Array.isArray(item.options)) collectOptions(item.options as typeof items);
+          else if (typeof item.value === "string" || typeof item.value === "number" || typeof item.value === "boolean") options[item.name] = item.value;
+        }
+      };
+      collectOptions(interaction.options.data as unknown as Parameters<typeof collectOptions>[0]);
 
       const memberRoleIds = [...interaction.member.roles.cache.keys()];
       const userScopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
@@ -226,6 +230,7 @@ client.on(Events.InteractionCreate, (interaction) => {
       await respondToModerationCommand(
         {
           name: interaction.commandName,
+          subcommand: interaction.options.getSubcommand(false) ?? undefined,
           options,
           guildId: interaction.guildId,
           userId: interaction.user.id,
@@ -246,6 +251,9 @@ client.on(Events.InteractionCreate, (interaction) => {
           },
           timeoutMember: async (member, durationMs, reason) => {
             await member.timeout(durationMs, reason);
+          },
+          clearTimeout: async (member, reason) => {
+            await member.timeout(0, reason);
           },
           bulkDeleteMessages: async (count) => {
             if (interaction.channel && "bulkDelete" in interaction.channel) {
