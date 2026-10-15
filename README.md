@@ -19,6 +19,7 @@ Six identities. Shared domain services. Durable state. Controlled releases.</p>
   <a href="#platform">PLATFORM</a> &nbsp;·&nbsp;
   <a href="#%EF%B8%8F-architecture">ARCHITECTURE</a> &nbsp;·&nbsp;
   <a href="#-quick-start">QUICK START</a> &nbsp;·&nbsp;
+  <a href="docs/bot-command-catalog.md">BOT COMMANDS</a> &nbsp;·&nbsp;
   <a href="#-operations-1">OPERATIONS</a> &nbsp;·&nbsp;
   <a href="#-readiness">READINESS</a>
 </p>
@@ -63,6 +64,8 @@ These describe the implemented product surface, not a claim that every archived 
 | **Himiko** | `himiko` | Embeds and announcements | Local delivery intent support; live Discord delivery acceptance remains open |
 
 The bot count is configurable through the release roster. A manifest cannot create a bot: each identity also needs application code, Compose service, token/secret wiring, health checks, registry configuration, and verified permissions. See [bot identities](docs/bot-identities.md) and [release operations](docs/operations-release.md).
+
+Browse the [individual command and function catalog for all six bots](docs/bot-command-catalog.md). It follows checked-in command definitions and distinguishes implemented source behavior from the still-open legacy parity and live acceptance gates.
 
 ## ⚙️ Architecture
 
