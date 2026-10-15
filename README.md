@@ -17,10 +17,10 @@ Six identities. Shared domain services. Durable state. Controlled releases.</p>
 
 <p>
   <a href="#platform">PLATFORM</a> &nbsp;·&nbsp;
-  <a href="#architecture">ARCHITECTURE</a> &nbsp;·&nbsp;
-  <a href="#quick-start">QUICK START</a> &nbsp;·&nbsp;
-  <a href="#operations">OPERATIONS</a> &nbsp;·&nbsp;
-  <a href="#readiness">READINESS</a>
+  <a href="#%EF%B8%8F-architecture">ARCHITECTURE</a> &nbsp;·&nbsp;
+  <a href="#-quick-start">QUICK START</a> &nbsp;·&nbsp;
+  <a href="#-operations-1">OPERATIONS</a> &nbsp;·&nbsp;
+  <a href="#-readiness">READINESS</a>
 </p>
 
 </div>
