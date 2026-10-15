@@ -2,35 +2,56 @@
 
 <img src="docs/assets/ei-point-pulse.gif" alt="Animated Ei Point signal traveling through the bot fleet" width="100%" />
 
-# EI POINT
+<h1>EI POINT</h1>
 
-### A modular Discord community, moderation, commerce, and operations platform
+<p><strong>A modular Discord platform for communities, creators, and operators.</strong><br />
+Six identities. Shared domain services. Durable state. Controlled releases.</p>
 
-**One PostgreSQL-backed platform. Six distinct Discord identities. A single, auditable release path.**
+<p>
+  <img src="https://img.shields.io/badge/Node.js-24.8-43853D?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js 24.8" />
+  <img src="https://img.shields.io/badge/pnpm-9.12-F69220?style=for-the-badge&logo=pnpm&logoColor=white" alt="pnpm 9.12" />
+  <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5.6" />
+  <img src="https://img.shields.io/badge/PostgreSQL-17-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL 17" />
+  <img src="https://img.shields.io/badge/Status-In%20Development-C05A4B?style=for-the-badge" alt="In development" />
+</p>
 
-[Architecture](#architecture) · [Quick start](#quick-start) · [Development](#development) · [Operations](#operations) · [Readiness](#readiness)
+<p>
+  <a href="#platform">PLATFORM</a> &nbsp;·&nbsp;
+  <a href="#architecture">ARCHITECTURE</a> &nbsp;·&nbsp;
+  <a href="#quick-start">QUICK START</a> &nbsp;·&nbsp;
+  <a href="#operations">OPERATIONS</a> &nbsp;·&nbsp;
+  <a href="#readiness">READINESS</a>
+</p>
 
 </div>
 
 > [!IMPORTANT]
-> **Ei Point is under active development.** The monorepo contains substantial implementations and passing local checks, but production readiness is **not certified**. Legacy feature parity, full-fleet runtime adoption, Linux/VPS builds, live Discord/provider flows, and real recovery/soak acceptance still have open gates. See [Readiness](#readiness) and the [phase gates](docs/phase-gates.md).
+> **Development build · production readiness is not certified.** Legacy feature parity, fleet-wide lifecycle adoption, Linux/VPS qualification, live integrations, and recovery/soak acceptance still have open gates. See [Readiness](#readiness) and the [phase gates](docs/phase-gates.md).
 
-## What is Ei Point?
+## ✦ Platform
 
-Ei Point is a TypeScript and Python monorepo for operating a coordinated fleet of Discord bots and a Kafka-themed public website/dashboard. Feature logic lives in reusable modules; gateway processes, the API, background workers, PostgreSQL, and operations tooling are separate components. PostgreSQL owns durable business state, while immutable release manifests select the services and bot identities to run.
+Ei Point is a TypeScript and Python monorepo for a coordinated fleet of Discord bots and a Kafka-themed public site/dashboard. Reusable domain modules sit behind independent gateway processes, an API, background workers, PostgreSQL, and release tooling. PostgreSQL owns durable business state; immutable release manifests select the services and identities to run.
 
-### What the repository provides
+<a id="platform"></a>
 
-- **Moderation and server protection** — scoped moderation actions, raid/antinuke logic, lockdown and restoration support, incident records, and audit-oriented event handling.
-- **Community and games** — welcome/leave configuration, XP and leaderboards, cards, packs, inventories, listings, and trades backed by durable state.
-- **Commerce and referrals** — catalog and order flows, payment claims and settlement, verification, referral cycles, and guarded fulfillment.
-- **AI, TTS, and music** — bounded provider routing and memory, Cyrene voice synthesis, and Robin's queue/playback service with restart snapshots and a bounded media cache.
-- **Website and API** — a Kafka-themed public site, dashboard foundation, OAuth/session controls, commerce endpoints, and health/readiness routes.
-- **Operations** — migrations, health checks, immutable release manifests, deploy/rollback helpers, local backup tooling, and restore-drill procedures.
+<table>
+  <tr>
+    <td width="50%"><h3>🛡️ Protection &amp; moderation</h3><p>Scoped moderation, raid and antinuke logic, lockdown/restoration support, incident records, and audit-oriented event handling.</p></td>
+    <td width="50%"><h3>🎴 Community &amp; games</h3><p>Welcome flows, XP and leaderboards, cards, packs, inventories, listings, and trades backed by durable state.</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><h3>◈ Commerce &amp; referrals</h3><p>Catalog and order flows, payment claims and settlement, verification, referral cycles, and guarded fulfillment.</p></td>
+    <td width="50%"><h3>✦ AI, voice &amp; music</h3><p>Bounded provider routing and memory, Cyrene TTS, and Robin playback with queue snapshots and a bounded media cache.</p></td>
+  </tr>
+  <tr>
+    <td width="50%"><h3>⌘ Website &amp; API</h3><p>A Kafka-themed public site and dashboard foundation with OAuth/session controls, commerce endpoints, and readiness routes.</p></td>
+    <td width="50%"><h3>⟲ Operations</h3><p>Database migrations, health checks, immutable release manifests, deploy/rollback helpers, backups, and recovery procedures.</p></td>
+  </tr>
+</table>
 
 These describe the implemented product surface, not a claim that every archived behavior or live integration has passed acceptance.
 
-## Fleet at a glance
+## ◈ The fleet
 
 | Identity | Service key | Intended responsibilities | Current acceptance status |
 |---|---|---|---|
@@ -43,28 +64,56 @@ These describe the implemented product surface, not a claim that every archived 
 
 The bot count is configurable through the release roster. A manifest cannot create a bot: each identity also needs application code, Compose service, token/secret wiring, health checks, registry configuration, and verified permissions. See [bot identities](docs/bot-identities.md) and [release operations](docs/operations-release.md).
 
-## Architecture
+## ⚙️ Architecture
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables': {'primaryColor':'#171c29','primaryTextColor':'#eef2f7','primaryBorderColor':'#b95348','lineColor':'#a98b71','secondaryColor':'#20283a','tertiaryColor':'#111722','clusterBkg':'#0e1420','clusterBorder':'#39435a','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
 flowchart LR
-  User[Members and operators] --> Web[Kafka-themed website]
-  User --> Discord[Discord]
-  Web --> API[Fastify API]
-  Discord --> Bots[Selected bot identities]
-  API --> DB[(PostgreSQL)]
-  Bots --> Flow[Ei-Flow runtime]
-  Flow --> Modules[Domain modules]
-  Modules --> DB
-  API --> Jobs[Workers and outbox]
-  Jobs --> DB
-  Ops[Release, health, backup and recovery tooling] --> API
-  Ops --> Bots
+  subgraph Experience["01 · EXPERIENCE"]
+    Members[Members & operators]
+    Discord[Discord]
+    Site[Kafka-themed site]
+  end
+  subgraph Services["02 · APPLICATION SERVICES"]
+    API[Fastify API]
+    Fleet[Six bot identities]
+    Workers[Workers & outbox]
+  end
+  subgraph Core["03 · SHARED PLATFORM"]
+    Flow[Ei-Flow lifecycle]
+    Domain[Domain modules]
+    DB[(PostgreSQL)]
+    Ops[Release · health · recovery]
+  end
+  Members --> Discord
+  Members --> Site
+  Site --> API
+  Discord --> Fleet
+  Fleet --> Flow
+  Flow --> Domain
+  API --> DB
+  Domain --> DB
+  API --> Workers
+  Workers --> DB
+  Ops --> API
+  Ops --> Fleet
   Ops --> DB
+  style Experience fill:#101722,stroke:#344157,color:#eef2f7
+  style Services fill:#121b2b,stroke:#475066,color:#eef2f7
+  style Core fill:#171826,stroke:#7b454d,color:#eef2f7
+  classDef actor fill:#1a2536,stroke:#78d6e6,color:#eef6fc,stroke-width:2px
+  classDef service fill:#21273a,stroke:#bc6559,color:#fff1e8,stroke-width:2px
+  classDef durable fill:#212b36,stroke:#d3ac6c,color:#fff8e8,stroke-width:2px
+  class Members,Discord,Site actor
+  class API,Fleet,Workers,Flow,Domain,Ops service
+  class DB durable
 ```
 
-**Key boundaries:** domain packages do not own Discord clients; authorization and interaction lifecycle code belongs in the shared flow/runtime layer; money, inventory, jobs, and receipts use database transactions and idempotency controls; production deployment selects prebuilt image digests rather than building on the live host.
+<p align="center"><sub>Discord and web traffic enter through separate edges, then meet at shared domain and persistence boundaries.</sub></p>
 
-## Quick start
+**Design boundaries:** domain packages do not own Discord clients; authorization and interaction lifecycle code belongs in the shared flow/runtime layer; money, inventory, jobs, and receipts use database transactions and idempotency controls; production deployment selects prebuilt image digests rather than building on the live host.
+
+## 🚀 Quick start
 
 ### Prerequisites
 
@@ -117,7 +166,7 @@ The complete annotated list is in [`.env.example`](.env.example). Common configu
 
 Production secrets belong in a protected host-side environment file. Do not put credentials in issues, logs, screenshots, or release manifests.
 
-## Development
+## 🧰 Development
 
 Install from the lockfile, then run checks from the root:
 
@@ -160,21 +209,28 @@ docs/
   operations*.md        Deployment, rollback, backup and recovery runbooks
 ```
 
-## Operations
+## ⛭ Operations
 
 ### Release flow
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables': {'primaryColor':'#171c29','primaryTextColor':'#eef2f7','primaryBorderColor':'#b95348','lineColor':'#a98b71','secondaryColor':'#20283a','tertiaryColor':'#111722','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
 flowchart LR
-  Source[Reviewed source] --> Build[Build and verify on Linux]
-  Build --> Digest[Publish immutable image digests]
-  Digest --> Manifest[Validate release manifest]
-  Manifest --> Backup[Verify recent backup and DB readiness]
-  Backup --> Deploy[Deploy selected roster]
-  Deploy --> Health[Readiness and fresh identity heartbeats]
-  Health --> Accept[Staging acceptance]
-  Accept --> Cutover[Operator-authorized production cutover]
+  Source[01 · Reviewed source] --> Build[02 · Linux build & checks]
+  Build --> Digest[03 · Immutable image digests]
+  Digest --> Manifest[04 · Release manifest]
+  Manifest --> Backup[05 · Verified backup]
+  Backup --> Deploy[06 · Deploy selected roster]
+  Deploy --> Health[07 · Health & heartbeats]
+  Health --> Accept[08 · Staging acceptance]
+  Accept --> Cutover[09 · Operator-approved cutover]
+  classDef gate fill:#171c29,stroke:#bd6558,color:#f4eee9,stroke-width:2px
+  classDef evidence fill:#17252a,stroke:#79ced3,color:#e8fbfc,stroke-width:2px
+  class Source,Build,Digest,Manifest,Deploy,Cutover gate
+  class Backup,Health,Accept evidence
 ```
+
+<p align="center"><sub>Every production release is digest-pinned and gated on backup, readiness, and operator evidence.</sub></p>
 
 Production starts prebuilt images; the deploy script checks a recent verified backup, immutable image references, migrations, readiness, and fresh service heartbeats. Application rollback restores a compatible image roster; it does **not** reverse migrations or restore an old database. Database recovery is a separate operator-led incident procedure.
 
@@ -187,7 +243,7 @@ Useful references:
 - [Security boundaries](docs/security.md)
 - [Feature matrix and source mapping](docs/feature-matrix.md)
 
-## Readiness
+## ◉ Readiness
 
 Local tests and typechecks support ongoing development; they do not prove live behavior or deployment readiness. The current remediation record reports:
 
@@ -198,9 +254,23 @@ Local tests and typechecks support ongoing development; they do not prove live b
 
 See the [remediation ledger](docs/audits/2026-10-15-remediation.md), [acceptance records](docs/acceptance/), and [phase gates](docs/phase-gates.md). Update these when evidence changes; do not infer closure from code presence or mocked tests.
 
-## Roadmap
+## ◷ Roadmap
 
 The completion plan sequences work as **behavioral inventory → reproducible Linux foundation → shared runtime → domain acceptance → recovery → staging and launch**. Track current requirements and exit criteria in the [phase gates](docs/phase-gates.md) and [remediation ledger](docs/audits/2026-10-15-remediation.md).
+
+```mermaid
+%%{init: {'theme':'base','themeVariables': {'primaryColor':'#171c29','primaryTextColor':'#eef2f7','primaryBorderColor':'#b95348','lineColor':'#857a78','secondaryColor':'#20283a','tertiaryColor':'#111722','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
+flowchart LR
+  Inventory["01 · INVENTORY<br/>Open"] --> Foundation["02 · FOUNDATION<br/>Open"]
+  Foundation --> Runtime["03 · RUNTIME<br/>In progress"]
+  Runtime --> Domains["04 · DOMAINS<br/>Open"]
+  Domains --> Recovery["05 · RECOVERY<br/>Open"]
+  Recovery --> Launch["06 · STAGING / LAUNCH<br/>Open"]
+  classDef open fill:#171c29,stroke:#75565a,color:#e7dfe0,stroke-width:2px
+  classDef active fill:#30251f,stroke:#e0a55f,color:#fff3d7,stroke-width:3px
+  class Inventory,Foundation,Domains,Recovery,Launch open
+  class Runtime active
+```
 
 | Gate | Current state |
 |---|---|
@@ -211,7 +281,7 @@ The completion plan sequences work as **behavioral inventory → reproducible Li
 | Backup and recovery | Tooling exists; real restore and off-host acceptance remain |
 | Staging and launch | Open — load, soak, recovery, and operator authorization required |
 
-## Troubleshooting
+## 🩺 Troubleshooting
 
 | Symptom | Check |
 |---|---|
@@ -222,7 +292,7 @@ The completion plan sequences work as **behavioral inventory → reproducible Li
 | Deployment stops before migration | Check image digests, disk usage, the selected verified backup's age/hash, database readiness, and migration credentials in the runbook. |
 | Backup timer exists but recovery is unproven | Run restore drills with actual artifacts and record timings; timer installation alone is not recovery evidence. |
 
-## Contributing
+## ✧ Contributing
 
 Keep behavior changes, tests, and documentation together. Preserve idempotency for retried money/inventory operations, check authorization on the server, and make timeouts and resource limits explicit. Update the phase acceptance record when new evidence is produced. Never commit `.env`, credentials, or generated user data.
 
