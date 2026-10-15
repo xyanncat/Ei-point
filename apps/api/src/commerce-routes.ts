@@ -26,8 +26,8 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
  const usdtRate=Number(env.INR_PER_USDT),usdtFee=Number(env.USDT_REFERENCE_FEE??1);
  const methods=()=>({upi:!!env.UPI_PAYEE_NAME&&/^[-\w.]{2,}@[A-Za-z]{2,}$/.test(env.UPI_PAYEE_VPA??""),usdt:/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(env.USDT_TRC20_ADDRESS??"")&&Number.isFinite(usdtRate)&&usdtRate>0&&Number.isFinite(usdtFee)&&usdtFee>=0});
  const guard=()=>{if(!snowflake(guild)||!origin)fail(503,"payments-not-configured","Payments are not configured for this deployment.");};
- const run=(handler:(req:FastifyRequest)=>Promise<unknown>)=>async(req:FastifyRequest,reply:any)=>{
-  try{return await handler(req);}catch(e){if(e instanceof PaymentError)return reply.code(e.status).send({code:e.code,error:e.message});
+ const run=(handler:(req:FastifyRequest,reply:any)=>Promise<unknown>)=>async(req:FastifyRequest,reply:any)=>{
+  try{return await handler(req,reply);}catch(e){if(e instanceof PaymentError)return reply.code(e.status).send({code:e.code,error:e.message});
    if((e as any)?.code==="23505")return reply.code(409).send({code:"payment-conflict",error:"This payment proof or order already exists."});throw e;}
  };
  const limit=async(req:FastifyRequest)=>{
@@ -38,11 +38,29 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
  };
  const publicWrite=async(req:FastifyRequest)=>{guard();if(req.headers.origin!==origin)fail(403,"origin-denied","Payment requests require the configured website Origin.");await limit(req);const approved=(await query("SELECT guild_id FROM access.guilds WHERE guild_id=$1 AND approved",[guild]))[0];if(!approved)fail(403,"guild-not-approved","Commerce guild is not approved.");};
  const body=(req:FastifyRequest)=>req.body as Record<string,unknown>??{};
+ // HttpOnly recovery cookie: reloads and lost responses resume the same order without
+ // privileged secrets in localStorage or URLs. One checkout at a time is intentional.
+ const recoveryCookie=(serviceId:string,orderId:string,token:string)=>{
+  const secure=(origin??"").startsWith("https")?"; Secure":"";
+  return `ei_checkout=${encodeURIComponent([serviceId,orderId,token].join("|"))}; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax${secure}`;
+ };
+ const readRecoveryCookie=(req:FastifyRequest):[string,string,string]|null=>{
+  const header=req.headers.cookie;if(typeof header!=="string")return null;
+  const match=header.split(";").map(p=>p.trim()).find(p=>p.startsWith("ei_checkout="));
+  if(!match)return null;
+  try{const [serviceId,orderId,token]=decodeURIComponent(match.slice("ei_checkout=".length)).split("|");if(!serviceId||!publicId(orderId)||!token)return null;return [serviceId,orderId,token];}catch{return null;}
+ };
+ const orderResponse=(order:Record<string,any>,token:string)=>{
+  const vpa=env.UPI_PAYEE_VPA,name=env.UPI_PAYEE_NAME,wallet=env.USDT_TRC20_ADDRESS,method=order.method==="usdt"?"usdt":"upi";
+  const note=`${order.public_id} Discord ${order.buyer_id}`,upiUri=`upi://pay?${new URLSearchParams({pa:vpa??"",pn:name??"",am:amount(order.amount_minor),cu:"INR",tn:note})}`;
+  return {...view(order),token,orderToken:token,amountMinor:Number(order.amount_minor),currency:method==="upi"?"INR":"USDT",paymentMethod:method,paymentUri:method==="upi"?upiUri:wallet,destination:method==="upi"?vpa:wallet,expiresAt:order.expires_at,referralApplied:!!order.referral_code,qrPayload:method==="upi"?upiUri:wallet,
+   ...(method==="upi"?{upiUri,payeeVpa:vpa,payeeName:name,note}:{walletAddress:wallet,network:"TRC-20 (Tron)",usdAmount:amount(order.amount_minor)}),notificationStatus:"not-configured"};
+ };
  const key=(req:FastifyRequest)=>{const v=req.headers["idempotency-key"]??body(req).idempotencyKey;if(typeof v!=="string"||!/^[A-Za-z0-9:_-]{8,128}$/.test(v))fail(400,"invalid-idempotency-key","Supply an 8–128 character Idempotency-Key.");return v as string;};
  const view=(o:Record<string,any>)=>({orderId:o.public_id,status:o.status==="settled"?"confirmed":o.status==="pending"&&new Date(o.expires_at).getTime()<Date.now()?"expired":o.status,amount:amount(o.amount_minor),method:o.method,paymentMethod:o.method,currency:o.method==="upi"?"INR":"USDT",serviceName:o.service_name??o.name,name:o.service_name??o.name,expiresAt:o.expires_at});
  app.get("/api/payments/options",run(async()=>{const configured=snowflake(guild)&&!!origin&&(methods().upi||methods().usdt);const approved=configured&&(await query("SELECT guild_id FROM access.guilds WHERE guild_id=$1 AND approved",[guild])).length>0;return {enabled:!!approved,methods:methods(),notificationStatus:"not-configured"};}));
  app.get("/api/payments/catalog",run(async()=>{guard();return {services:await query("SELECT sku AS id,name,price_minor AS \"priceMinor\",currency,membership_days AS \"membershipDays\" FROM commerce.catalog WHERE active ORDER BY sku"),methods:methods()};}));
- app.post("/api/payments/upi-qr",run(async(req)=>{
+ app.post("/api/payments/upi-qr",run(async(req,reply)=>{
   await publicWrite(req);const b=body(req),method=b.paymentMethod??b.method??"upi",buyer=b.discordId??b.discordUserId,sku=b.serviceId;
   if(!snowflake(buyer)||typeof sku!=="string"||sku.length>100||!['upi','usdt'].includes(String(method)))fail(400,"invalid-checkout","Provide a valid service, Discord user ID and payment method.");
   if(b.amount!==undefined||b.price!==undefined)fail(400,"invalid-checkout","Prices are selected by the server.");
@@ -66,11 +84,21 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
    const rows=await q(`INSERT INTO commerce.orders(guild_id,buyer_id,sku,amount_minor,order_token_hash,idempotency_key,public_id,method,referral_code,request_hash,service_name,membership_days)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,[guild,buyer,sku,minor,hash(token),idem,id,method,ref,requestHash,item!.name,item!.membership_days]);return rows[0]!;
   });
-  const note=`${order.public_id} Discord ${buyer}`,upiUri=`upi://pay?${new URLSearchParams({pa:vpa??"",pn:name??"",am:amount(order.amount_minor),cu:"INR",tn:note})}`;
-  return {...view(order),token,orderToken:token,amountMinor:Number(order.amount_minor),currency:method==="upi"?"INR":"USDT",paymentMethod:method,paymentUri:method==="upi"?upiUri:wallet,destination:method==="upi"?vpa:wallet,expiresAt:order.expires_at,referralApplied:!!ref,qrPayload:method==="upi"?upiUri:wallet,
-   ...(method==="upi"?{upiUri,payeeVpa:vpa,payeeName:name,note}:{walletAddress:wallet,network:"TRC-20 (Tron)",usdAmount:amount(order.amount_minor)}),notificationStatus:"not-configured"};
- }));
- app.get<{Params:{orderId:string}}>("/api/payments/status/:orderId",run(async(req)=>{guard();await limit(req);const id=(req.params as any).orderId;if(!publicId(id))fail(400,"invalid-order","Order IDs look like RP-XXXXXX.");const o=(await query("SELECT o.*,c.name FROM commerce.orders o JOIN commerce.catalog c USING(sku) WHERE public_id=$1 AND guild_id=$2",[id,guild]))[0];if(!o)fail(404,"order-not-found","Order was not found.");return view(o!);}));
+   reply.header("set-cookie",recoveryCookie(order.sku,order.public_id,token));
+   return orderResponse(order,token);
+  }));
+  app.get("/api/payments/resume",run(async(req)=>{
+   guard();await limit(req);
+   const serviceId=String((req.query as Record<string,unknown>)?.serviceId??"");
+   if(!serviceId||serviceId.length>100)fail(400,"invalid-service","A service id is required.");
+   const cookie=readRecoveryCookie(req);
+   if(!cookie||cookie[0]!==serviceId)return {resumed:false};
+   const [,orderId,token]=cookie;
+   const o=(await query("SELECT * FROM commerce.orders WHERE public_id=$1 AND guild_id=$2",[orderId,guild]))[0];
+   if(!o||o.order_token_hash!==hash(token))return {resumed:false};
+   return {...orderResponse(o,token),resumed:true};
+  }));
+  app.get<{Params:{orderId:string}}>("/api/payments/status/:orderId",run(async(req)=>{guard();await limit(req);const id=(req.params as any).orderId;if(!publicId(id))fail(400,"invalid-order","Order IDs look like RP-XXXXXX.");const o=(await query("SELECT o.*,c.name FROM commerce.orders o JOIN commerce.catalog c USING(sku) WHERE public_id=$1 AND guild_id=$2",[id,guild]))[0];if(!o)fail(404,"order-not-found","Order was not found.");return view(o!);}));
  app.post("/api/payments/claim",run(async(req)=>{
   await publicWrite(req);const b=body(req),id=b.orderId,token=b.token??b.orderToken;
   if(!publicId(id)||typeof token!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(token))fail(400,"invalid-claim","Supply the order ID and original order token.");

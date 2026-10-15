@@ -4,14 +4,20 @@ import QRCode from "qrcode";
 import { api } from "../lib/api";
 type Method = "upi" | "usdt";
 type Options = {enabled:boolean;methods:{upi:boolean;usdt:boolean}};
-type Order = {orderId:string;token:string;amountMinor:number;currency:string;paymentMethod:Method;paymentUri:string;destination:string;network?:string;expiresAt:string;referralApplied:boolean};
+type Order = {orderId:string;token:string;amountMinor:number;currency:string;paymentMethod:Method;paymentUri:string;destination:string;network?:string;expiresAt:string;referralApplied:boolean;status?:string};
+type ResumedOrder = Order & {resumed:true};
 const REFERRAL_KEY="royal-referral-code";
 function referral(){try {const value=new URLSearchParams(location.search).get("ref")?.trim().toUpperCase();if(value&&/^[A-Z0-9-]{6,24}$/.test(value)){localStorage.setItem(REFERRAL_KEY,value);return value;}return localStorage.getItem(REFERRAL_KEY)??"";}catch{return "";}}
 export function CheckoutButton({serviceId,name}:{serviceId:string;name:string}){
  const dialog=useRef<HTMLDialogElement>(null),secret=useRef(""),attempt=useRef(""),alive=useRef(true);
  const [options,setOptions]=useState<Options|null>(null),[buyer,setBuyer]=useState(""),[method,setMethod]=useState<Method>("upi"),[ref,setRef]=useState(""),[order,setOrder]=useState<Order|null>(null),[qr,setQr]=useState(""),[proof,setProof]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState(""),[claimed,setClaimed]=useState(false),[status,setStatus]=useState("");
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
- async function open(){dialog.current?.showModal();setError("");setRef(referral());if(order)return;setBusy(true);try {const o=await api<Options>("/api/payments/options");if(alive.current){setOptions(o);setMethod(o.methods.upi?"upi":"usdt");}}catch(e){if(alive.current)setError(e instanceof Error?e.message:"Payment options are unavailable.");}finally{if(alive.current)setBusy(false);}}
+ async function open(){dialog.current?.showModal();setError("");setRef(referral());if(order)return;setBusy(true);try {
+  // A reload or lost creation response resumes the same order through the
+  // HttpOnly recovery cookie; a second order is never created by default.
+  try{const resumed=await api<ResumedOrder|{resumed:false}>(`/api/payments/resume?serviceId=${encodeURIComponent(serviceId)}`);
+   if("resumed" in resumed&&resumed.resumed){setOrder(resumed);setStatus(resumed.status==="confirmed"?"confirmed":resumed.status??"pending");setQr(await QRCode.toDataURL(resumed.paymentUri,{width:256,margin:2,color:{dark:"#251322",light:"#ffffff"}}));return;}}catch{}
+  const o=await api<Options>("/api/payments/options");if(alive.current){setOptions(o);setMethod(o.methods.upi?"upi":"usdt");}}catch(e){if(alive.current)setError(e instanceof Error?e.message:"Payment options are unavailable.");}finally{if(alive.current)setBusy(false);}}
  async function checkout(e:FormEvent){e.preventDefault();setError("");setBusy(true);attempt.current ||= crypto.randomUUID();secret.current ||= btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");try {
   const o=await api<Order>("/api/payments/upi-qr",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({serviceId,discordId:buyer,paymentMethod:method,idempotencyKey:attempt.current,recoveryToken:secret.current,...(ref?{referralCode:ref.trim().toUpperCase()}:{})})});
   if(!/^RP-[A-Z0-9]{6}$/.test(o.orderId)||!o.token||!o.paymentUri)throw Error("The payment service returned an incomplete order.");

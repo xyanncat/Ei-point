@@ -52,6 +52,36 @@ test('USDT snapshot uses configured quote, TRON proof validates, and maintenance
  assert.equal((await pool.query("SELECT status FROM commerce.orders WHERE idempotency_key='second-checkout-key'")).rows[0].status,'expired');
  assert.equal((await pool.query("SELECT status FROM commerce.rewards WHERE idempotency_key='old-month-reward'")).rows[0].status,'expired');
 });
+test('checkout resume recovers the same order and claim authority without storing secrets in the URL',async()=>{
+ const key='resume-key-1',secret='b'.repeat(43);
+ const first=await app.inject({method:'POST',url:'/api/payments/upi-qr',headers:{origin},payload:{serviceId:'account-management-membership',discordId:buyer,paymentMethod:'upi',idempotencyKey:key,recoveryToken:secret}});
+ assert.equal(first.statusCode,200,first.body);
+ const order=first.json();
+ const cookie=first.headers['set-cookie'];
+ assert.ok(cookie, 'checkout creation must set a recovery cookie');
+ assert.match(String(cookie),/HttpOnly/);
+ const resumed=await app.inject({method:'GET',url:'/api/payments/resume?serviceId=account-management-membership',headers:{cookie}});
+ assert.equal(resumed.statusCode,200,resumed.body);
+ const recovered=resumed.json();
+ assert.equal(recovered.resumed,true);
+ assert.equal(recovered.orderId,order.orderId);
+ assert.equal(recovered.token,secret);
+ const claim=await app.inject({method:'POST',url:'/api/payments/claim',headers:{origin},payload:{orderId:recovered.orderId,token:recovered.token,utr:'987654321012',idempotencyKey:'resume-claim-key'}});
+ assert.equal(claim.statusCode,200,claim.body);
+ assert.equal((await app.inject({method:'GET',url:'/api/payments/resume?serviceId=genshin-main-event',headers:{cookie}})).json().resumed,false);
+ assert.equal((await app.inject({method:'GET',url:'/api/payments/resume?serviceId=account-management-membership'})).json().resumed,false);
+});
+test('a lost creation response replays the same order for the same key and recovery token',async()=>{
+ const key='lost-response-key',secret='c'.repeat(43);
+ const payload={serviceId:'account-management-membership',discordId:buyer,paymentMethod:'upi',idempotencyKey:key,recoveryToken:secret};
+ const first=await app.inject({method:'POST',url:'/api/payments/upi-qr',headers:{origin},payload});
+ assert.equal(first.statusCode,200,first.body);
+ const replay=await app.inject({method:'POST',url:'/api/payments/upi-qr',headers:{origin},payload});
+ assert.equal(replay.statusCode,200,replay.body);
+ assert.equal(replay.json().orderId,first.json().orderId);
+ assert.equal((await pool.query('SELECT count(*) FROM commerce.orders WHERE idempotency_key=$1',[key])).rows[0].count,'1');
+ assert.equal((await app.inject({method:'POST',url:'/api/payments/upi-qr',headers:{origin},payload:{...payload,recoveryToken:'d'.repeat(43)}})).statusCode,409);
+});
 test('rejection is terminal and does not activate another membership',async()=>{
  const o=await create('rejected-checkout-key');
  const rejection=await app.inject({method:'POST',url:`/api/guilds/${guild}/commerce/orders/${o.orderId}/reject`,payload:{idempotencyKey:'reject-order-key'}});assert.equal(rejection.statusCode,200);
