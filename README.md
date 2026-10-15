@@ -68,18 +68,21 @@ The bot count is configurable through the release roster. A manifest cannot crea
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables': {'primaryColor':'#171c29','primaryTextColor':'#eef2f7','primaryBorderColor':'#b95348','lineColor':'#a98b71','secondaryColor':'#20283a','tertiaryColor':'#111722','clusterBkg':'#0e1420','clusterBorder':'#39435a','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
-flowchart LR
+flowchart TB
   subgraph Experience["01 · EXPERIENCE"]
+    direction LR
     Members[Members & operators]
     Discord[Discord]
     Site[Kafka-themed site]
   end
   subgraph Services["02 · APPLICATION SERVICES"]
+    direction LR
     API[Fastify API]
     Fleet[Six bot identities]
     Workers[Workers & outbox]
   end
   subgraph Core["03 · SHARED PLATFORM"]
+    direction LR
     Flow[Ei-Flow lifecycle]
     Domain[Domain modules]
     DB[(PostgreSQL)]
@@ -215,15 +218,24 @@ docs/
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables': {'primaryColor':'#171c29','primaryTextColor':'#eef2f7','primaryBorderColor':'#b95348','lineColor':'#a98b71','secondaryColor':'#20283a','tertiaryColor':'#111722','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
-flowchart LR
-  Source[01 · Reviewed source] --> Build[02 · Linux build & checks]
-  Build --> Digest[03 · Immutable image digests]
-  Digest --> Manifest[04 · Release manifest]
-  Manifest --> Backup[05 · Verified backup]
-  Backup --> Deploy[06 · Deploy selected roster]
-  Deploy --> Health[07 · Health & heartbeats]
-  Health --> Accept[08 · Staging acceptance]
-  Accept --> Cutover[09 · Operator-approved cutover]
+flowchart TB
+  subgraph Prepare["01 · PREPARE RELEASE"]
+    direction LR
+    Source[Reviewed source] --> Build[Linux build & checks]
+    Build --> Digest[Immutable image digests]
+    Digest --> Manifest[Release manifest]
+  end
+  subgraph Rollout["02 · CONTROLLED ROLLOUT"]
+    direction LR
+    Backup[Verified backup] --> Deploy[Deploy selected roster]
+    Deploy --> Health[Health & heartbeats]
+  end
+  subgraph Acceptance["03 · ACCEPTANCE"]
+    direction LR
+    Accept[Staging acceptance] --> Cutover[Operator-approved cutover]
+  end
+  Manifest --> Backup
+  Health --> Accept
   classDef gate fill:#171c29,stroke:#bd6558,color:#f4eee9,stroke-width:2px
   classDef evidence fill:#17252a,stroke:#79ced3,color:#e8fbfc,stroke-width:2px
   class Source,Build,Digest,Manifest,Deploy,Cutover gate
