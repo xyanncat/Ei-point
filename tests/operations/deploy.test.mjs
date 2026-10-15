@@ -20,6 +20,7 @@ test('deploy uses immutable images, stops overlapping handlers, gates readiness 
   async function mock(name,body){const p=join(bin,name);await writeFile(p,'#!/usr/bin/env bash\nset -euo pipefail\n'+body+'\n');await chmod(p,0o755);}
   await mock('docker',`printf 'DOCKER %s\n' "$*" >> "$MOCK_LOG"
 if [[ "$*" == *'ps -q tts-qwen'* ]]; then echo tts-id
+elif [[ "$*" == *'ps -q hy-mt2'* ]]; then echo hy-id
 elif [[ "$1" == ps ]]; then echo api-id
 elif [[ "$*" == *'ps -q postgres'* ]]; then echo pg-id; fi`);
   await mock('node',`if [[ "$1" == *scripts/health-fleet.mjs ]]; then echo '{"ok":true}'; exit "\${MOCK_HEALTH_EXIT:-0}"; fi
@@ -36,9 +37,9 @@ exec "$REAL_NODE" "$@"`);
   await writeFile(log,'');result=run('scripts/rollback.sh');assert.equal(result.status,0,result.stderr);calls=await readFile(log,'utf8');assert.doesNotMatch(calls,/\bdown\b|pg_restore|migrate|postgres.*up/);assert.match(calls,/up -d --no-build/);
   await writeFile(join(backup,'backup.json'),JSON.stringify({version:1,createdAt:new Date(Date.now()-60*60*1000).toISOString(),database:'ei_point',files}));await writeFile(log,'');result=run('scripts/deploy.sh',{DEPLOY_BACKUP_MAX_AGE_HOURS:'0.01'});assert.notEqual(result.status,0);assert.equal(await readFile(log,'utf8'),'');assert.equal(await readFile(join(state,'current.json'),'utf8'),saved);
   await writeFile(join(backup,'backup.json'),JSON.stringify({version:1,createdAt:new Date().toISOString(),database:'ei_point',files}));
-  const oldImages=Object.fromEntries(releaseServices.filter(service=>service!=='tts-qwen').map(service=>[service,`example/${service}@sha256:${'e'.repeat(64)}`]));
+  const oldImages=Object.fromEntries(releaseServices.filter(service=>!['tts-qwen','hy-mt2'].includes(service)).map(service=>[service,`example/${service}@sha256:${'e'.repeat(64)}`]));
   const oldRelease=join(dir,'old-release.json');await writeFile(oldRelease,JSON.stringify({id:'old-release',images:oldImages}));
-  await writeFile(log,'');result=run('scripts/rollback.sh',{},oldRelease);assert.equal(result.status,0,result.stderr);calls=await readFile(log,'utf8');assert.match(calls,/stop tts-qwen/);
+  await writeFile(log,'');result=run('scripts/rollback.sh',{},oldRelease);assert.equal(result.status,0,result.stderr);calls=await readFile(log,'utf8');assert.match(calls,/stop tts-qwen/);assert.match(calls,/stop hy-mt2/);
   await writeFile(release,JSON.stringify({id:'bad',images:{}}));await writeFile(log,'');result=run('scripts/deploy.sh');assert.notEqual(result.status,0);assert.equal(await readFile(log,'utf8'),'');
  }finally{await rm(dir,{recursive:true,force:true});}
 });

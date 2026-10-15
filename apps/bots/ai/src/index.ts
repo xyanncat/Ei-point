@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFile, stat } from "node:fs/promises";
 import { acquireVoiceLease } from "./voice-lease.js";
 import { isControlEnabled } from "@ei-point/flow";
 import { createServer } from "node:http";
@@ -23,9 +24,12 @@ import {
 } from "./commands.js";
 import { synthesizeSpeech, ttsCommandDefinitions, respondToTtsCommand } from "./tts.js";
 import { extractVoiceChatText, TTS_MAX_CHARS } from "@ei-point/module-tts";
+import { respondToTranslationCommand, translationCommandDefinition } from "./translate.js";
+import { prepareCyrenePersonaPrompt } from "./persona.js";
 
-const ALL_AI_COMMANDS = [...commonCommandDefinitions(), ...ttsCommandDefinitions];
+const ALL_AI_COMMANDS = [...commonCommandDefinitions(), ...ttsCommandDefinitions, translationCommandDefinition];
 const TTS_NAMES = new Set(ttsCommandDefinitions.map((c) => c.name));
+const TRANSLATION_NAME = translationCommandDefinition.name;
 
 // Cyrene voice sessions: guildId -> voice connection (lazy @discordjs/voice).
 const voiceSessions = new Map<string, { destroy: () => void }>();
@@ -260,6 +264,18 @@ let stopping = false;
 let identityVerified = false;
 let lastDbReady = false;
 let activeCommands = 0;
+let cyrenePersona = "";
+const cyrenePersonaPath = process.env.CYRENE_PERSONA_MEMORY_PATH ?? ".models/Cyrene_Chat_Roleplay_Memory.md";
+
+async function loadCyrenePersona(): Promise<string> {
+  const info = await stat(cyrenePersonaPath);
+  if (!info.isFile() || info.size < 1 || info.size > 32 * 1024) {
+    throw new Error("Cyrene persona memory must be a non-empty regular file no larger than 32 KiB");
+  }
+  const memory = (await readFile(cyrenePersonaPath, "utf8")).trim();
+  if (!memory || Buffer.byteLength(memory, "utf8") > 32 * 1024) throw new Error("Cyrene persona memory is empty or too large");
+  return prepareCyrenePersonaPrompt(memory);
+}
 
 const guarded = (label: string, run: () => Promise<unknown>) => {
   void run().catch((err) =>
@@ -380,6 +396,7 @@ client.on(Events.MessageCreate, (message) => {
       rawContent,
       (p) => router.ask(p),
       DAILY_BUDGET_CAP,
+      cyrenePersona,
     );
 
     await message.reply({ ...toEiEmbedPayload(fitDiscord(reply), "Cyrene"), allowedMentions: { parse: [], repliedUser: true } });
@@ -412,7 +429,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         return;
       }
 
-      if (await respondToCommonCommand(interaction, "Cyrene", "Mention Cyrene in a text channel to chat. Use `/speak`, `/tts`, `/leave`, or `/search` for voice and search features.")) return;
+      if (await respondToCommonCommand(interaction, "Cyrene", "Mention Cyrene in a text channel to chat. Use `/speak`, `/tts`, `/leave`, `/search`, or `/translate` for local voice and translation features.")) return;
 
       await interaction.deferReply();
       if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) {
@@ -423,6 +440,16 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
       const options: Record<string, string | number | boolean> = {};
       for (const opt of interaction.options.data) {
         if (opt.value !== undefined) options[opt.name] = opt.value;
+      }
+
+      if (interaction.commandName === TRANSLATION_NAME) {
+        const result = await respondToTranslationCommand({
+          text: String(options.text ?? ""),
+          targetLanguage: String(options.target_language ?? ""),
+          ...(typeof options.source_language === "string" ? { sourceLanguage: options.source_language } : {}),
+        });
+        await interaction.editReply({ content: fitDiscord(result), allowedMentions: { parse: [] } });
+        return;
       }
 
       if (TTS_NAMES.has(interaction.commandName)) {
@@ -484,6 +511,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
           key: interaction.id,
           askRouter: (prompt) => router.ask(prompt),
           dailyBudgetCap: DAILY_BUDGET_CAP,
+          systemPrompt: cyrenePersona,
           defer: async () => {},
           reply: async (text) => {
             await interaction.editReply({ content: fitDiscord(text), allowedMentions: { parse: [] } });
@@ -570,6 +598,7 @@ process.on("SIGTERM", () => void shutdown());
 
 client.once(Events.ClientReady, () => {
   guarded("startup", async () => {
+    cyrenePersona = await loadCyrenePersona();
     const registry = await pool.query("SELECT application_id FROM config.bots WHERE bot_key=$1", [botKey]);
     if (registry.rows[0]?.application_id !== client.user!.id) throw new Error("Registered application identity mismatch");
     identityVerified = true;

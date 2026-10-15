@@ -11,7 +11,7 @@ The six current identities are Kafka, Cyrene, Robin, Cipher, SilverWolf, and Him
 | Bot | Main function | Command source |
 |---|---|---|
 | [Kafka](#kafka) | Security, moderation, audit/event logging | `apps/bots/kafka/src/index.ts`, security and moderation command modules |
-| [Cyrene](#cyrene) | AI chat, persona and persistent conversation state, TTS | `apps/bots/ai/src/commands.ts`, `apps/bots/ai/src/tts.ts` |
+| [Cyrene](#cyrene) | Mention chat, persona and conversation state, TTS, local translation | `apps/bots/ai/src/commands.ts`, `apps/bots/ai/src/tts.ts`, `apps/bots/ai/src/translate.ts` |
 | [Robin](#robin) | Music search, playback, voice and queue management | `apps/bots/music-py/src/main.py` |
 | [Cipher](#cipher) | Service catalog, orders, payment claims, settlement, referrals | `apps/bots/commerce/src/commands.ts` |
 | [SilverWolf](#silverwolf) | Rank readout, cards, games, inventory, market and trades | `apps/bots/community/src/commands.ts` |
@@ -73,6 +73,7 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 | `/tts` | Join the caller's voice channel and read new text-chat messages aloud; bounded queue and idle-human departure are implemented. |
 | `/leave` | End Cyrene's active voice session. |
 | `/search <query>` | Registered but currently returns an explicit not-configured response until a search source is selected. |
+| `/translate <text> <target_language> [source_language]` | Translate up to 500 characters through the private local Hy-MT2 service. Source language is optional and auto-detected when omitted. |
 
 ### Other functions
 
@@ -80,6 +81,7 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 - Keep guild/user conversation threads, recent messages, summaries, persona preferences, and usage records in PostgreSQL.
 - Read new messages from the active voice channel's text chat, enforce Ei-Flow authorization, rate and queue limits, and coordinate voice admission with Robin through database leases.
 - Synthesize through the private, offline local Qwen service. Provisioning model weights and target-VPS CPU/audible acceptance remain open.
+- Translate through a separate offline local Hy-MT2 service with one inference slot, eight waiting requests and a 60-second request deadline. Translation text is not stored in Cyrene's conversation history; pinned model provisioning, target-VPS performance and language-quality acceptance remain open.
 
 ## Robin
 

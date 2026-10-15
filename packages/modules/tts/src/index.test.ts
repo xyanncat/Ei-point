@@ -122,6 +122,17 @@ describe("extractVoiceChatText", () => {
       text: "party time now",
     });
   });
+  it("removes markdown, Discord mentions, and stage directions before voice playback", () => {
+    assert.deepEqual(extractVoiceChatText("**Hello**, <@123456789012345678> *laughs* [waves] there"), {
+      ok: true,
+      text: "Hello, there",
+    });
+    assert.deepEqual(extractVoiceChatText("*Very important* *standpoint* words *she smiles softly* (laughs)"), {
+      ok: true,
+      text: "Very important standpoint words",
+    });
+    assert.deepEqual(extractVoiceChatText("`secret code`"), { ok: false, reason: "nothing-speakable" });
+  });
   it("reports nothing-speakable when only ignored content remains", () => {
     assert.deepEqual(extractVoiceChatText("https://tenor.com/x.gif"), { ok: false, reason: "nothing-speakable" });
     assert.deepEqual(extractVoiceChatText("<:wave:123> \u{1F600}"), { ok: false, reason: "nothing-speakable" });

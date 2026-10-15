@@ -2,6 +2,8 @@
 
 Cyrene `/speak` and `/tts` send text to a private local service running Qwen3-TTS 12Hz 0.6B Base. The service clones from the configured local reference clip and transcript, uses Qwen's automatic language detection, returns 16-bit PCM WAV, and cannot reach the public network. It does not use a speech-provider API key or silently switch to an external inference endpoint. `/tts` reads new voice-channel **text chat** messages; it does not transcribe spoken audio.
 
+Cyrene chat uses the supplied role-play memory mounted read-only in `bot-ai`. The bot selects its character, personality, relationship, spoiler-awareness, intent, and boundary sections for the system message; sample replies and reference links are omitted to keep each request bounded. This selected persona context is not persisted in the conversation tables. The supplied TTS memory informs text cleanup and QA guidance. Qwen3-TTS Base accepts the audio reference and matching transcript, but the current Base inference path does not expose the memory file as emotion/style controls. This voice guidance does not certify that generated audio matches an official performance.
+
 ## Provision the model once
 
 The Compose service does not download weights. Provision a specific Hugging Face commit outside container startup using Python 3.12:

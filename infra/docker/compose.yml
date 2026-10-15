@@ -239,11 +239,18 @@ services:
       AI_QUEUE_MAX: ${AI_QUEUE_MAX:-20}
       AI_DEADLINE_MS: ${AI_DEADLINE_MS:-60000}
       QWEN_TTS_URL: http://tts-qwen:3120/v1/audio/speech
+      HY_MT2_URL: http://hy-mt2:3121/v1/chat/completions
+      CYRENE_PERSONA_MEMORY_PATH: /persona/Cyrene_Chat_Roleplay_Memory.md
       # Release manifests add the local URL only when tts-qwen is part of that release.
       TTS_PROVIDER_URL: ${TTS_PROVIDER_URL:-}
       TTS_PROVIDER_KEY: ${TTS_PROVIDER_KEY:-}
       TTS_PROVIDER_NAME: ${TTS_PROVIDER_NAME:-default}
-    networks: [app, data, tts]
+    volumes:
+      - type: bind
+        source: ${CYRENE_PERSONA_MEMORY_FILE:-../../.models/Cyrene_Chat_Roleplay_Memory.md}
+        target: /persona/Cyrene_Chat_Roleplay_Memory.md
+        read_only: true
+    networks: [app, data, tts, translation]
     ports: ["127.0.0.1:3104:3104"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "0.75", memory: 2G } } }
@@ -256,6 +263,37 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       tts-qwen: { condition: service_started }
+      hy-mt2: { condition: service_started }
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  hy-mt2:
+    image: "ei-point/hy-mt2:local"
+    build: { context: ../.., dockerfile: apps/services/hy-mt2/Dockerfile }
+    restart: unless-stopped
+    environment:
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp
+    command: ["--model", "/models/Hy-MT2-1.8B-Q4_K_M.gguf", "--ctx-size", "2048", "--parallel", "1", "--threads", "${HY_MT2_THREADS:-2}", "--threads-batch", "${HY_MT2_THREADS:-2}", "--n-predict", "700", "--metrics", "--no-webui", "--host", "0.0.0.0", "--port", "3121"]
+    networks: [translation]
+    ports: ["127.0.0.1:3121:3121"]
+    volumes:
+      - type: bind
+        source: ${HY_MT2_MODEL_PATH:-../../.models/hy-mt2-1.8b}
+        target: /models
+        read_only: true
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=128m,uid=10001,gid=10001
+    deploy: { resources: { limits: { cpus: "1.50", memory: 4G } } }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3121/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15m
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
   tts-qwen:
@@ -443,6 +481,7 @@ networks:
       config: [{subnet: "${APP_SUBNET:-172.29.10.0/24}"}]
   data: { name: ei-point_data, internal: true }
   tts: { name: ei-point_tts, internal: true }
+  translation: { name: ei-point_translation, internal: true }
 
 volumes:
   pgdata: { name: ei-point_pgdata }

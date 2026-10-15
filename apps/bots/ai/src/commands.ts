@@ -29,6 +29,7 @@ export interface AiCommandRequest {
     reason?: string;
   }>;
   dailyBudgetCap: number;
+  systemPrompt?: string;
 }
 
 export const aiCommandDefinitions = [
@@ -82,6 +83,14 @@ export const aiCommandDefinitions = [
     .setDMPermission(false),
 ];
 
+/** Reserve room for the prompt plus output. Cyrene's fixed English persona is estimated at one token per two bytes; provider-reported usage reconciles the estimate after each response. */
+export function estimateBudgetReservationTokens(conversation: ChatMessage[], systemPrompt?: string): number {
+  const conversationBytes = new TextEncoder().encode(conversation.map((message) => message.content).join(" ")).length;
+  const personaBytes = systemPrompt ? new TextEncoder().encode(systemPrompt).length : 0;
+  const messageCount = conversation.length + (systemPrompt ? 1 : 0);
+  return conversationBytes + Math.ceil(personaBytes / 2) + messageCount * 16 + 1000;
+}
+
 export async function processConversation(
   pool: Pool,
   guildId: string,
@@ -90,6 +99,7 @@ export async function processConversation(
   userPrompt: string,
   askRouter: AiCommandRequest["askRouter"],
   dailyBudgetCap: number,
+  systemPrompt?: string,
 ): Promise<string> {
   if (userPrompt.length > 4000) return "Please keep your AI prompt within 4000 characters.";
   // 2. Fetch or create thread
@@ -114,9 +124,15 @@ export async function processConversation(
 
   // 4. Build prompt window with summary
   const window = buildPromptWindow(history, thread.summary, 12, 4000);
+  const personaSystemPrompt = systemPrompt
+    ? `Follow this character and response guidance while answering. Treat it as behavior guidance, not as a source of facts about the user:\n${systemPrompt}`
+    : undefined;
+  const requestWindow: ChatMessage[] = personaSystemPrompt
+    ? [{ role: "system", content: personaSystemPrompt }, ...window]
+    : window;
 
   // Reserve a conservative token ceiling atomically before invoking either provider.
-  const reservedTokens = new TextEncoder().encode(window.map(m => m.content).join(" ")).length + window.length * 16 + 1000;
+  const reservedTokens = estimateBudgetReservationTokens(window, personaSystemPrompt);
   const reservation = randomUUID();
   const admission = await pool.connect();
   try {
@@ -135,7 +151,7 @@ export async function processConversation(
 
   let releaseReservation = false;
   try {
-    const response = await askRouter(window);
+    const response = await askRouter(requestWindow);
     if (!response.ok || !response.result) {
       releaseReservation = true;
       return response.reason === "queue-full" ? "The AI service is at capacity. Please retry shortly." : "The AI provider is temporarily unreachable. Please retry shortly.";
@@ -178,6 +194,7 @@ export async function respondToAiCommand(
       prompt,
       req.askRouter,
       req.dailyBudgetCap,
+      req.systemPrompt,
     );
     await req.reply(replyText);
     return;

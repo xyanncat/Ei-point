@@ -23,7 +23,7 @@ node scripts/release-manifest.mjs "$RELEASE_MANIFEST" "$WORK/release.compose.jso
 mapfile -t BOTS < <(sed '/^$/d' "$WORK/release.compose.json.bots")
 COMPOSE=(docker compose --project-name ei-point --env-file "$ENV_FILE" -f infra/docker/compose.yml -f "$WORK/release.compose.json")
 "${COMPOSE[@]}" config --quiet
-"${COMPOSE[@]}" pull postgres nginx api web workers tts-qwen "${BOTS[@]}" migrate
+"${COMPOSE[@]}" pull postgres nginx api web workers tts-qwen hy-mt2 "${BOTS[@]}" migrate
 # A single identity must never have old and replacement handlers running together.
 "${COMPOSE[@]}" --profile legacy-disabled stop bot-security bot-moderation
 bash scripts/stop-retired-bots.sh "$WORK/release.compose.json.bots"
@@ -33,7 +33,7 @@ docker exec --user postgres "$pgid" sh -c 'exec pgbackrest --stanza=ei-point --p
 docker exec --user postgres "$pgid" sh -c 'exec pgbackrest --stanza=ei-point --pg1-user="$POSTGRES_USER" check'
 # Do not mutate the schema until WAL archiving has a usable repository.
 "${COMPOSE[@]}" --profile maintenance run --rm --no-deps migrate
-"${COMPOSE[@]}" up -d --no-build --wait --wait-timeout 900 tts-qwen
+"${COMPOSE[@]}" up -d --no-build --wait --wait-timeout 900 tts-qwen hy-mt2
 "${COMPOSE[@]}" up -d --no-build --remove-orphans --wait --wait-timeout 120 api web workers "${BOTS[@]}" nginx
 healthy=false
 for ((attempt=1; attempt<=HEALTH_ATTEMPTS; attempt++)); do

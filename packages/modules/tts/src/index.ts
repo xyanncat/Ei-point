@@ -12,6 +12,8 @@ export const TTS_MAX_CHARS = 500;
 export const TTS_MAX_SESSIONS = 2;
 export const TTS_CACHE_VERSION = 1;
 
+const STAGE_DIRECTION = /^(?:(?:she|he|they|i|cyrene)\s+)?(?:laugh|smile|sigh|gasp|chuckle|giggle|sob|cry|whisper|shout|murmur|pause|nod|shrug|wave|blink|grin|wink|smirk|scoff|yawn|cough|sneeze|inhale|exhale|look|lean|step|turn|tilt|close|open|touch|hold|reach|clasp|bow|kneel|stand|sit|walk|move|offer|raise|lower)(?:s|es|ed|ing)?(?:\s+(?:softly|gently|quietly|warmly|brightly|happily|sadly|playfully|wistfully|slowly|lightly))?$/i;
+
 export type TtsProviderFailure = "queue-full" | "all-failed" | "input-rejected";
 
 export interface TtsAudio {
@@ -49,6 +51,14 @@ export function extractVoiceChatText(
   const cleaned = content
     .replace(/!?\[[^\]]*\]\([^)]*\)/g, " ")
     .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/<a?:\w+:\d+>/g, " ")
+    .replace(/<@!?\d{17,20}>|<@&\d{17,20}>|<#\d{17,20}>/g, " ")
+    .replace(/```[\s\S]*?```|`[^`]*`/g, " ")
+    .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, "$1$2")
+    .replace(/\*([^*\n]+)\*/g, (_marked, words: string) => STAGE_DIRECTION.test(words.trim()) ? " " : words)
+    .replace(/\(([^()\n]+)\)/g, (parenthesized, words: string) => STAGE_DIRECTION.test(words.trim()) ? " " : parenthesized)
+    .replace(/(?<!\w)\[[^\]]{1,120}\]/g, " ")
+    .replace(/[*_~>#]/g, " ")
     .replace(
       /<a?:\w+:\d+>|[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{2190}-\u{21FF}\u{2300}-\u{23FF}]/gu,
       " ",

@@ -2,13 +2,13 @@ import {readFile,stat,realpath} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {resolve,join,basename,sep} from 'node:path';
-export const releaseServices=['postgres','nginx','api','web','workers','tts-qwen','bot-kafka','bot-himiko','bot-community','bot-ai','bot-music','bot-commerce'];
+export const releaseServices=['postgres','nginx','api','web','workers','tts-qwen','hy-mt2','bot-kafka','bot-himiko','bot-community','bot-ai','bot-music','bot-commerce'];
 export const defaultBots=[['bot-kafka','kafka',3108],['bot-himiko','himiko',3107],['bot-community','silverwolf',3103],['bot-ai','cyrene',3104],['bot-music','robin',3105],['bot-commerce','cipher',3106]].map(([service,botKey,port])=>({service,botKey,port}));
-export function validateRelease(value,{allowMissingTts=false}={}){
+export function validateRelease(value,{allowMissingTts=false,allowMissingHyMt2=false}={}){
  if(!value||typeof value.id!=='string'||!/^[-a-zA-Z0-9_.]{1,80}$/.test(value.id)||!value.images||typeof value.images!=='object')throw Error('Invalid release manifest');
  const bots=value.bots??defaultBots;
  if(!Array.isArray(bots)||bots.some(b=>!/^bot-[a-z0-9-]+$/.test(b.service)||['bot-security','bot-moderation'].includes(b.service)||!/^[-a-z0-9]+$/.test(b.botKey)||!Number.isInteger(b.port)||b.port<1024||b.port>65535)||new Set(bots.map(b=>b.service)).size!==bots.length||new Set(bots.map(b=>b.botKey)).size!==bots.length||new Set(bots.map(b=>b.port)).size!==bots.length)throw Error('Invalid or overlapping bot roster');
- const expected=['postgres','nginx','api','web','workers',...(allowMissingTts&&!Object.hasOwn(value.images,'tts-qwen')?[]:['tts-qwen']),...bots.map(b=>b.service)];
+ const expected=['postgres','nginx','api','web','workers',...(allowMissingTts&&!Object.hasOwn(value.images,'tts-qwen')?[]:['tts-qwen']),...(allowMissingHyMt2&&!Object.hasOwn(value.images,'hy-mt2')?[]:['hy-mt2']),...bots.map(b=>b.service)];
  if(Object.keys(value.images).some(key=>!expected.includes(key)))throw Error('Unsupported or overlapping release service');
  for(const name of expected)if(typeof value.images[name]!=='string'||!/^[-a-zA-Z0-9._/:]+@sha256:[a-f0-9]{64}$/.test(value.images[name]))throw Error(`Immutable image digest required: ${name}`);
  value.bots=bots;
@@ -18,7 +18,8 @@ export function readyPayload(value){return !!value&&typeof value==='object'&&(va
 export async function probeFleet(targets,fetchFn=fetch){
  const results=await Promise.all(targets.map(async target=>{
   try{const response=await fetchFn(target.url,{signal:AbortSignal.timeout(5000),redirect:'error'});
-   const ok=response.ok&&(target.kind==='text'?(await response.text()).trim()==='healthy':readyPayload(await response.json()));
+   const payload=target.kind==='text'?await response.text():target.kind==='http'?null:await response.json();
+   const ok=response.ok&&(target.kind==='text'?payload.trim()==='healthy':target.kind==='http'?true:target.kind==='model'?payload?.status==='ok':readyPayload(payload));
    return {name:target.name,ok};
   }catch{return {name:target.name,ok:false};}
  }));

@@ -31,6 +31,7 @@ Required slash commands:
 - `/speak <text>` creates a voice file for text up to 500 characters and sends the audio file in the command's text channel; it does not join voice.
 - `/tts` joins the invoker's voice channel and reads new text-chat messages associated with that voice channel aloud. It runs for that voice session and leaves when no human members remain. A separate `/leave` command leaves immediately.
 - `/search` performs the agreed search operation (provider/source is still to be specified).
+- `/translate <text> <target_language> [source_language]` translates up to 500 characters with the local Hy-MT2 model. Source language is optional and auto-detected when omitted. Translation text is not added to Cyrene's conversation history.
 
 The chat assistant has no `/ask`, `/persona`, `/reset`, `/usage`, `/model`, or `/tts-voice` command. It responds to a direct mention of Cyrene in an allowed text channel. Reply in character using the supplied Cyrene memory files; persist only the conversation data intended by the current retention policy.
 
@@ -38,7 +39,7 @@ The chat assistant has no `/ask`, `/persona`, `/reset`, `/usage`, `/model`, or `
 
 - Text-to-speech: Qwen3-TTS 12Hz 0.6B Base, conditioned on the supplied reference audio and its matching transcript. The provided calibration line is: “Ah, there you are! Hehe, were you looking for me? Oh, don't look so surprised. I'm simply happy you're here. You know, even the smallest moments can become precious memories. So, shall we make another one together?”
 - Translation: Tencent Hy-MT2 1.8B.
-- Load model weights from a pinned local model directory/volume; never download model weights during a command or silently switch to a metered provider. Expose readiness, load time, inference time, memory, CPU, and queue metrics.
+- Load model weights from a pinned local model directory/volume; never download model weights during a command or silently switch to a metered provider. Expose readiness, load time, inference time, memory, CPU, and queue metrics. Qwen TTS and Hy-MT2 translation use independent, local-only services.
 - Model inference is subject to bounded concurrency, queue depth, request timeout, and overload responses even when there is no external provider API rate limit.
 - TTS text cap is 500 characters. Split or reject longer messages from `/tts` using a documented policy; do not let an unbounded backlog form.
 - Keep Qwen voice-cloning reference audio, transcript, model/license notices, and deployment provenance together. Do not represent generated audio as official game dialogue or a specific actor's original recording.
@@ -117,6 +118,7 @@ This table reflects repository work in progress. A slash command appearing in so
 | Kafka permissions | Partial | Administrator default command permissions, owner-or-Administrator interaction gate, `/kick`, warning/timeout removals, and all four `/temp` actions are implemented. Disposable-guild effect/recovery tests, other security callbacks, and live authorization checks remain open. |
 | Cyrene `/tts` session | Partial | Reads new messages from the joined voice channel's text chat, caps each message at 500 characters, bounds the queue, and leaves after humans exit. A private, offline-only local Qwen service with preloaded reference conditioning, pinned model manifest verification, bounded WAV cache/queue, health checks and metrics is implemented; model provisioning, target-VPS CPU benchmark and audible Discord acceptance remain open. |
 | Cyrene `/speak` and `/search` | Partial | `/speak` now uses the local Qwen service and attaches WAV output. Model provisioning and live Discord acceptance remain open; `/search` still needs an approved source. |
+| Cyrene `/translate` | Partial | Registered `/translate` uses the local Hy-MT2 OpenAI-compatible endpoint with optional source-language detection, a 500-character limit, one inference slot, bounded queue and timeout. Pinned weight provisioning, target-VPS CPU/memory/latency and language-quality acceptance remain open. |
 | Robin | Partial | Requested common commands are added and disallowed slash commands are removed from sync; several older direct responses still bypass embed formatting. |
 | Cipher | Partial | `/orders` and `/payment` plus one-time transactional referral redemption are implemented. `/orders list` lists the service catalog rather than the caller's order history; Razorpay card/wallet checkout, webhook verification, and sandbox acceptance remain open. |
 | SilverWolf | Partial | Requested game/economy commands are now the registered allowlist; integration tests and common reply/event formatting remain open. |
@@ -164,6 +166,7 @@ All Kafka rows above are owner-or-Administrator only. Temporary actions need ret
 | `/tts` | Join the caller's voice channel and speak new messages from that voice channel's text chat. |
 | `/leave` | End the active Cyrene voice session immediately. |
 | `/search` | Search the agreed source and summarize/link results. |
+| `/translate <text> <target_language> [source_language]` | Translate up to 500 characters with local Hy-MT2. The source language is optional and auto-detected when omitted. |
 
 ### Robin
 
