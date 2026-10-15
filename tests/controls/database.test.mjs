@@ -11,8 +11,8 @@ import {
   isControlEnabled,
   consumeEmbedJob,
   transaction,
+  deliverCommunityMessages,
 } from "../../packages/flow/dist/index.js";
-import { deliverMessages } from "../../apps/bots/community/dist/delivery.js";
 import { CommunityService } from "../../packages/modules/community/dist/index.js";
 let server, pool;
 const guild = "100000000000000001",
@@ -196,7 +196,7 @@ test("disabled guild notifications prevent leasing community outbox events", asy
   );
   let sent = false;
   assert.equal(
-    await deliverMessages(
+    await deliverCommunityMessages(
       pool,
       [guild],
       async () => {
@@ -216,7 +216,7 @@ test("disabled guild notifications prevent leasing community outbox events", asy
     "UPDATE config.guild_controls SET notifications_enabled=true,notification_preferences='{\"welcome\":false}'::jsonb",
   );
   assert.equal(
-    await deliverMessages(
+    await deliverCommunityMessages(
       pool,
       [guild],
       async () => {
