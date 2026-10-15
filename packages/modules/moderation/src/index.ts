@@ -70,15 +70,6 @@ export const LIST_CASES_SQL = `
   WHERE guild_id = $1 AND user_id = $2
   ORDER BY created_at DESC LIMIT $3`;
 
-export const DUE_EXPIRY_SQL = `
-  SELECT case_id, guild_id, user_id, kind, metadata, attempt_count FROM moderation.cases
-  WHERE execution_status = 'applied' AND expires_at IS NOT NULL AND expires_at <= now()
-    AND kind IN ('ban', 'timeout', 'temp_role', 'temp_restriction')
-    AND superseded_by IS NULL
-    AND next_attempt_at <= now()
-    AND (lease_until IS NULL OR lease_until < now())
-  ORDER BY next_attempt_at, expires_at LIMIT $1`;
-
 /** Claim due expiry work with a bounded lease and fairness window (A07). */
 export const CLAIM_DUE_EXPIRY_SQL = `
   WITH due AS (
@@ -114,20 +105,35 @@ export const RETRY_EXPIRY_SQL = `
 export const CLEAR_EXPIRY_SQL = `
   UPDATE moderation.cases
   SET execution_status = $2, expires_at = NULL, lease_owner = NULL, lease_until = NULL
-  WHERE case_id = $1 AND execution_status = 'applied'`;
+  WHERE case_id = $1 AND execution_status = 'applied' AND lease_owner = $3`;
 
-/** New equal-kind sanctions supersede older applied cases (A06): expiry must not undo a newer action.
- *  For temp_role/temp_restriction the metadata target ($5/$6) scopes the comparison to the same role/channel. */
+/** New equal-kind sanctions supersede only OLDER applied cases (A06): expiry must not undo a newer action.
+ *  An older case applying late can therefore never supersede a newer one. For temp_role/temp_restriction
+ *  the metadata target ($5/$6) scopes the comparison to the same role/channel. */
 export const SUPERSEDE_OLDER_SQL = `
   UPDATE moderation.cases SET superseded_by = $4, lease_owner = NULL, lease_until = NULL
-  WHERE guild_id = $1 AND user_id = $2 AND kind = $3 AND case_id <> $4
+  WHERE guild_id = $1 AND user_id = $2 AND kind = $3 AND case_id < $4
     AND execution_status = 'applied' AND superseded_by IS NULL
     AND ($5::text IS NULL OR metadata->>$5 IS NOT DISTINCT FROM $6)`;
 
-/** Release a lease without changing durability (used when work is no longer owned). */
-export const RELEASE_EXPIRY_SQL = `
-  UPDATE moderation.cases SET lease_owner = NULL, lease_until = NULL
-  WHERE case_id = $1`;
+/** Serializes sanction apply/supersede against expiry cleanup for one (guild, subject, kind) key. */
+export const SANCTION_LOCK_SQL = `SELECT pg_advisory_lock(hashtextextended($1, 0))`;
+export const SANCTION_UNLOCK_SQL = `SELECT pg_advisory_unlock(hashtextextended($1, 0))`;
+export function sanctionLockKey(guildId: string, userId: string, kind: string): string {
+  return `sanction:${guildId}:${userId}:${kind}`;
+}
+
+/** Discord lookup outcomes: only authoritative absence may close a cleanup as done.
+ *  10003 unknown channel, 10007 unknown member, 10011 unknown role, 10013 unknown user. */
+export function sanctionLookupOutcome(error: { code?: number } | undefined | null): "absent" | "retry" {
+  const code = error?.code;
+  return code === 10003 || code === 10007 || code === 10011 || code === 10013 ? "absent" : "retry";
+}
+
+/** Role cleanup decision: remove the granted role only when role and member still exist and carry it. */
+export function temporaryRoleCleanupPlan(state: { roleExists: boolean; memberExists: boolean; memberHasRole: boolean }): "nothing" | "remove-role" {
+  return state.roleExists && state.memberExists && state.memberHasRole ? "remove-role" : "nothing";
+}
 
 export type TemporaryExpiryOutcome = "restored" | "conflict";
 

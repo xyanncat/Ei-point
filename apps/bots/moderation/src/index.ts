@@ -12,7 +12,6 @@ import {
 } from "discord.js";
 import pg from "pg";
 import { buildLogEvent } from "@ei-point/module-logging";
-import { DUE_EXPIRY_SQL, reconcileExpiry } from "@ei-point/module-moderation";
 import { moderationCommandDefinitions, respondToModerationCommand } from "./commands.js";
 
 const botKey = process.env.BOT_KEY ?? "kafka";
@@ -281,26 +280,11 @@ client.on(Events.GuildCreate, (guild) => {
   if (!allowed.includes(guild.id)) guarded("leave-unapproved", () => guild.leave());
 });
 
-// Periodic expiry reconciliation & service status
+// Periodic service status. Expiry reconciliation is owned solely by the Kafka gateway
+// (leased fair claims with ownership re-checks); this legacy process must never touch it.
 async function runMaintenance(): Promise<void> {
   if (stopping || !identityVerified || !client.isReady()) return;
   try {
-    // Check due expiry cases
-    const dueCases = await pool.query<{ case_id: string; guild_id: string; user_id: string; kind: string }>(
-      DUE_EXPIRY_SQL,
-      [10],
-    );
-    for (const c of dueCases.rows) {
-      if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, c.guild_id, botKey))) continue;
-      await reconcileExpiry(c.kind, async () => {
-        const guild = client.guilds.cache.get(c.guild_id);
-        if (!guild) throw new Error("Guild unavailable for expiry reconciliation");
-        await guild.bans.remove(c.user_id, "Automated ban expiration");
-      }, async () => {
-        await pool.query("UPDATE moderation.cases SET expires_at = NULL WHERE case_id = $1", [c.case_id]);
-      });
-    }
-
     await pool.query(
       `INSERT INTO ops.service_status(service, liveness, gateway, db_ready, latency_ms)
        VALUES('bot-moderation', 'ok', 'ok', true, $1)

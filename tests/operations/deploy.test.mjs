@@ -21,6 +21,8 @@ test('deploy uses immutable images, stops overlapping handlers, gates readiness 
   await mock('docker',`printf 'DOCKER %s\n' "$*" >> "$MOCK_LOG"
 if [[ "$*" == *'ps -q tts-qwen'* ]]; then echo tts-id
 elif [[ "$*" == *'ps -q hy-mt2'* ]]; then echo hy-id
+elif [[ "$*" == *'config --format json'* ]]; then
+  echo '{"services":{"postgres":{"deploy":{"resources":{"limits":{"cpus":"1.25","memory":"6G"}}}},"nginx":{"deploy":{"resources":{"limits":{"cpus":"0.15","memory":"512M"}}}},"api":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1G"}}}},"web":{"deploy":{"resources":{"limits":{"cpus":"0.30","memory":"1G"}}}},"workers":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"1536M"}}}},"tts-qwen":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"8G"}}}},"hy-mt2":{"deploy":{"resources":{"limits":{"cpus":"1.00","memory":"4G"}}}},"bot-kafka":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"1536M"}}}},"bot-himiko":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1536M"}}}},"bot-community":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"2G"}}}},"bot-ai":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"2G"}}}},"bot-music":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"2G"}}}},"bot-commerce":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"1536M"}}}}}}'
 elif [[ "$1" == ps ]]; then echo api-id
 elif [[ "$*" == *'ps -q postgres'* ]]; then echo pg-id; fi`);
   await mock('node',`if [[ "$1" == *scripts/health-fleet.mjs ]]; then echo '{"ok":true}'; exit "\${MOCK_HEALTH_EXIT:-0}"; fi

@@ -23,6 +23,8 @@ node scripts/release-manifest.mjs "$RELEASE_MANIFEST" "$WORK/release.compose.jso
 mapfile -t BOTS < <(sed '/^$/d' "$WORK/release.compose.json.bots")
 COMPOSE=(docker compose --project-name ei-point --env-file "$ENV_FILE" -f infra/docker/compose.yml -f "$WORK/release.compose.json")
 "${COMPOSE[@]}" config --quiet
+"${COMPOSE[@]}" config --format json > "$WORK/render.compose.json"
+node scripts/check-resource-budget.mjs "$WORK/render.compose.json"
 "${COMPOSE[@]}" pull postgres nginx api web workers tts-qwen hy-mt2 "${BOTS[@]}" migrate
 # A single identity must never have old and replacement handlers running together.
 "${COMPOSE[@]}" --profile legacy-disabled stop bot-security bot-moderation

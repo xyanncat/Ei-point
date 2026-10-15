@@ -127,7 +127,7 @@ async function main() {
     process.exitCode = 2;
     return;
   }
-  const fileArg = args.find((arg, index) => !arg.startsWith("-") && index !== modeIndex + 1);
+  const fileArg = args.find((arg, index) => !arg.startsWith("-") && (modeIndex === -1 || index !== modeIndex + 1));
   const file = fileArg ? resolve(fileArg) : resolve(root, "docs/audits/legacy-behavior-map.json");
   let document;
   try {

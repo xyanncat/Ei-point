@@ -14,9 +14,12 @@ export function CheckoutButton({serviceId,name}:{serviceId:string;name:string}){
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
  async function open(){dialog.current?.showModal();setError("");setRef(referral());if(order)return;setBusy(true);try {
   // A reload or lost creation response resumes the same order through the
-  // HttpOnly recovery cookie; a second order is never created by default.
-  try{const resumed=await api<ResumedOrder|{resumed:false}>(`/api/payments/resume?serviceId=${encodeURIComponent(serviceId)}`);
-   if("resumed" in resumed&&resumed.resumed){setOrder(resumed);setStatus(resumed.status==="confirmed"?"confirmed":resumed.status??"pending");setQr(await QRCode.toDataURL(resumed.paymentUri,{width:256,margin:2,color:{dark:"#251322",light:"#ffffff"}}));return;}}catch{}
+  // HttpOnly recovery cookie. Resume failures surface an error instead of
+  // silently falling through: creating a second order for an unknown first
+  // outcome is never the default.
+  const previous=await api<ResumedOrder|{resumed:false}>(`/api/payments/resume?serviceId=${encodeURIComponent(serviceId)}`).catch(error=>{if(alive.current)setError(error instanceof Error?error.message:"Could not check for an existing checkout. Retry in a moment.");return null;});
+  if(previous===null)return;
+  if("resumed" in previous&&previous.resumed){setOrder(previous);setStatus(previous.status==="confirmed"?"confirmed":previous.status??"pending");setQr(await QRCode.toDataURL(previous.paymentUri,{width:256,margin:2,color:{dark:"#251322",light:"#ffffff"}}));return;}
   const o=await api<Options>("/api/payments/options");if(alive.current){setOptions(o);setMethod(o.methods.upi?"upi":"usdt");}}catch(e){if(alive.current)setError(e instanceof Error?e.message:"Payment options are unavailable.");}finally{if(alive.current)setBusy(false);}}
  async function checkout(e:FormEvent){e.preventDefault();setError("");setBusy(true);attempt.current ||= crypto.randomUUID();secret.current ||= btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");try {
   const o=await api<Order>("/api/payments/upi-qr",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({serviceId,discordId:buyer,paymentMethod:method,idempotencyKey:attempt.current,recoveryToken:secret.current,...(ref?{referralCode:ref.trim().toUpperCase()}:{})})});

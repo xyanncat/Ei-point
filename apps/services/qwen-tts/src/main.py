@@ -14,6 +14,7 @@ import logging
 import os
 import queue
 import re
+import signal
 import subprocess
 import threading
 import time
@@ -672,6 +673,17 @@ def main() -> None:
     service = TtsService(runtime, queue_max=queue_max, request_timeout=request_timeout, hard_timeout=hard_timeout)
     service.start()
     server = BoundedHttpServer(("0.0.0.0", port), make_handler(service))
+
+    def _stop(_signum: int, _frame: Any) -> None:
+        # Bounded shutdown: stop accepting work, give the worker a short join, then
+        # stop the server. A genuinely hung inference is the container runtime's
+        # problem to replace; readiness has already been degraded for it.
+        service.shutdown()
+        service.wait_worker_stopped(timeout=5.0)
+        threading.Thread(target=server.shutdown, daemon=True).start()
+
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
     logger.info("local Qwen TTS HTTP service listening on port %s; model loading is offline", port)
     server.serve_forever()
 

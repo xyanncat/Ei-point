@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { validateResourceBudget, serviceResourcesFromCompose, APPROVED_RUNTIME, APPROVED_MAINTENANCE } from '../../scripts/check-resource-budget.mjs';
 
 test('the approved allocation fits the 8 CPU / 40 GiB envelope including concurrent maintenance', () => {
@@ -43,4 +45,20 @@ test('compose extraction reads deploy limits and reports missing entries', () =>
   assert.equal(resources.api.memoryGiB, 1);
   assert.equal(resources.web.memoryGiB, 1);
   assert.deepEqual(resources.nginx, {});
+});
+test('infra compose deploy limits stay in sync with the approved allocation', () => {
+  const composePath = fileURLToPath(new URL('../../infra/docker/compose.yml', import.meta.url));
+  const text = readFileSync(composePath, 'utf8').replace(/\r\n/g, '\n');
+  const parseMemory = (value) => {
+    const amount = Number(value.slice(0, -1));
+    return value.endsWith('M') ? amount / 1024 : amount;
+  };
+  for (const [service, expected] of Object.entries(APPROVED_RUNTIME)) {
+    const block = new RegExp(`\\n  ${service}:\\n([\\s\\S]*?)(?=\\n  [a-z-]+:\\n|\\nnetworks:)`).exec(text);
+    assert.ok(block, `compose must define ${service}`);
+    const limits = /limits: \{ cpus: "([\d.]+)", memory: ([0-9]+[GM]) \}/.exec(block[1]);
+    assert.ok(limits, `${service} must declare deploy resource limits`);
+    assert.equal(Number(limits[1]), expected.cpus, `${service} cpu drift`);
+    assert.equal(parseMemory(limits[2]), expected.memoryGiB, `${service} memory drift`);
+  }
 });

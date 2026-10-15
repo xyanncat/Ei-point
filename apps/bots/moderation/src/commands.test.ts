@@ -38,10 +38,12 @@ it("failed result recording retains an unconfirmed durable case", async () => {
   const trace: string[] = [];
   const pool = { query: async (sql: string) => {
     if (sql.includes("INSERT")) return { rows: [{ case_id: "2" }] };
+    if (sql.includes("pg_advisory_lock")) { trace.push("lock"); return { rows: [] }; }
+    if (sql.includes("pg_advisory_unlock")) { trace.push("unlock"); return { rows: [] }; }
     if (sql.includes("'applied'")) throw new Error("lost DB"); trace.push("unconfirmed"); return { rows: [] };
   } } as unknown as Pool;
   await assert.rejects(executeSanction(pool, request(), "target", "ban", "reason", async () => { trace.push("discord"); }), /outcome unconfirmed/);
-  assert.deepEqual(trace, ["discord", "unconfirmed"]);
+  assert.deepEqual(trace, ["discord", "lock", "unconfirmed", "unlock"]);
 });
 
 it("warn remove voids the guild-scoped warning and records the moderator reason atomically", async () => {
@@ -77,6 +79,8 @@ it("temporary role persists expiry metadata before granting the selected role", 
   const trace: string[] = [];
   const pool = { query: async (sql: string, args: unknown[] = []) => {
     if (sql.includes("INSERT INTO moderation.cases")) { trace.push(`intent:${JSON.stringify(args[7])}`); return { rows: [{ case_id: "24" }] }; }
+    if (sql.includes("pg_advisory_lock")) { trace.push("lock"); return { rows: [] }; }
+    if (sql.includes("pg_advisory_unlock")) { trace.push("unlock"); return { rows: [] }; }
     if (sql.includes("superseded_by")) { trace.push("supersede"); return { rows: [] }; }
     trace.push("applied"); return { rows: [] };
   } } as unknown as Pool;
@@ -85,13 +89,15 @@ it("temporary role persists expiry metadata before granting the selected role", 
     targetMember: { manageable: true, roles: { cache: { has: () => false } } } as never, targetRole: role as never,
     addMemberRole: async (_member, selected, reason) => { assert.equal(selected.id, "role-1"); assert.equal(reason, "event access"); trace.push("discord-add"); } }), pool);
   assert.equal(JSON.parse(trace[0]!.slice("intent:".length)).roleId, "role-1");
-  assert.deepEqual(trace.slice(1), ["discord-add", "applied", "supersede"]);
+  assert.deepEqual(trace.slice(1), ["discord-add", "lock", "applied", "supersede", "unlock"]);
 });
 
 it("temporary restriction snapshots existing send permissions before denying them", async () => {
   const trace: string[] = [];
   const pool = { query: async (sql: string, args: unknown[] = []) => {
     if (sql.includes("INSERT INTO moderation.cases")) { trace.push(`intent:${JSON.stringify(args[7])}`); return { rows: [{ case_id: "25" }] }; }
+    if (sql.includes("pg_advisory_lock")) { trace.push("lock"); return { rows: [] }; }
+    if (sql.includes("pg_advisory_unlock")) { trace.push("unlock"); return { rows: [] }; }
     if (sql.includes("superseded_by")) { trace.push("supersede"); return { rows: [] }; }
     trace.push("applied"); return { rows: [] };
   } } as unknown as Pool;
@@ -101,7 +107,7 @@ it("temporary restriction snapshots existing send permissions before denying the
   const metadata = JSON.parse(trace[0]!.slice("intent:".length));
   assert.equal(metadata.channelId, "channel-1");
   assert.deepEqual([metadata.previousSendMessages, metadata.previousSendMessagesInThreads], [true, null]);
-  assert.deepEqual(trace.slice(1), ["discord-deny", "applied", "supersede"]);
+  assert.deepEqual(trace.slice(1), ["discord-deny", "lock", "applied", "supersede", "unlock"]);
 });
 
 it("unsupported temporary restriction reads return a handled error before writing a case", async () => {

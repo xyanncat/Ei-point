@@ -26,7 +26,7 @@ import {
   type GuardedAction,
 } from "@ei-point/module-security";
 import { buildLogEvent } from "@ei-point/module-logging";
-import { CLAIM_DUE_EXPIRY_SQL, CLEAR_EXPIRY_SQL, RETRY_EXPIRY_SQL, expiryBackoffSeconds, reconcileExpiry, reconcileTemporaryEffect } from "@ei-point/module-moderation";
+import { CLAIM_DUE_EXPIRY_SQL, CLEAR_EXPIRY_SQL, RETRY_EXPIRY_SQL, SANCTION_LOCK_SQL, SANCTION_UNLOCK_SQL, expiryBackoffSeconds, reconcileExpiry, reconcileTemporaryEffect, sanctionLockKey, sanctionLookupOutcome, temporaryRoleCleanupPlan } from "@ei-point/module-moderation";
 import { securityCommandDefinitions, respondToSecurityCommand } from "@ei-point/bot-security/dist/commands.js";
 import { moderationCommandDefinitions, respondToModerationCommand } from "@ei-point/bot-moderation/dist/commands.js";
 import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
@@ -461,86 +461,103 @@ client.on(Events.GuildCreate, (guild) => {
 });
 
 // --- Maintenance: expiry reconciliation + service status (kafka + legacy keys) ---
-const expiryLeaseOwner = `kafka-${process.pid}`;
+const expiryLeaseBase = `kafka-${process.pid}`;
+let expiryGeneration = 0;
+let maintenanceRunning = false;
 const GUILD_UNAVAILABLE = "guild-unavailable";
 async function runMaintenance(): Promise<void> {
-  if (stopping || !identityVerified || !client.isReady()) return;
+  // Single-flight: overlapping ticks would compile duplicate Discord effects and
+  // stack leases; the leasable rows still guard multi-process overlap (A07).
+  if (maintenanceRunning || stopping || !identityVerified || !client.isReady()) return;
+  maintenanceRunning = true;
+  const leaseOwner = `${expiryLeaseBase}-${++expiryGeneration}`;
   try {
     const dueCases = await pool.query<{ case_id: string; guild_id: string; user_id: string; kind: string; metadata: Record<string, unknown> | null; attempt_count: number }>(
       CLAIM_DUE_EXPIRY_SQL,
-      [10, expiryLeaseOwner],
+      [10, leaseOwner],
     );
     for (const c of dueCases.rows) {
-      // Expiry cleanup is a compensating action for a previously authorized sanction.
-      // Do not strand temporary effects when an operator pauses the bot or guild.
-      if (c.kind === "temp_role" || c.kind === "temp_restriction") {
-        const metadata = c.metadata ?? {};
-        const settled = await reconcileTemporaryEffect(c.kind, async () => {
+      // Serialize ownership re-check + Discord effect against a parallel new sanction
+      // (executeSanction takes the same advisory lock before apply/supersede).
+      const lockKey = sanctionLockKey(c.guild_id, c.user_id, c.kind);
+      await pool.query(SANCTION_LOCK_SQL, [lockKey]);
+      try {
+        // Expiry cleanup is a compensating action for a previously authorized sanction.
+        // Do not strand temporary effects when an operator pauses the bot or guild.
+        if (c.kind === "temp_role" || c.kind === "temp_restriction") {
+          const metadata = c.metadata ?? {};
+          const settled = await reconcileTemporaryEffect(c.kind, async () => {
+            const guild = client.guilds.cache.get(c.guild_id);
+            if (!guild) throw new Error(GUILD_UNAVAILABLE);
+            if (c.kind === "temp_role") {
+              const roleId = typeof metadata.roleId === "string" ? metadata.roleId : "";
+              if (!roleId) return "conflict";
+              // Only authoritative Discord absence (100xx) closes the case; transient
+              // fetch failures stay retryable so the expiry is not falsely acknowledged.
+              const role = await guild.roles.fetch(roleId).catch((error: { code?: number }) => {
+                if (sanctionLookupOutcome(error) === "absent") return null;
+                throw error;
+              });
+              const member = role
+                ? await guild.members.fetch(c.user_id).catch((error: { code?: number }) => {
+                    if (sanctionLookupOutcome(error) === "absent") return null;
+                    throw error;
+                  })
+                : null;
+              const plan = temporaryRoleCleanupPlan({ roleExists: !!role, memberExists: !!member, memberHasRole: !!member?.roles.cache.has(roleId) });
+              if (plan === "remove-role" && role && member) await member.roles.remove(role, "Temporary role expired");
+              return "restored";
+            }
+            const channelId = typeof metadata.channelId === "string" ? metadata.channelId : "";
+            if (!channelId) return "conflict";
+            const channel = await guild.channels.fetch(channelId).catch((error: { code?: number }) => {
+              if (sanctionLookupOutcome(error) === "absent") return null;
+              throw error;
+            });
+            if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) return "restored";
+            const overwrite = channel.permissionOverwrites.cache.get(c.user_id);
+            const current = {
+              sendMessages: overwrite?.deny.has(PermissionFlagsBits.SendMessages) ? false : overwrite?.allow.has(PermissionFlagsBits.SendMessages) ? true : null,
+              sendMessagesInThreads: overwrite?.deny.has(PermissionFlagsBits.SendMessagesInThreads) ? false : overwrite?.allow.has(PermissionFlagsBits.SendMessagesInThreads) ? true : null,
+            };
+            const previous = {
+              sendMessages: typeof metadata.previousSendMessages === "boolean" ? metadata.previousSendMessages : null,
+              sendMessagesInThreads: typeof metadata.previousSendMessagesInThreads === "boolean" ? metadata.previousSendMessagesInThreads : null,
+            };
+            if (current.sendMessages === previous.sendMessages && current.sendMessagesInThreads === previous.sendMessagesInThreads) return "restored";
+            if (current.sendMessages !== false || current.sendMessagesInThreads !== false) return "conflict";
+            await channel.permissionOverwrites.edit(c.user_id, { SendMessages: previous.sendMessages, SendMessagesInThreads: previous.sendMessagesInThreads }, { reason: "Temporary restriction expired" });
+            return "restored";
+          }, async (outcome) => {
+            await pool.query(CLEAR_EXPIRY_SQL, [c.case_id, outcome === "restored" ? "expired" : "conflict", leaseOwner]);
+            if (outcome === "conflict") console.warn(`temporary moderation case ${c.case_id} (${c.kind}) requires manual reconciliation`);
+          });
+          if (!settled) await pool.query(RETRY_EXPIRY_SQL, [c.case_id, expiryBackoffSeconds(c.attempt_count ?? 0), "discord-unconfirmed", leaseOwner]);
+          continue;
+        }
+        // Ownership re-check under the claim and the sanction lock: a newer equal-kind
+        // sanction must not be undone by this older expiry.
+        const secondary = await pool.query<{ case_id: string }>(
+          `SELECT n.case_id FROM moderation.cases n JOIN moderation.cases c ON c.case_id=$1
+           WHERE n.guild_id=c.guild_id AND n.user_id=c.user_id AND n.kind=c.kind
+             AND n.case_id>c.case_id AND n.execution_status='applied' AND n.superseded_by IS NULL LIMIT 1`,
+          [c.case_id],
+        );
+        if (secondary.rows.length) {
+          await pool.query(CLEAR_EXPIRY_SQL, [c.case_id, "superseded", leaseOwner]);
+          continue;
+        }
+        const settled = await reconcileExpiry(c.kind, async () => {
           const guild = client.guilds.cache.get(c.guild_id);
           if (!guild) throw new Error(GUILD_UNAVAILABLE);
-          if (c.kind === "temp_role") {
-            const roleId = typeof metadata.roleId === "string" ? metadata.roleId : "";
-            if (!roleId) return "conflict";
-            // Role cache misses are not proof of deletion; a transient fetch failure stays retryable.
-            const role = await guild.roles.fetch(roleId).catch((error: { code?: number }) => {
-              if (error?.code === 10011) return null;
-              throw error;
-            });
-            if (!role) return "restored";
-            const member = await guild.members.fetch(c.user_id).catch((error: { code?: number }) => {
-              if (error?.code === 10007 || error?.code === 10013) return null;
-              throw error;
-            });
-            if (!member) return "restored";
-            if (member.roles.cache.has(roleId)) await member.roles.remove(role, "Temporary role expired");
-            return "restored";
-          }
-          const channelId = typeof metadata.channelId === "string" ? metadata.channelId : "";
-          if (!channelId) return "conflict";
-          const channel = await guild.channels.fetch(channelId).catch((error: { code?: number }) => {
-            if (error?.code === 10003) return null;
-            throw error;
-          });
-          if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) return "restored";
-          const overwrite = channel.permissionOverwrites.cache.get(c.user_id);
-          const current = {
-            sendMessages: overwrite?.deny.has(PermissionFlagsBits.SendMessages) ? false : overwrite?.allow.has(PermissionFlagsBits.SendMessages) ? true : null,
-            sendMessagesInThreads: overwrite?.deny.has(PermissionFlagsBits.SendMessagesInThreads) ? false : overwrite?.allow.has(PermissionFlagsBits.SendMessagesInThreads) ? true : null,
-          };
-          const previous = {
-            sendMessages: typeof metadata.previousSendMessages === "boolean" ? metadata.previousSendMessages : null,
-            sendMessagesInThreads: typeof metadata.previousSendMessagesInThreads === "boolean" ? metadata.previousSendMessagesInThreads : null,
-          };
-          if (current.sendMessages === previous.sendMessages && current.sendMessagesInThreads === previous.sendMessagesInThreads) return "restored";
-          if (current.sendMessages !== false || current.sendMessagesInThreads !== false) return "conflict";
-          await channel.permissionOverwrites.edit(c.user_id, { SendMessages: previous.sendMessages, SendMessagesInThreads: previous.sendMessagesInThreads }, { reason: "Temporary restriction expired" });
-          return "restored";
-        }, async (outcome) => {
-          await pool.query(CLEAR_EXPIRY_SQL, [c.case_id, outcome === "restored" ? "expired" : "conflict"]);
-          if (outcome === "conflict") console.warn(`temporary moderation case ${c.case_id} (${c.kind}) requires manual reconciliation`);
+          await guild.bans.remove(c.user_id, "Automated ban expiration");
+        }, async () => {
+          await pool.query(CLEAR_EXPIRY_SQL, [c.case_id, "expired", leaseOwner]);
         });
-        if (!settled) await pool.query(RETRY_EXPIRY_SQL, [c.case_id, expiryBackoffSeconds(c.attempt_count ?? 0), "discord-unconfirmed", expiryLeaseOwner]);
-        continue;
+        if (!settled) await pool.query(RETRY_EXPIRY_SQL, [c.case_id, expiryBackoffSeconds(c.attempt_count ?? 0), "discord-unconfirmed", leaseOwner]);
+      } finally {
+        await pool.query(SANCTION_UNLOCK_SQL, [lockKey]).catch(() => {});
       }
-      // Ownership re-check under the claim: a newer equal-kind sanction must not be undone by this older expiry.
-      const secondary = await pool.query<{ case_id: string }>(
-        `SELECT n.case_id FROM moderation.cases n JOIN moderation.cases c ON c.case_id=$1
-         WHERE n.guild_id=c.guild_id AND n.user_id=c.user_id AND n.kind=c.kind
-           AND n.case_id>c.case_id AND n.execution_status='applied' AND n.superseded_by IS NULL LIMIT 1`,
-        [c.case_id],
-      );
-      if (secondary.rows.length) {
-        await pool.query(CLEAR_EXPIRY_SQL, [c.case_id, "superseded"]);
-        continue;
-      }
-      const settled = await reconcileExpiry(c.kind, async () => {
-        const guild = client.guilds.cache.get(c.guild_id);
-        if (!guild) throw new Error(GUILD_UNAVAILABLE);
-        await guild.bans.remove(c.user_id, "Automated ban expiration");
-      }, async () => {
-        await pool.query(CLEAR_EXPIRY_SQL, [c.case_id, "expired"]);
-      });
-      if (!settled) await pool.query(RETRY_EXPIRY_SQL, [c.case_id, expiryBackoffSeconds(c.attempt_count ?? 0), "discord-unconfirmed", expiryLeaseOwner]);
     }
     const latency = Math.max(0, Math.round(client.ws.ping));
     for (const service of [`bot-${botKey}`]) {
@@ -554,6 +571,8 @@ async function runMaintenance(): Promise<void> {
     lastDbReady = true;
   } catch {
     lastDbReady = false;
+  } finally {
+    maintenanceRunning = false;
   }
 }
 

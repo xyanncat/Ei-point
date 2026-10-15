@@ -81,13 +81,34 @@ test('temp-role supersession is scoped to the same role while other roles stay a
   assert.equal(String(byKey['role-a']), String(newer.rows[0].case_id));
   assert.equal(byKey['role-b'], null);
 });
+test('an older sanction applying late cannot supersede a newer one', async () => {
+  const past = new Date(Date.now() - 60_000).toISOString();
+  const older = await insertCase('ban', past, 'apply-late-older');
+  const newer = await insertCase('ban', null, 'applied-first-newer');
+  await pool.query(SUPERSEDE_OLDER_SQL, [guild, subject, 'ban', older.rows[0].case_id, null, null]);
+  const rows = await pool.query('SELECT idempotency_key, superseded_by FROM moderation.cases');
+  const byKey = Object.fromEntries(rows.rows.map(r => [r.idempotency_key, r.superseded_by]));
+  assert.equal(byKey['applied-first-newer'], null);
+  const claimed = await pool.query(CLAIM_DUE_EXPIRY_SQL, [10, lease]);
+  assert.equal(String(claimed.rows[0].case_id), String(older.rows[0].case_id));
+});
 test('clearing a case releases the lease and stops further claims', async () => {
   const past = new Date(Date.now() - 60_000).toISOString();
   const row = await insertCase('timeout', past, 'clear-me');
   await pool.query(CLAIM_DUE_EXPIRY_SQL, [10, lease]);
-  await pool.query(CLEAR_EXPIRY_SQL, [row.rows[0].case_id, 'expired']);
+  await pool.query(CLEAR_EXPIRY_SQL, [row.rows[0].case_id, 'expired', lease]);
   const claimed = await pool.query(CLAIM_DUE_EXPIRY_SQL, [10, lease]);
   assert.equal(claimed.rowCount, 0);
   const after = await pool.query('SELECT execution_status, expires_at, lease_owner FROM moderation.cases WHERE case_id=$1', [row.rows[0].case_id]);
   assert.deepEqual(after.rows[0], { execution_status: 'expired', expires_at: null, lease_owner: null });
+});
+test('a stale worker cannot clear a case that another worker re-claimed', async () => {
+  const past = new Date(Date.now() - 60_000).toISOString();
+  const row = await insertCase('timeout', past, 'stolen-lease');
+  await pool.query(CLAIM_DUE_EXPIRY_SQL, [10, 'worker-a']);
+  await pool.query("UPDATE moderation.cases SET lease_until = now() - interval '1 minute' WHERE case_id=$1", [row.rows[0].case_id]);
+  await pool.query(CLAIM_DUE_EXPIRY_SQL, [10, 'worker-b']);
+  await pool.query(CLEAR_EXPIRY_SQL, [row.rows[0].case_id, 'expired', 'worker-a']);
+  const after = await pool.query('SELECT execution_status, lease_owner FROM moderation.cases WHERE case_id=$1', [row.rows[0].case_id]);
+  assert.deepEqual(after.rows[0], { execution_status: 'applied', lease_owner: 'worker-b' });
 });

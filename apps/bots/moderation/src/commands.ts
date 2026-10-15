@@ -13,6 +13,9 @@ import {
   CREATE_CASE_SQL,
   LIST_CASES_SQL,
   SUPERSEDE_OLDER_SQL,
+  SANCTION_LOCK_SQL,
+  SANCTION_UNLOCK_SQL,
+  sanctionLockKey,
   type CaseKind,
 } from "@ei-point/module-moderation";
 
@@ -188,15 +191,31 @@ export async function executeSanction(
   if (!caseId) throw new Error("This interaction already has a durable case; inspect its execution status before retrying.");
   try {
     await effect();
-    await pool.query("UPDATE moderation.cases SET execution_status='applied' WHERE case_id=$1", [caseId]);
-    if (kind === "ban" || kind === "timeout" || kind === "temp_role" || kind === "temp_restriction") {
-      const supersedeKey = kind === "temp_role" ? "roleId" : kind === "temp_restriction" ? "channelId" : null;
-      const supersedeValue = supersedeKey && typeof metadata[supersedeKey] === "string" ? metadata[supersedeKey] : null;
-      await pool.query(SUPERSEDE_OLDER_SQL, [req.guildId, targetId, kind, caseId, supersedeKey, supersedeValue]);
-    }
   } catch (error) {
     await pool.query("UPDATE moderation.cases SET execution_status='unconfirmed' WHERE case_id=$1", [caseId]).catch(() => {});
     throw new Error(`Case #${caseId}: external outcome unconfirmed; inspect Discord before retrying.`, { cause: error });
+  }
+  // Effect confirmed. Record and supersede under the sanction lock so expiry cleanup
+  // cannot interleave; supersede failure is retryable bookkeeping and must never flip
+  // a confirmed sanction to unconfirmed (A06).
+  const expiryKind = kind === "ban" || kind === "timeout" || kind === "temp_role" || kind === "temp_restriction";
+  const lockKey = sanctionLockKey(req.guildId, targetId, kind);
+  if (expiryKind) await pool.query(SANCTION_LOCK_SQL, [lockKey]).catch(() => {});
+  try {
+    try {
+      await pool.query("UPDATE moderation.cases SET execution_status='applied' WHERE case_id=$1", [caseId]);
+    } catch (error) {
+      await pool.query("UPDATE moderation.cases SET execution_status='unconfirmed' WHERE case_id=$1", [caseId]).catch(() => {});
+      throw new Error(`Case #${caseId}: external outcome unconfirmed; inspect Discord before retrying.`, { cause: error });
+    }
+    if (expiryKind) {
+      const supersedeKey = kind === "temp_role" ? "roleId" : kind === "temp_restriction" ? "channelId" : null;
+      const supersedeValue = supersedeKey && typeof metadata[supersedeKey] === "string" ? metadata[supersedeKey] : null;
+      await pool.query(SUPERSEDE_OLDER_SQL, [req.guildId, targetId, kind, caseId, supersedeKey, supersedeValue])
+        .catch(() => console.warn(`moderation case ${caseId}: supersede bookkeeping failed; expiry will re-check ownership`));
+    }
+  } finally {
+    if (expiryKind) await pool.query(SANCTION_UNLOCK_SQL, [lockKey]).catch(() => {});
   }
   return caseId;
 }

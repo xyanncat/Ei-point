@@ -118,3 +118,19 @@ test("release mode requires replacements to keep an approved decision and a reac
   const withoutDecision = validateFeatureCoverage(map([row({ status: "replaced", decisionReason: "we felt like it" })]), { mode: "release" });
   assert.ok(withoutDecision.some(issue => issue.code === "replacement-without-decision"));
 });
+test("CLI validates a positional map file and honors --mode release", async () => {
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const dir = await mkdtemp(join(tmpdir(), "ei-map-cli-"));
+  try {
+    const goodPath = join(dir, "good.json");
+    await writeFile(goodPath, JSON.stringify(map([row()])));
+    const ok = spawnSync(process.execPath, [join(process.cwd(), "scripts/check-feature-coverage.mjs"), goodPath], { encoding: "utf8" });
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.match(ok.stdout, /structural mode/);
+    const missing = spawnSync(process.execPath, [join(process.cwd(), "scripts/check-feature-coverage.mjs"), join(dir, "absent.json")], { encoding: "utf8" });
+    assert.equal(missing.status, 2);
+    const release = spawnSync(process.execPath, [join(process.cwd(), "scripts/check-feature-coverage.mjs"), goodPath, "--mode", "release"], { encoding: "utf8" });
+    assert.equal(release.status, 1);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

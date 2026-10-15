@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { canModerate, CLAIM_DUE_EXPIRY_SQL, expiryBackoffSeconds, planPurge, reconcileTemporaryEffect, requiredScope, validateTimeout } from "./index.js";
+import { canModerate, CLAIM_DUE_EXPIRY_SQL, expiryBackoffSeconds, planPurge, reconcileTemporaryEffect, requiredScope, sanctionLookupOutcome, temporaryRoleCleanupPlan, validateTimeout } from "./index.js";
 
 describe("moderation permissions", () => {
   it("denies without the exact scope", () => {
@@ -53,6 +53,21 @@ describe("temporary moderation expiry", () => {
     assert.equal(expiryBackoffSeconds(1), 10);
     assert.equal(expiryBackoffSeconds(2), 20);
     assert.equal(expiryBackoffSeconds(99), 300);
+  });
+
+  it("classifies only authoritative Discord absence as closable", () => {
+    for (const code of [10003, 10007, 10011, 10013]) assert.equal(sanctionLookupOutcome({ code }), "absent");
+    assert.equal(sanctionLookupOutcome({ code: 500 }), "retry");
+    assert.equal(sanctionLookupOutcome(new Error("network") as { code?: number }), "retry");
+    assert.equal(sanctionLookupOutcome(undefined), "retry");
+    assert.equal(sanctionLookupOutcome(null), "retry");
+  });
+
+  it("removes the granted role only when role, member and grant still exist", () => {
+    assert.equal(temporaryRoleCleanupPlan({ roleExists: true, memberExists: true, memberHasRole: true }), "remove-role");
+    assert.equal(temporaryRoleCleanupPlan({ roleExists: false, memberExists: true, memberHasRole: true }), "nothing");
+    assert.equal(temporaryRoleCleanupPlan({ roleExists: true, memberExists: false, memberHasRole: true }), "nothing");
+    assert.equal(temporaryRoleCleanupPlan({ roleExists: true, memberExists: true, memberHasRole: false }), "nothing");
   });
 
   it("does not acknowledge a Discord failure and records conflicts without retrying them", async () => {

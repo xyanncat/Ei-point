@@ -4,6 +4,7 @@
 // Without an argument the approved in-repo allocation is validated.
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const CPU_CEILING = 8;
 export const MEMORY_CEILING_GIB = 40;
@@ -33,7 +34,7 @@ export const APPROVED_MAINTENANCE = {
 
 const RUNTIME_SERVICES = new Set(Object.keys(APPROVED_RUNTIME));
 const MAINTENANCE_SERVICES = new Set(Object.keys(APPROVED_MAINTENANCE));
-const LEGACY_SERVICES = new Set(["bot-security", "bot-moderation", "migrate"]);
+const LEGACY_SERVICES = new Set(["bot-security", "bot-moderation"]);
 
 function parseMemoryGiB(value) {
   if (typeof value === "number") return value > 0 ? value : null;
@@ -80,7 +81,7 @@ function normalize(services) {
 export function validateResourceBudget(services, { cpu = CPU_CEILING, memoryGiB = MEMORY_CEILING_GIB } = {}) {
   const { normalized, violations } = normalize(services);
   const runtimeNames = Object.keys(normalized).filter((name) => RUNTIME_SERVICES.has(name));
-  const maintenanceNames = Object.keys(normalized).filter((name) => MAINTENANCE_SERVICES.has(name) || !RUNTIME_SERVICES.has(name));
+  const maintenanceNames = Object.keys(normalized).filter((name) => !RUNTIME_SERVICES.has(name) && !LEGACY_SERVICES.has(name));
   const unknownNames = Object.keys(normalized).filter((name) => !RUNTIME_SERVICES.has(name) && !MAINTENANCE_SERVICES.has(name) && !LEGACY_SERVICES.has(name));
   for (const name of unknownNames) violations.push(`${name}: not part of the approved allocation`);
   const sum = (names) =>
@@ -98,7 +99,9 @@ async function main() {
   let services = { ...APPROVED_RUNTIME, ...APPROVED_MAINTENANCE };
   if (file) {
     const compose = JSON.parse(await readFile(resolve(file), "utf8"));
-    services = serviceResourcesFromCompose(compose);
+    // Rendered releases contain runtime services only; add the maintenance allowances
+    // that overlap them during deploy/backup windows (constants win over missing rows).
+    services = { ...APPROVED_MAINTENANCE, ...serviceResourcesFromCompose(compose) };
   }
   const result = validateResourceBudget(services);
   if (!result.ok) {
@@ -110,4 +113,4 @@ async function main() {
   console.log(`Resource budget ok: runtime ${result.runtime.cpu.toFixed(2)} CPU / ${result.runtime.memoryGiB} GiB; concurrent ${result.concurrent.cpu.toFixed(2)} CPU / ${result.concurrent.memoryGiB} GiB.`);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/u, "$1"))) await main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
