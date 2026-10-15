@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",
-    "test": "pnpm --filter @ei-point/contracts build && pnpm --filter @ei-point/flow build && pnpm -r test && pnpm test:phase6 && pnpm test:phase4 && node --test tests/controls/database.test.mjs && pnpm --filter @ei-point/bot-ai build && node --test tests/ai/*.test.mjs tests/workers/*.test.mjs tests/operations/*.test.mjs tests/runtime/*.test.mjs infra/backup/backup.test.mjs",
+    "test": "pnpm --filter @ei-point/contracts build && pnpm --filter @ei-point/flow build && pnpm -r test && pnpm test:phase6 && pnpm test:phase4 && node --test tests/controls/database.test.mjs && pnpm --filter @ei-point/bot-ai build && node --test tests/ai/*.test.mjs tests/workers/*.test.mjs tests/operations/*.test.mjs tests/runtime/*.test.mjs tests/moderation/*.test.mjs infra/backup/backup.test.mjs && node scripts/check-resource-budget.mjs",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm --filter @ei-point/contracts build && pnpm --filter @ei-point/flow build && pnpm --filter @ei-point/module-games build && pnpm --filter @ei-point/module-community build && pnpm -r typecheck",
     "migrate": "node infra/postgres/run-migrations.mjs",
