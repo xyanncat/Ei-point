@@ -63,7 +63,7 @@ export function buildAnnouncePayload(guildId: string, input: AnnounceInput) {
 
 export const himikoCommandDefinitions = [
   new SlashCommandBuilder()
-    .setName("announce")
+    .setName("announcement")
     .setDescription("Post an embed announcement to a channel (Himiko)")
     .setDMPermission(false)
     .addChannelOption((opt) =>

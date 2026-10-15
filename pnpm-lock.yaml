@@ -71,6 +71,9 @@ importers:
       '@ei-point/module-ai':
         specifier: workspace:*
         version: link:../../../packages/modules/ai
+      '@ei-point/module-bot-ui':
+        specifier: workspace:*
+        version: link:../../../packages/modules/bot-ui
       '@ei-point/module-tts':
         specifier: workspace:*
         version: link:../../../packages/modules/tts
@@ -105,6 +108,9 @@ importers:
       '@ei-point/flow':
         specifier: workspace:*
         version: link:../../../packages/flow
+      '@ei-point/module-bot-ui':
+        specifier: workspace:*
+        version: link:../../../packages/modules/bot-ui
       '@ei-point/module-commerce':
         specifier: workspace:*
         version: link:../../../packages/modules/commerce
@@ -133,6 +139,9 @@ importers:
       '@ei-point/flow':
         specifier: workspace:*
         version: link:../../../packages/flow
+      '@ei-point/module-bot-ui':
+        specifier: workspace:*
+        version: link:../../../packages/modules/bot-ui
       '@ei-point/module-community':
         specifier: workspace:*
         version: link:../../../packages/modules/community
@@ -167,6 +176,9 @@ importers:
       '@ei-point/flow':
         specifier: workspace:*
         version: link:../../../packages/flow
+      '@ei-point/module-bot-ui':
+        specifier: workspace:*
+        version: link:../../../packages/modules/bot-ui
       discord.js:
         specifier: 14.27.0
         version: 14.27.0
@@ -201,6 +213,9 @@ importers:
       '@ei-point/flow':
         specifier: workspace:*
         version: link:../../../packages/flow
+      '@ei-point/module-bot-ui':
+        specifier: workspace:*
+        version: link:../../../packages/modules/bot-ui
       '@ei-point/module-logging':
         specifier: workspace:*
         version: link:../../../packages/modules/logging
@@ -377,6 +392,19 @@ importers:
         version: 5.6.3
 
   packages/modules/ai:
+    devDependencies:
+      '@types/node':
+        specifier: 24.3.0
+        version: 24.3.0
+      typescript:
+        specifier: 5.6.3
+        version: 5.6.3
+
+  packages/modules/bot-ui:
+    dependencies:
+      discord.js:
+        specifier: 14.27.0
+        version: 14.27.0
     devDependencies:
       '@types/node':
         specifier: 24.3.0

@@ -1,8 +1,4 @@
-// Cyrene TTS wiring: /speak, /tts-voice, /tts-stop.
-// Synthesis runs through @ei-point/module-tts queue (2 concurrent,
-// bounded queue, 30s deadline). Voice playback joins the caller's voice
-// channel via @discordjs/voice when available; otherwise the command fails
-// clearly with staging guidance instead of claiming success.
+// Cyrene TTS wiring: /speak, /tts, /leave, and /search.
 
 import { SlashCommandBuilder } from "discord.js";
 import type { Pool } from "pg";
@@ -17,7 +13,7 @@ import {
 export const ttsCommandDefinitions = [
   new SlashCommandBuilder()
     .setName("speak")
-    .setDescription("Speak text in your voice channel (Cyrene TTS)")
+    .setDescription("Create and attach a Cyrene voice file")
     .setDMPermission(false)
     .addStringOption((opt) =>
       opt
@@ -25,27 +21,30 @@ export const ttsCommandDefinitions = [
         .setDescription(`Text to speak (max ${TTS_MAX_CHARS} chars)`)
         .setMaxLength(TTS_MAX_CHARS)
         .setRequired(true),
-    )
-    .addStringOption((opt) => opt.setName("voice").setDescription("Voice name (per-guild default otherwise)")),
+    ),
   new SlashCommandBuilder()
-    .setName("tts-voice")
-    .setDescription("View or set the TTS voice for this server")
-    .setDMPermission(false)
-    .addStringOption((opt) => opt.setName("voice").setDescription("Voice name")),
-  new SlashCommandBuilder()
-    .setName("tts-stop")
-    .setDescription("Stop TTS playback and leave voice")
+    .setName("tts")
+    .setDescription("Read this voice channel's text chat aloud")
     .setDMPermission(false),
+  new SlashCommandBuilder()
+    .setName("leave")
+    .setDescription("Leave the active Cyrene voice session")
+    .setDMPermission(false),
+  new SlashCommandBuilder()
+    .setName("search")
+    .setDescription("Search the configured Cyrene search source")
+    .setDMPermission(false)
+    .addStringOption((opt) => opt.setName("query").setDescription("Search query").setRequired(true).setMaxLength(300)),
 ];
 
 function makeTtsProvider(): TtsSynthesizeFn {
   const apiUrl = process.env.TTS_PROVIDER_URL;
   const apiKey = process.env.TTS_PROVIDER_KEY;
   return async (text, voice, signal) => {
-    if (apiUrl && apiKey) {
+    if (apiUrl) {
       const res = await fetch(apiUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        headers: { "Content-Type": "application/json", ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
         body: JSON.stringify({ text, voice, format: "mp3" }),
         signal,
       });
@@ -80,9 +79,13 @@ export interface TtsCommandContext {
   inVoiceChannel: boolean;
   requestedVoice?: string | undefined;
   text?: string | undefined;
+  query?: string | undefined;
   reply(text: string): Promise<void>;
+  sendAudio(audio: { mime: string; bytes: Uint8Array }): Promise<void>;
+  startTts(): Promise<{ ok: true } | { ok: false; reason: string }>;
   playAudio(audio: { mime: string; bytes: Uint8Array }): Promise<{ ok: true } | { ok: false; reason: string }>;
   stopPlayback(): Promise<void>;
+  search(query: string): Promise<string>;
 }
 
 export async function respondToTtsCommand(
@@ -90,41 +93,24 @@ export async function respondToTtsCommand(
   ctx: TtsCommandContext,
   pool: Pool,
 ): Promise<boolean> {
-  if (name === "tts-voice") {
-    if (ctx.requestedVoice) {
-      const voice = normalizeVoice(ctx.requestedVoice);
-      // Serialized version bump: advisory lock + insert in one transaction so
-      // concurrent setters cannot compute the same MAX(version) + 1.
-      // (Same pattern as the dashboard embed queue in control-routes.)
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
-          `tts-voice:${ctx.guildId}`,
-        ]);
-        await client.query(
-          `INSERT INTO config.settings (scope, key, version, value, updated_by)
-           SELECT $1, $2, COALESCE(MAX(version), 0) + 1, $3, $4
-           FROM config.settings WHERE scope = $1 AND key = $2`,
-          [`guild:${ctx.guildId}`, TTS_VOICE_KEY, JSON.stringify({ voice }), ctx.userId],
-        );
-        await client.query("COMMIT");
-      } catch (err) {
-        await client.query("ROLLBACK").catch(() => {});
-        throw err;
-      } finally {
-        client.release();
-      }
-      await ctx.reply(`TTS voice set to **${voice}** for this server.`);
-    } else {
-      await ctx.reply(`Current TTS voice for this server: **${await getGuildVoice(pool, ctx.guildId)}**.`);
-    }
+  if (name === "leave") {
+    await ctx.stopPlayback();
+    await ctx.reply("Cyrene left the voice channel.");
     return true;
   }
 
-  if (name === "tts-stop") {
-    await ctx.stopPlayback();
-    await ctx.reply("TTS playback stopped.");
+  if (name === "tts") {
+    if (!ctx.inVoiceChannel) {
+      await ctx.reply("Join a voice channel first, then use `/tts`.");
+      return true;
+    }
+    const started = await ctx.startTts();
+    await ctx.reply(started.ok ? "Cyrene joined. New messages in this voice channel's text chat will be read aloud; use `/leave` to stop." : started.reason === "already-active-elsewhere" ? "Cyrene is already reading a different voice channel in this server. Use `/leave` there before starting another session." : started.reason === "no-humans" ? "No members remain in that voice channel, so Cyrene left." : "Cyrene could not start the voice session. Check voice permissions and try again.");
+    return true;
+  }
+
+  if (name === "search") {
+    await ctx.reply(await ctx.search(ctx.query ?? ""));
     return true;
   }
 
@@ -140,10 +126,6 @@ export async function respondToTtsCommand(
       await ctx.reply(why);
       return true;
     }
-    if (!ctx.inVoiceChannel) {
-      await ctx.reply("Join a voice channel first, then use /speak.");
-      return true;
-    }
     const voice = normalizeVoice(ctx.requestedVoice ?? (await getGuildVoice(pool, ctx.guildId)));
     const res = await ttsQueue.synthesize(checked.text, voice);
     if (!res.ok) {
@@ -152,20 +134,11 @@ export async function respondToTtsCommand(
           ? "TTS service is at capacity. Try again shortly."
           : res.reason === "input-rejected"
             ? "That text was refused for safety."
-            : "TTS provider is not configured or unreachable. Staff: set TTS_PROVIDER_URL/KEY.",
+          : "Cyrene's local TTS service is not ready. Try again after service health recovers.",
       );
       return true;
     }
-    const played = await ctx.playAudio(res.audio);
-    if (!played.ok) {
-      await ctx.reply(
-        played.reason === "voice-unavailable"
-          ? "Synthesis ready, but voice playback is unavailable on this host (staging gate). Audio was not played."
-          : "Playback failed safely. Try again.",
-      );
-      return true;
-    }
-    await ctx.reply(`Spoke (${checked.text.length} chars, voice **${voice}**).`);
+    await ctx.sendAudio(res.audio);
     return true;
   }
 
@@ -174,4 +147,12 @@ export async function respondToTtsCommand(
 
 export function ttsStatus() {
   return { inFlight: ttsQueue.inFlight(), queued: ttsQueue.queued() };
+}
+
+export async function synthesizeSpeech(text: string, guildId: string, pool: Pool): Promise<{ mime: string; bytes: Uint8Array }> {
+  const checked = validateTtsInput(text);
+  if (!checked.ok) throw new Error("tts-input-rejected");
+  const result = await ttsQueue.synthesize(checked.text, await getGuildVoice(pool, guildId));
+  if (!result.ok) throw new Error(result.reason);
+  return result.audio;
 }

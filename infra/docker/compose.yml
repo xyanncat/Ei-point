@@ -197,6 +197,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
+      EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
       BOT_KEY: silverwolf
       BOT_TOKEN: ${DISCORD_SILVERWOLF_BOT_TOKEN:-${DISCORD_COMMUNITY_BOT_TOKEN:-}}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
@@ -222,6 +224,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
+      EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
       BOT_KEY: cyrene
       BOT_TOKEN: ${DISCORD_CYRENE_BOT_TOKEN:-${DISCORD_AI_BOT_TOKEN:-}}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
@@ -255,6 +259,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
+      EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
       BOT_KEY: robin
       BOT_TOKEN: ${DISCORD_ROBIN_BOT_TOKEN:-${DISCORD_MUSIC_BOT_TOKEN:-}}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
@@ -279,6 +285,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
+      EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
       BOT_KEY: cipher
       PAYMENT_ORIGIN: ${PAYMENT_ORIGIN}
       UPI_PAYEE_VPA: ${UPI_PAYEE_VPA:-}
@@ -307,6 +315,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
+      EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
       BOT_KEY: kafka
       BOT_TOKEN: ${DISCORD_KAFKA_BOT_TOKEN:-}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
@@ -329,6 +339,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
+      EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
       BOT_KEY: himiko
       BOT_TOKEN: ${DISCORD_HIMIKO_BOT_TOKEN:-}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}

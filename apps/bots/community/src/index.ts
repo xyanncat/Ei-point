@@ -13,6 +13,7 @@ import { EconomyService } from "@ei-point/module-games";
 import { commandDefinitions, respondToCommand } from "./commands.js";
 import { communityCommandPermissionDenial } from "./authorization.js";
 import { deliverMessages } from "./delivery.js";
+import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 import {
   dispatchGuildCommand,
   isControlEnabled,
@@ -74,7 +75,8 @@ const guarded = (label: string, run: () => Promise<unknown>) => {
   );
 };
 
-client.on(Events.InteractionCreate, (interaction) => {
+client.on(Events.InteractionCreate, (rawInteraction) => {
+  const interaction = withEiEmbedReplies(rawInteraction);
   if (!interaction.isChatInputCommand()) return;
   if (!identityVerified) {
     guarded("identity-not-ready", () =>
@@ -98,6 +100,7 @@ client.on(Events.InteractionCreate, (interaction) => {
   activeCommands++;
   guarded("command", async () => {
     try {
+      if (interaction.inCachedGuild() && await respondToCommonCommand(interaction, "SilverWolf", "Community XP and collectible card economy.")) return;
       await dispatchGuildCommand({
         botKey,
         allowlist: allowed,
@@ -371,7 +374,7 @@ client.once(Events.ClientReady, () =>
       if (approved !== true) continue;
       await client.rest.put(
         Routes.applicationGuildCommands(client.user!.id, guild.id),
-        { body: commandDefinitions.map((c) => c.toJSON()) },
+        { body: [...commonCommandDefinitions(), ...commandDefinitions.filter((c) => ["rank", "cards", "inventory", "balance", "packs", "open", "buy", "sell", "market", "trade"].includes(c.name))].map((c) => c.toJSON()) },
       );
     }
     await pump();

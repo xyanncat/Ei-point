@@ -28,6 +28,7 @@ import { buildLogEvent } from "@ei-point/module-logging";
 import { DUE_EXPIRY_SQL, reconcileExpiry } from "@ei-point/module-moderation";
 import { securityCommandDefinitions, respondToSecurityCommand } from "@ei-point/bot-security/dist/commands.js";
 import { moderationCommandDefinitions, respondToModerationCommand } from "@ei-point/bot-moderation/dist/commands.js";
+import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 
 const botKey = process.env.BOT_KEY ?? "kafka";
 const url = process.env.DATABASE_URL;
@@ -101,7 +102,12 @@ const guarded = (label: string, run: () => Promise<unknown>) => {
   );
 };
 
-const ALL_COMMANDS = [...securityCommandDefinitions, ...moderationCommandDefinitions];
+const ALL_COMMANDS = [
+  ...commonCommandDefinitions(),
+  ...[...securityCommandDefinitions, ...moderationCommandDefinitions].map((command) =>
+    command.setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  ),
+];
 
 // --- Security: anti-raid on member join ---
 client.on(Events.GuildMemberAdd, (member) => {
@@ -275,7 +281,8 @@ async function loadStaffScopes(guildId: string, roleIds: string[]): Promise<stri
 const SECURITY_NAMES = new Set(securityCommandDefinitions.map((c) => c.name));
 
 // --- Merged interaction router ---
-client.on(Events.InteractionCreate, (interaction) => {
+client.on(Events.InteractionCreate, (rawInteraction) => {
+  const interaction = withEiEmbedReplies(rawInteraction);
   if (!interaction.isChatInputCommand()) return;
   if (!identityVerified) {
     guarded("not-ready", () =>
@@ -294,6 +301,13 @@ client.on(Events.InteractionCreate, (interaction) => {
     try {
       if (!interaction.inCachedGuild() || !allowed.includes(interaction.guildId)) {
         await interaction.reply({ content: "This server is not approved for Kafka.", ephemeral: true });
+        return;
+      }
+      if (await respondToCommonCommand(interaction, "Kafka", "Guild security, moderation, and audit controls.")) return;
+      const isOwner = interaction.guild.ownerId === interaction.user.id;
+      const isAdministrator = interaction.memberPermissions.has(PermissionFlagsBits.Administrator);
+      if (!isOwner && !isAdministrator) {
+        await interaction.reply({ content: "Kafka security and moderation commands require the guild owner or an Administrator.", ephemeral: true });
         return;
       }
       await interaction.deferReply({ ephemeral: true });

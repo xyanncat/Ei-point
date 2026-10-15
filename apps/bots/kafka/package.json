@@ -18,6 +18,7 @@
     "@ei-point/module-logging": "workspace:*",
     "@ei-point/bot-security": "workspace:*",
     "@ei-point/bot-moderation": "workspace:*",
+    "@ei-point/module-bot-ui": "workspace:*",
     "pg": "8.13.1",
     "zod": "3.23.8"
   },

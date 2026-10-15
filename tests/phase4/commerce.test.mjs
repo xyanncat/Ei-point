@@ -64,25 +64,25 @@ test('Discord commerce scopes buyer and guild and shares transactional membershi
  const o=await create('discord-settlement-key','ABC234');
  const row=(await pool.query('SELECT * FROM commerce.orders WHERE public_id=$1',[o.orderId])).rows[0];
  async function command(name,subcommand,userId,guildId,canManage=false,options={}){let reply='';await respondToCommerceCommand({name,subcommand,userId,guildId,canManage,isOwner:false,userScopes:[],key:`interaction-${name}-${subcommand}-${guildId}-${userId}`,options:{order_id:row.order_id,...options},reply:async(s)=>{reply=s;}},pool);return reply;}
- assert.match(await command('order','status',referrer,guild),/not found/);
- assert.match(await command('order','status',referrer,'999999999999999999',true),/not found/);
- assert.match(await command('order','claim',referrer,guild,false,{proof:'foreign-proof'}),/failed/);
+ assert.match(await command('orders','status',referrer,guild),/not found/);
+ assert.match(await command('orders','status',referrer,'999999999999999999',true),/not found/);
+ assert.match(await command('orders','claim',referrer,guild,false,{proof:'foreign-proof'}),/failed/);
  assert.equal((await pool.query('SELECT status FROM commerce.orders WHERE order_id=$1',[row.order_id])).rows[0].status,'pending');
- assert.match(await command('order','claim',buyer,guild,false,{proof:'upi:555555555555'}),/Submitted/);
- assert.match(await command('settle',undefined,referrer,'999999999999999999',true),/failed/);
+ assert.match(await command('orders','claim',buyer,guild,false,{proof:'upi:555555555555'}),/Submitted/);
+ assert.match(await command('orders','settle',referrer,'999999999999999999',true),/failed/);
  const before=(await pool.query('SELECT expires_at FROM commerce.memberships WHERE guild_id=$1 AND user_id=$2',[guild,buyer])).rows[0].expires_at;
- assert.match(await command('settle',undefined,referrer,guild,true),/successfully/);
+ assert.match(await command('orders','settle',referrer,guild,true),/successfully/);
  assert.equal((await pool.query('SELECT status FROM commerce.claims WHERE order_id=$1',[row.order_id])).rows[0].status,'confirmed');
  const after=(await pool.query('SELECT expires_at FROM commerce.memberships WHERE guild_id=$1 AND user_id=$2',[guild,buyer])).rows[0].expires_at;
  assert.equal(after-before,30*86400000);
  assert.equal((await pool.query("SELECT uses FROM commerce.referrals WHERE code='ABC234'")).rows[0].uses,2);
- await command('settle',undefined,referrer,guild,true);
+ await command('orders','settle',referrer,guild,true);
  assert.equal((await pool.query('SELECT expires_at FROM commerce.memberships WHERE guild_id=$1 AND user_id=$2',[guild,buyer])).rows[0].expires_at.getTime(),after.getTime());
 });
 
 test('Discord-created membership captures immutable service and duration snapshot',async()=>{
  const {respondToCommerceCommand}=await import('../../apps/bots/commerce/dist/commands.js');let reply='';
- await respondToCommerceCommand({name:'order',subcommand:'create',userId:buyer,guildId:guild,isOwner:false,canManage:false,userScopes:[],key:'discord-create-membership',options:{sku:'account-management-membership'},paymentOrigin:origin,payeeVpa:'merchant@bank',payeeName:'Studio',usdtAddress:'',reply:async(s)=>{reply=s;}},pool);
+ await respondToCommerceCommand({name:'orders',subcommand:'create',userId:buyer,guildId:guild,isOwner:false,canManage:false,userScopes:[],key:'discord-create-membership',options:{sku:'account-management-membership'},paymentOrigin:origin,payeeVpa:'merchant@bank',payeeName:'Studio',usdtAddress:'',reply:async(s)=>{reply=s;}},pool);
  assert.match(reply,/Successfully/);
  const row=(await pool.query("SELECT * FROM commerce.orders WHERE idempotency_key='ord-discord-create-membership'")).rows[0];assert.equal(row.membership_days,30);assert.ok(row.service_name);assert.match(row.public_id,/^RP-[A-Z0-9]{6}$/);assert.match(reply,new RegExp(`verify\\?id=${row.public_id}`));
 });

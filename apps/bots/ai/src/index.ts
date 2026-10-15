@@ -10,6 +10,7 @@ import {
   Routes,
 } from "discord.js";
 import pg from "pg";
+import { commonCommandDefinitions, respondToCommonCommand, toEiEmbedPayload, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 import {
   createRouter,
   makeHttpProvider,
@@ -20,14 +21,122 @@ import {
   respondToAiCommand,
   processConversation,
 } from "./commands.js";
-import { ttsCommandDefinitions, respondToTtsCommand } from "./tts.js";
+import { synthesizeSpeech, ttsCommandDefinitions, respondToTtsCommand } from "./tts.js";
 
-const ALL_AI_COMMANDS = [...aiCommandDefinitions, ...ttsCommandDefinitions];
+const ALL_AI_COMMANDS = [...commonCommandDefinitions(), ...ttsCommandDefinitions];
 const TTS_NAMES = new Set(ttsCommandDefinitions.map((c) => c.name));
 
 // Cyrene voice sessions: guildId -> voice connection (lazy @discordjs/voice).
 const voiceSessions = new Map<string, { destroy: () => void }>();
 const pendingVoice = new Set<string>();
+type CyreneVoiceSession = {
+  channelId: string;
+  guildId: string;
+  connection: import("@discordjs/voice").VoiceConnection;
+  player: import("@discordjs/voice").AudioPlayer;
+  queue: string[];
+  busy: boolean;
+  owner: string;
+  leaseTimer: ReturnType<typeof setInterval>;
+};
+const cyreneVoiceSessions = new Map<string, CyreneVoiceSession>();
+
+async function stopCyreneSession(guildId: string): Promise<void> {
+  const session = cyreneVoiceSessions.get(guildId);
+  if (!session) return;
+  cyreneVoiceSessions.delete(guildId);
+  session.queue.length = 0;
+  clearInterval(session.leaseTimer);
+  try { session.player.stop(true); session.connection.destroy(); } catch { /* already disconnected */ }
+  voiceSessions.delete(guildId);
+  await pool.query("DELETE FROM ai.voice_leases WHERE owner=$1", [session.owner]).catch(() => {
+    console.error("cyrene voice lease cleanup deferred until reconciliation");
+  });
+}
+
+async function drainCyreneQueue(session: CyreneVoiceSession): Promise<void> {
+  if (session.busy || cyreneVoiceSessions.get(session.guildId) !== session) return;
+  session.busy = true;
+  try {
+    while (session.queue.length && cyreneVoiceSessions.get(session.guildId) === session) {
+      const text = session.queue.shift()!;
+      try {
+        const audio = await synthesizeSpeech(text, session.guildId, pool);
+        if (cyreneVoiceSessions.get(session.guildId) !== session) return;
+        const voice = await import("@discordjs/voice");
+        session.player.play(voice.createAudioResource(Readable.from(Buffer.from(audio.bytes)), { inputType: voice.StreamType.Arbitrary }));
+        await voice.entersState(session.player, voice.AudioPlayerStatus.Idle, 120_000);
+      } catch (err) {
+        console.error("cyrene voice chat message was not spoken:", err instanceof Error ? err.message : String(err));
+      }
+    }
+  } finally {
+    session.busy = false;
+  }
+}
+
+async function startCyreneSession(guildId: string, voiceChannelId: string, adapterCreator: unknown): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const currentSession = cyreneVoiceSessions.get(guildId);
+  if (currentSession) return currentSession.channelId === voiceChannelId ? { ok: true } : { ok: false, reason: "already-active-elsewhere" };
+  if (pendingVoice.has(guildId)) return { ok: false, reason: "voice-full" };
+  pendingVoice.add(guildId);
+  const owner = `tts-session:${guildId}:${randomUUID()}`;
+  let connection: import("@discordjs/voice").VoiceConnection | undefined;
+  try {
+    if (!(await acquireVoiceLease(pool, owner))) return { ok: false, reason: "voice-full" };
+    if (voiceSessions.size >= 2 && !voiceSessions.has(guildId)) {
+      await pool.query("DELETE FROM ai.voice_leases WHERE owner=$1", [owner]);
+      return { ok: false, reason: "voice-full" };
+    }
+    const voice = await import("@discordjs/voice");
+    connection = voice.joinVoiceChannel({ channelId: voiceChannelId, guildId, adapterCreator: adapterCreator as never });
+    await voice.entersState(connection, voice.VoiceConnectionStatus.Ready, 15_000);
+    const player = voice.createAudioPlayer();
+    connection.subscribe(player);
+    const leaseTimer = setInterval(() => {
+      void pool.query("UPDATE ai.voice_leases SET expires_at=now()+interval '60 seconds' WHERE owner=$1", [owner]).then((result) => {
+        if (result.rowCount !== 1 && cyreneVoiceSessions.get(guildId)?.owner === owner) void stopCyreneSession(guildId);
+      }).catch(() => {
+        console.error("cyrene voice lease renewal failed");
+        if (cyreneVoiceSessions.get(guildId)?.owner === owner) void stopCyreneSession(guildId);
+      });
+    }, 20_000);
+    leaseTimer.unref();
+    const session: CyreneVoiceSession = { channelId: voiceChannelId, guildId, connection, player, queue: [], busy: false, owner, leaseTimer };
+    cyreneVoiceSessions.set(guildId, session);
+    voiceSessions.set(guildId, connection);
+    connection.on("stateChange", (_oldState, newState) => {
+      if (newState.status === voice.VoiceConnectionStatus.Destroyed) {
+        void stopCyreneSession(guildId);
+      } else if (newState.status === voice.VoiceConnectionStatus.Disconnected) {
+        const recoveryTimer = setTimeout(() => {
+          if (connection?.state.status === voice.VoiceConnectionStatus.Disconnected) void stopCyreneSession(guildId);
+        }, 15_000);
+        recoveryTimer.unref();
+      }
+    });
+    const voiceChannel = client.channels.cache.get(voiceChannelId);
+    if (!voiceChannel?.isVoiceBased() || !voiceChannel.members.some((member) => !member.user.bot)) {
+      await stopCyreneSession(guildId);
+      return { ok: false, reason: "no-humans" };
+    }
+    return { ok: true };
+  } catch {
+    const session = cyreneVoiceSessions.get(guildId);
+    if (session?.connection === connection) {
+      await stopCyreneSession(guildId);
+    } else {
+      if (voiceSessions.get(guildId) === connection) voiceSessions.delete(guildId);
+      connection?.destroy();
+      await pool.query("DELETE FROM ai.voice_leases WHERE owner=$1", [owner]).catch(() => {
+        console.error("cyrene voice lease cleanup deferred until reconciliation");
+      });
+    }
+    return { ok: false, reason: "voice-unavailable" };
+  } finally {
+    pendingVoice.delete(guildId);
+  }
+}
 
 async function playTtsAudio(
   guildId: string,
@@ -115,8 +224,8 @@ function fitDiscord(text: string, limit = 2000): string {
   return text.slice(0, limit - 1) + "…";
 }
 
-if (!process.env.AI_PROVIDER_PRIMARY || !process.env.AI_PROVIDER_PRIMARY_KEY || !process.env.AI_PROVIDER_PRIMARY_MODEL?.trim()) throw new Error("AI_PROVIDER_PRIMARY, AI_PROVIDER_PRIMARY_KEY and AI_PROVIDER_PRIMARY_MODEL are required");
-if ([process.env.AI_PROVIDER_FALLBACK, process.env.AI_PROVIDER_FALLBACK_KEY, process.env.AI_PROVIDER_FALLBACK_MODEL].some(Boolean) && (!process.env.AI_PROVIDER_FALLBACK || !process.env.AI_PROVIDER_FALLBACK_KEY || !process.env.AI_PROVIDER_FALLBACK_MODEL?.trim())) throw new Error("Fallback provider URL, key and model must all be configured together");
+if (!process.env.AI_PROVIDER_PRIMARY || !process.env.AI_PROVIDER_PRIMARY_MODEL?.trim()) throw new Error("AI_PROVIDER_PRIMARY and AI_PROVIDER_PRIMARY_MODEL are required");
+if ([process.env.AI_PROVIDER_FALLBACK, process.env.AI_PROVIDER_FALLBACK_KEY, process.env.AI_PROVIDER_FALLBACK_MODEL].some(Boolean) && (!process.env.AI_PROVIDER_FALLBACK || !process.env.AI_PROVIDER_FALLBACK_MODEL?.trim())) throw new Error("Fallback provider URL and model must be configured together; its key is optional for local endpoints");
 const primaryProvider = makeHttpProvider(
   process.env.AI_PROVIDER_PRIMARY,
   process.env.AI_PROVIDER_PRIMARY_KEY,
@@ -159,6 +268,73 @@ const guarded = (label: string, run: () => Promise<unknown>) => {
 
 // --- Handle Direct Mentions in Channels ---
 const userMentionCooldown = new Map<string, number>();
+const voiceChatCooldown = new Map<string, number>();
+const voiceChatPending = new Set<string>();
+
+client.on(Events.MessageCreate, async (message) => {
+  const session = message.guildId ? cyreneVoiceSessions.get(message.guildId) : undefined;
+  if (!session || message.channelId !== session.channelId || message.author.bot || !message.guild) return;
+  const spoken = message.content.trim();
+  if (!spoken) return;
+  if (spoken.length > 500) {
+    void message.reply(toEiEmbedPayload("I skipped that message because voice chat messages must be 500 characters or shorter.", "Cyrene")).catch(() => {});
+    return;
+  }
+  const cooldownKey = `${message.guildId}:${message.author.id}`;
+  const now = Date.now();
+  const lastSpokenAt = voiceChatCooldown.get(cooldownKey) ?? 0;
+  if (now - lastSpokenAt < 5_000 || voiceChatPending.has(cooldownKey)) {
+    void message.reply(toEiEmbedPayload("Please wait a few seconds before sending another message for voice playback.", "Cyrene")).catch(() => {});
+    return;
+  }
+  voiceChatPending.add(cooldownKey);
+  try {
+    const enabled = await isControlEnabled(
+      async (sql, params) => (await pool.query(sql, params)).rows,
+      message.guildId!,
+      botKey,
+      "tts",
+      message.member ? [...message.member.roles.cache.keys()] : [],
+    );
+    if (!enabled) {
+      void message.reply(toEiEmbedPayload("Voice chat reading is disabled or restricted by this server's Ei-Flow controls.", "Cyrene")).catch(() => {});
+      return;
+    }
+    if (cyreneVoiceSessions.get(message.guildId!) !== session) return;
+    if (session.queue.length >= 10) {
+      void message.reply(toEiEmbedPayload("My voice queue is full. Please wait for a few messages to finish.", "Cyrene")).catch(() => {});
+      return;
+    }
+    session.queue.push(spoken);
+    voiceChatCooldown.set(cooldownKey, Date.now());
+  } catch (err) {
+    console.error("cyrene voice chat authorization failed:", err instanceof Error ? err.message : String(err));
+    return;
+  } finally {
+    voiceChatPending.delete(cooldownKey);
+  }
+  if (voiceChatCooldown.size > 500) {
+    const cutoff = now - 60_000;
+    for (const [key, ts] of voiceChatCooldown.entries()) if (ts < cutoff) voiceChatCooldown.delete(key);
+  }
+  void drainCyreneQueue(session);
+});
+
+client.on(Events.VoiceStateUpdate, (oldState, newState) => {
+  const session = cyreneVoiceSessions.get(newState.guild.id);
+  if (!session || (oldState.channelId !== session.channelId && newState.channelId !== session.channelId)) return;
+  if (newState.id === client.user?.id && newState.channelId !== session.channelId) {
+    void stopCyreneSession(newState.guild.id);
+    return;
+  }
+  const channel = newState.guild.channels.cache.get(session.channelId);
+  if (!channel?.isVoiceBased()) {
+    void stopCyreneSession(newState.guild.id);
+    return;
+  }
+  const humans = channel.members.filter((member) => !member.user.bot && (member.id !== newState.id || newState.channelId === session.channelId));
+  if (humans.size === 0) void stopCyreneSession(newState.guild.id);
+});
 
 client.on(Events.MessageCreate, (message) => {
   if (
@@ -175,7 +351,7 @@ client.on(Events.MessageCreate, (message) => {
     if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, message.guildId!, botKey, "ask", message.member ? [...message.member.roles.cache.keys()] : []))) return;
     const last = userMentionCooldown.get(message.author.id) ?? 0;
     if (Date.now() - last < 5000) {
-      await message.reply("⏳ Please wait a few seconds before asking another question.");
+      await message.reply(toEiEmbedPayload("Please wait a few seconds before asking another question.", "Cyrene"));
       return;
     }
     userMentionCooldown.set(message.author.id, Date.now());
@@ -188,7 +364,7 @@ client.on(Events.MessageCreate, (message) => {
 
     const rawContent = message.content.replace(new RegExp(`<@!?${client.user!.id}>`, "g"), "").trim();
     if (!rawContent) {
-      await message.reply("Hello! How can I help you today? You can also use `/ask` to chat with me.");
+      await message.reply(toEiEmbedPayload("Ah, there you are! Hehe, were you looking for me? You can ask me anything by mentioning me here.", "Cyrene"));
       return;
     }
 
@@ -204,12 +380,13 @@ client.on(Events.MessageCreate, (message) => {
       DAILY_BUDGET_CAP,
     );
 
-    await message.reply({ content: fitDiscord(reply), allowedMentions: { parse: [], repliedUser: true } });
+    await message.reply({ ...toEiEmbedPayload(fitDiscord(reply), "Cyrene"), allowedMentions: { parse: [], repliedUser: true } });
   });
 });
 
 // --- Slash Command Interaction Handler ---
-client.on(Events.InteractionCreate, (interaction) => {
+client.on(Events.InteractionCreate, (rawInteraction) => {
+  const interaction = withEiEmbedReplies(rawInteraction);
   if (!interaction.isChatInputCommand()) return;
   if (!identityVerified) {
     guarded("not-ready", () =>
@@ -232,6 +409,8 @@ client.on(Events.InteractionCreate, (interaction) => {
         await interaction.reply({ content: "This server is not approved for AI bot.", ephemeral: true });
         return;
       }
+
+      if (await respondToCommonCommand(interaction, "Cyrene", "Mention Cyrene in a text channel to chat. Use `/speak`, `/tts`, `/leave`, or `/search` for voice and search features.")) return;
 
       await interaction.deferReply();
       if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) {
@@ -257,8 +436,20 @@ client.on(Events.InteractionCreate, (interaction) => {
             requestedVoice:
               typeof options.voice === "string" ? options.voice : undefined,
             text: typeof options.text === "string" ? options.text : undefined,
+            query: typeof options.query === "string" ? options.query : undefined,
             reply: async (text) => {
               await interaction.editReply({ content: fitDiscord(text), allowedMentions: { parse: [] } });
+            },
+            sendAudio: async (audio) => {
+              const ext = audio.mime.includes("wav") ? "wav" : "mp3";
+              await interaction.editReply({
+                ...toEiEmbedPayload("Your Cyrene audio file is ready.", "Cyrene · Voice file"),
+                files: [{ attachment: Buffer.from(audio.bytes), name: `cyrene.${ext}` }],
+              });
+            },
+            startTts: async () => {
+              if (!voiceChannelId) return { ok: false as const, reason: "voice-unavailable" };
+              return startCyreneSession(interaction.guildId, voiceChannelId, interaction.guild.voiceAdapterCreator);
             },
             playAudio: async (audio) => {
               if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) return { ok: false as const, reason: "disabled" };
@@ -271,9 +462,11 @@ client.on(Events.InteractionCreate, (interaction) => {
               );
             },
             stopPlayback: async () => {
+              await stopCyreneSession(interaction.guildId);
               voiceSessions.get(interaction.guildId)?.destroy();
               voiceSessions.delete(interaction.guildId);
             },
+            search: async (_query) => "Search is not configured yet. Configure an approved search source before using this command.",
           },
           pool,
         );
@@ -357,6 +550,7 @@ async function shutdown(): Promise<void> {
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();
   try {
+    for (const guildId of cyreneVoiceSessions.keys()) await stopCyreneSession(guildId);
     client.destroy();
     health.close();
     await pool.end();

@@ -67,6 +67,8 @@ The bot count is configurable through the release roster. A manifest cannot crea
 
 Browse the [individual command and function catalog for all six bots](docs/bot-command-catalog.md). It follows checked-in command definitions and distinguishes implemented source behavior from the still-open legacy parity and live acceptance gates.
 
+The owner-approved target command set is documented command by command in the [product command and runtime spec](docs/product/bot-command-and-runtime-spec.md). This spec records requested behavior separately from code that has passed its implementation gates.
+
 ## ⚙️ Architecture
 
 ```mermaid

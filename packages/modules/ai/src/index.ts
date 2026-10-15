@@ -133,9 +133,11 @@ export const USAGE_TODAY_SQL = `
 /** OpenAI-compatible HTTP adapter. Configuration and all malformed/error responses fail closed. */
 export function makeHttpProvider(apiUrl?: string, apiKey?: string, request: typeof fetch = fetch, model?: string): ProviderFn {
   return async (messages, signal) => {
-    if (!apiUrl || !apiKey) throw new Error("provider-not-configured");
+    if (!apiUrl) throw new Error("provider-not-configured");
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
     const response = await request(apiUrl, {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      method: "POST", headers,
       body: JSON.stringify({ ...(model ? { model } : {}), messages, max_tokens: 1000 }), signal,
     });
     if (!response.ok) throw new Error(`provider-http-${response.status}`);

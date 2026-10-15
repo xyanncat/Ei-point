@@ -14,6 +14,7 @@
     "discord.js": "14.27.0",
     "@ei-point/flow": "workspace:*",
     "@ei-point/contracts": "workspace:*",
+    "@ei-point/module-bot-ui": "workspace:*",
     "pg": "8.13.1"
   },
   "devDependencies": {

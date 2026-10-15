@@ -33,14 +33,10 @@ export interface CommerceCommandRequest {
 
 export const commerceCommandDefinitions = [
   new SlashCommandBuilder()
-    .setName("catalog")
-    .setDescription("View available digital services and packages")
-    .setDMPermission(false),
-
-  new SlashCommandBuilder()
-    .setName("order")
+    .setName("orders")
     .setDescription("Manage orders and payments")
     .setDMPermission(false)
+    .addSubcommand((sub) => sub.setName("list").setDescription("List services available for orders"))
     .addSubcommand((sub) =>
       sub
         .setName("create")
@@ -61,20 +57,24 @@ export const commerceCommandDefinitions = [
         .addStringOption((opt) =>
           opt.setName("proof").setDescription("Payment reference / UTR / transaction hash").setRequired(true),
         ),
-    ),
-
-  new SlashCommandBuilder()
-    .setName("settle")
-    .setDescription("Staff settlement for a claimed order")
-    .setDMPermission(false)
-    .addStringOption((opt) => opt.setName("order_id").setDescription("Order UUID to settle").setRequired(true)),
+    )
+    .addSubcommand((sub) => sub
+      .setName("settle")
+      .setDescription("Staff settlement for a claimed order")
+      .addStringOption((opt) => opt.setName("order_id").setDescription("Order UUID to settle").setRequired(true))),
 
   new SlashCommandBuilder()
     .setName("referral")
     .setDescription("Referral link generation and reward tracking")
     .setDMPermission(false)
-    .addSubcommand((sub) => sub.setName("code").setDescription("Get your unique referral code and link"))
-    .addSubcommand((sub) => sub.setName("stats").setDescription("View referral stats and current month rewards")),
+    .addSubcommand((sub) => sub.setName("link").setDescription("Get your unique referral code and link"))
+    .addSubcommand((sub) => sub.setName("redeem").setDescription("Apply a referral code to your future order")
+      .addStringOption((opt) => opt.setName("code").setDescription("Referral code").setRequired(true).setMaxLength(24)))
+    .addSubcommand((sub) => sub.setName("status").setDescription("View referral stats and current month rewards")),
+  new SlashCommandBuilder()
+    .setName("payment")
+    .setDescription("Show available payment methods and checkout guidance")
+    .setDMPermission(false),
 ];
 
 export async function respondToCommerceCommand(
@@ -84,23 +84,16 @@ export async function respondToCommerceCommand(
   const { name, subcommand, options, guildId, userId, isOwner, canManage, userScopes } = req;
   const isPrivileged = canSettleCommerce({ isOwner, canManage, userScopes });
 
-  if (name === "catalog") {
-    const res = await pool.query<{ sku: string; name: string; price_minor: string; currency: string; membership_days: number }>(
-      "SELECT sku, name, price_minor, currency FROM commerce.catalog WHERE active = TRUE ORDER BY price_minor ASC",
-    );
-    if (res.rows.length === 0) {
-      await req.reply("The catalog is currently empty.");
+  if (name === "orders") {
+    if (subcommand === "list") {
+      const catalog = await pool.query<{ sku: string; name: string; price_minor: string; currency: string }>(
+        "SELECT sku,name,price_minor,currency FROM commerce.catalog WHERE active=true ORDER BY price_minor",
+      );
+      await req.reply(catalog.rows.length
+        ? catalog.rows.map((item) => `• **${item.name}** (\`${item.sku}\`) — ${item.currency} ${(Number(item.price_minor) / 100).toFixed(2)}`).join("\n")
+        : "No services are currently available.");
       return;
     }
-    const lines = res.rows.map((item) => {
-      const price = (Number(item.price_minor) / 100).toFixed(2);
-      return `• **${item.name}** (\`${item.sku}\`) — ${item.currency} ${price}`;
-    });
-    await req.reply(`🛒 **Service Catalog:**\n${lines.join("\n")}\n\n*Use \`/order create <sku>\` to place an order.*`);
-    return;
-  }
-
-  if (name === "order") {
     if (subcommand === "create") {
       if (!buildUpiPayload({payeeVpa:req.payeeVpa,payeeName:req.payeeName?.trim()??"",amountMinor:1,note:"configuration check"}) || !req.paymentOrigin) {
         await req.reply("Payments are not configured for Discord checkout. Use the website checkout for configured payment methods or contact staff.");
@@ -112,7 +105,7 @@ export async function respondToCommerceCommand(
         [sku],
       );
       if (catRes.rows.length === 0) {
-        await req.reply("❌ Invalid SKU or service is inactive. Use `/catalog` to view active items.");
+        await req.reply("❌ Invalid SKU or service is inactive. Use `/orders list` to view active items.");
         return;
       }
 
@@ -122,14 +115,65 @@ export async function respondToCommerceCommand(
       const { token, hash } = newOrderToken();
       const idempotencyKey = `ord-${req.key}`;
       const publicId=`RP-${randomBytes(3).toString("hex").toUpperCase()}`;
-
-      const orderRes = await pool.query<{ order_id: string }>(
-        `INSERT INTO commerce.orders (guild_id, buyer_id, sku, amount_minor, order_token_hash, idempotency_key, service_name, membership_days,public_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9)
-         RETURNING order_id`,
-        [guildId, userId, sku, priceMinor, hash, idempotencyKey, item.name, item.membership_days,publicId],
-      );
-      const orderId = orderRes.rows[0]!.order_id;
+      const client = await pool.connect();
+      let orderId: string | undefined;
+      let referralInvalid = false;
+      try {
+        await client.query("BEGIN");
+        const referralScope = `guild:${guildId}:user:${userId}`;
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`commerce-referral:${referralScope}`]);
+        const setting = await client.query<{ version: number; value: { code?: string | null } }>(
+          "SELECT version, value FROM config.settings WHERE scope=$1 AND key='commerce.referral-code' ORDER BY version DESC LIMIT 1 FOR UPDATE",
+          [referralScope],
+        );
+        const referralCode = typeof setting.rows[0]?.value?.code === "string" ? setting.rows[0].value.code : null;
+        if (referralCode) {
+          const validReferral = await client.query<{ referrer_id: string }>(
+            "SELECT referrer_id FROM commerce.referrals WHERE code=$1 AND guild_id=$2 AND cycle=$3",
+            [referralCode, guildId, cycleFor(new Date())],
+          );
+          if (!validReferral.rows[0] || validReferral.rows[0].referrer_id === userId) {
+            referralInvalid = true;
+            await client.query(
+              "INSERT INTO config.settings(scope,key,version,value,updated_by) VALUES($1,'commerce.referral-code',$2,$3,$4)",
+              [referralScope, setting.rows[0]!.version + 1, { code: null }, userId],
+            );
+            await client.query("COMMIT");
+          } else {
+            const orderRes = await client.query<{ order_id: string }>(
+              `INSERT INTO commerce.orders (guild_id, buyer_id, sku, amount_minor, order_token_hash, idempotency_key, service_name, membership_days,public_id,referral_code)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9,$10)
+               RETURNING order_id`,
+              [guildId, userId, sku, priceMinor, hash, idempotencyKey, item.name, item.membership_days, publicId, referralCode],
+            );
+            orderId = orderRes.rows[0]!.order_id;
+            await client.query(
+              "INSERT INTO config.settings(scope,key,version,value,updated_by) VALUES($1,'commerce.referral-code',$2,$3,$4)",
+              [referralScope, setting.rows[0]!.version + 1, { code: null }, userId],
+            );
+            await client.query("COMMIT");
+          }
+        } else {
+          const orderRes = await client.query<{ order_id: string }>(
+            `INSERT INTO commerce.orders (guild_id, buyer_id, sku, amount_minor, order_token_hash, idempotency_key, service_name, membership_days,public_id,referral_code)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9,NULL)
+             RETURNING order_id`,
+            [guildId, userId, sku, priceMinor, hash, idempotencyKey, item.name, item.membership_days, publicId],
+          );
+          orderId = orderRes.rows[0]!.order_id;
+          await client.query("COMMIT");
+        }
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+      if (referralInvalid) {
+        await req.reply("Your saved referral code is no longer valid. Redeem another code before placing this order.");
+        return;
+      }
+      if (!orderId) throw new Error("Order creation completed without an order ID");
 
       const upiUrl = buildUpiPayload({
         payeeVpa: req.payeeVpa,
@@ -148,7 +192,7 @@ export async function respondToCommerceCommand(
           `• Status: **Pending Payment**\n\n` +
           (upiUrl ? `📲 **UPI Pay Link:** <${upiUrl}>\n` : "") +
           `🔗 **Verification & Claim Page:** <${verifyUrl}>\n\n` +
-          `*After payment, claim your order using \`/order claim order_id:${orderId} proof:<your_utr_or_tx_id>\`*`,
+          `*After payment, claim your order using \`/orders claim order_id:${orderId} proof:<your_utr_or_tx_id>\`*`,
       );
       return;
     }
@@ -219,7 +263,7 @@ export async function respondToCommerceCommand(
     }
   }
 
-  if (name === "settle") {
+  if (name === "orders" && subcommand === "settle") {
     if (!isPrivileged) {
       await req.reply("❌ Permission denied: `commerce-settle` role or Manage Server required.");
       return;
@@ -258,7 +302,7 @@ export async function respondToCommerceCommand(
   if (name === "referral") {
     const currentCycle = cycleFor(new Date());
 
-    if (subcommand === "code") {
+    if (subcommand === "link") {
       let refRes = await pool.query<{ code: string }>(
         "SELECT code FROM commerce.referrals WHERE guild_id = $1 AND referrer_id = $2 AND cycle = $3",
         [guildId, userId, currentCycle],
@@ -281,7 +325,7 @@ export async function respondToCommerceCommand(
       return;
     }
 
-    if (subcommand === "stats") {
+    if (subcommand === "status") {
       const [refRes, rewardsRes] = await Promise.all([
         pool.query<{ uses: number }>(
           "SELECT COALESCE(SUM(uses), 0)::int as uses FROM commerce.referrals WHERE guild_id = $1 AND referrer_id = $2 AND cycle = $3",
@@ -305,6 +349,44 @@ export async function respondToCommerceCommand(
       );
       return;
     }
+
+    if (subcommand === "redeem") {
+      const code = String(options.code ?? "").trim().toUpperCase();
+      const referral = await pool.query<{ referrer_id: string }>(
+        "SELECT referrer_id FROM commerce.referrals WHERE code=$1 AND guild_id=$2 AND cycle=$3",
+        [code, guildId, currentCycle],
+      );
+      if (!referral.rows[0] || referral.rows[0].referrer_id === userId) {
+        await req.reply("Referral code is expired, unknown, or belongs to you.");
+        return;
+      }
+      const scope = `guild:${guildId}:user:${userId}`;
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`commerce-referral:${scope}`]);
+        const current = await client.query<{ version: number }>(
+          "SELECT COALESCE(MAX(version),0)::int AS version FROM config.settings WHERE scope=$1 AND key='commerce.referral-code'",
+          [scope],
+        );
+        await client.query(
+          "INSERT INTO config.settings(scope,key,version,value,updated_by) VALUES($1,'commerce.referral-code',$2,$3,$4)",
+          [scope, current.rows[0]!.version + 1, JSON.stringify({ code }), userId],
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw error;
+      } finally { client.release(); }
+      await req.reply(`Referral code \`${code}\` is saved for your next order.`);
+      return;
+    }
+  }
+
+  if (name === "payment") {
+    const upiReady = Boolean(buildUpiPayload({ payeeVpa: req.payeeVpa, payeeName: req.payeeName?.trim() ?? "", amountMinor: 1, note: "configuration check" }));
+    await req.reply(`Configured payment methods: ${upiReady ? "UPI (server-quoted amount)" : "none"}. Orders show their exact payment instructions after creation. Card and wallet checkout are not enabled in this deployment.`);
+    return;
   }
 
   await req.reply("Unknown commerce command.");

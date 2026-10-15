@@ -610,6 +610,7 @@ intents.guilds = True
 intents.voice_states = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+BOT_STARTED_AT = time.monotonic()
 
 
 def guild_runtime_allowed_sync(guild_id: str) -> bool:
@@ -749,6 +750,9 @@ async def on_ready():
             await asyncio.to_thread(restore_guild_queue, str(guild.id))
 
     try:
+        # Keep Robin's public slash surface aligned with the approved spec.
+        for removed in ("search", "nowplaying", "seek", "autoplay", "claimmaster", "masters"):
+            bot.tree.remove_command(removed)
         synced = await bot.tree.sync()
         log.info("Synced %d slash commands globally.", len(synced))
     except Exception as exc:
@@ -765,11 +769,38 @@ async def on_guild_join(guild: discord.Guild):
         await asyncio.to_thread(restore_guild_queue, str(guild.id))
 
 
-async def respond(interaction: discord.Interaction, message: str, ephemeral: bool = False, **kwargs):
+async def respond(interaction: discord.Interaction, message: str, ephemeral: bool = False, title: str = "Ei Point", **kwargs):
     """Safely respond to an interaction whether deferred or not."""
+    if "embed" not in kwargs and "embeds" not in kwargs:
+        kwargs["embed"] = make_ei_embed(message, title)
     if interaction.response.is_done():
-        return await interaction.followup.send(message, ephemeral=ephemeral, **kwargs)
-    return await interaction.response.send_message(message, ephemeral=ephemeral, **kwargs)
+        return await interaction.followup.send(ephemeral=ephemeral, **kwargs)
+    return await interaction.response.send_message(ephemeral=ephemeral, **kwargs)
+
+
+def make_ei_embed(message: str, title: str = "Ei Point") -> discord.Embed:
+    embed = discord.Embed(title=title[:256], description=(message or " ")[:4096], color=0x8F2938)
+    embed.set_image(url=os.getenv("EI_POINT_EMBED_IMAGE_URL", "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif"))
+    embed.set_footer(text="Ei Point · powered by Ei-Flow")
+    return embed
+
+
+@bot.tree.command(name="ping", description="Check Robin's Discord gateway latency")
+async def common_ping(interaction: discord.Interaction):
+    await respond(interaction, f"Discord gateway latency: **{round(bot.latency * 1000)} ms**", title="Ei Point · Pong!")
+
+
+@bot.tree.command(name="botinfo", description="Show Robin's identity and status")
+async def common_botinfo(interaction: discord.Interaction):
+    uptime_seconds = int(time.monotonic() - BOT_STARTED_AT)
+    await respond(interaction, f"**Robin** · Music player\nServers: {len(bot.guilds)}\nUptime: {uptime_seconds} seconds", title="Robin · Bot information")
+
+
+@bot.tree.command(name="about", description="About Ei Point and Ei-Flow")
+async def common_about(interaction: discord.Interaction):
+    owner_id = os.getenv("EI_POINT_OWNER_ID", "").strip()
+    mention = f"<@{owner_id}>" if owner_id.isdigit() else "the project owner (not configured)"
+    await respond(interaction, f"**Ei Point** coordinates the community bots; **Ei-Flow** provides shared interaction controls and workflows.\n\nProject owner: {mention}", title="About Ei Point", allowed_mentions=discord.AllowedMentions(users=[discord.Object(id=int(owner_id))] if owner_id.isdigit() else []))
 
 
 # --- Music Slash Commands (§2, §8, Feature Matrix #46–54) ---

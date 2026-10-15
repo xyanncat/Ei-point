@@ -116,3 +116,14 @@ it("sends the explicitly configured model in the OpenAI-compatible request body"
   assert.equal(sentBody.max_tokens,1000);
   assert.equal(result.text,"real provider response");
 });
+
+it("supports local compatible endpoints without an API key", async () => {
+  let captured: RequestInit | undefined;
+  const provider = makeHttpProvider("http://127.0.0.1:11434/v1/chat/completions", undefined, async (_url, init) => {
+    captured = init;
+    return Response.json({choices:[{message:{content:"local reply"}}],usage:{prompt_tokens:2,completion_tokens:3}});
+  }, "local-model");
+  const result = await provider([{role:"user",content:"hello"}],new AbortController().signal);
+  assert.equal(result.text,"local reply");
+  assert.equal(new Headers(captured?.headers).has("authorization"), false);
+});

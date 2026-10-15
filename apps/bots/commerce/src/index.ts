@@ -11,6 +11,7 @@ import {
 import pg from "pg";
 import { commerceCommandDefinitions, respondToCommerceCommand } from "./commands.js";
 import { canSettleCommerce } from "./authorization.js";
+import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 
 const botKey = process.env.BOT_KEY ?? "cipher";
 const url = process.env.DATABASE_URL;
@@ -65,7 +66,8 @@ async function loadStaffScopes(guildId: string, roleIds: string[]): Promise<stri
 }
 
 // --- Interaction Handler ---
-client.on(Events.InteractionCreate, (interaction) => {
+client.on(Events.InteractionCreate, (rawInteraction) => {
+  const interaction = withEiEmbedReplies(rawInteraction);
   if (!interaction.isChatInputCommand()) return;
   if (!identityVerified) {
     guarded("not-ready", () =>
@@ -84,6 +86,7 @@ client.on(Events.InteractionCreate, (interaction) => {
   activeCommands++;
   guarded("command", async () => {
     try {
+      if (interaction.inCachedGuild() && await respondToCommonCommand(interaction, "Cipher", "Orders, referrals, and payment setup.")) return;
       let userScopes: string[] = [];
       const canManage = interaction.inCachedGuild() && interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild);
       const isOwner = interaction.inCachedGuild() && interaction.guild.ownerId === interaction.user.id;
@@ -101,7 +104,7 @@ client.on(Events.InteractionCreate, (interaction) => {
           const identity = (await pool.query("SELECT application_id FROM config.bots WHERE bot_key=$1", [botKey])).rows[0];
           if (identity?.application_id !== client.user!.id) return { content: "Registered bot identity is unavailable." };
           userScopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
-          if (interaction.commandName === "settle" && !canSettleCommerce({ isOwner, canManage, userScopes })) {
+          if (interaction.commandName === "orders" && interaction.options.getSubcommand(false) === "settle" && !canSettleCommerce({ isOwner, canManage, userScopes })) {
             return { content: "❌ Permission denied: `commerce-settle` role or Manage Server required." };
           }
           return undefined;
@@ -225,7 +228,7 @@ client.once(Events.ClientReady, () => {
         continue;
       }
       await client.rest.put(Routes.applicationGuildCommands(client.user!.id, guild.id), {
-        body: commerceCommandDefinitions.map((c) => c.toJSON()),
+        body: [...commonCommandDefinitions(), ...commerceCommandDefinitions].map((c) => c.toJSON()),
       });
     }
     await updateStatus();

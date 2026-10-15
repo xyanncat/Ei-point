@@ -2,6 +2,8 @@
 
 This catalog lists commands currently defined by the checked-in bot code, plus the non-command functions wired into each bot. It is a source-level reference, not proof that commands are registered in Discord, work in a live guild, or match every legacy bot behavior. The source-to-target parity gate remains open; see [the feature matrix](feature-matrix.md), [legacy behavior map](audits/legacy-behavior-map.json), and the local completion build plan provided with the project assets.
 
+For the owner-approved command surface and command-by-command target behavior, see the [product command and runtime spec](product/bot-command-and-runtime-spec.md). That target spec is not an implementation-completion claim.
+
 The six current identities are Kafka, Cyrene, Robin, Cipher, SilverWolf, and Himiko. `security` and `moderation` are modules served by the single Kafka gateway; they are not separate production identities in the current default roster.
 
 ## At a glance
@@ -56,21 +58,21 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 
 | Command | Function |
 |---|---|
-| `/ask <prompt> [persona]` | Send a prompt through the configured AI provider router and persist conversation history. |
-| `/persona [name]` | View or change the conversation persona. |
-| `/reset [persona]` | Clear the current guild/user conversation history, optionally for a named persona. |
-| `/usage` | Show today's recorded AI usage against the configured daily limit. |
-| `/model` | Show configured AI provider/router status. |
-| `/speak <text> [voice]` | Synthesize text and attempt playback in the caller's voice channel. Requires TTS provider configuration and platform acceptance. |
-| `/tts-voice [voice]` | View or set the server's TTS voice preference. |
-| `/tts-stop` | Stop active TTS playback and release the voice connection. |
+| `/botinfo` | Show Cyrene's identity, responsibilities, server count, and uptime. |
+| `/ping` | Show Discord gateway latency. |
+| `/about` | Describe Ei Point and Ei-Flow and mention the configured owner. |
+| Direct mention | Chat with Cyrene in an allowed text channel; old chat slash commands are no longer registered. |
+| `/speak <text>` | Generate and attach an audio file, with text limited to 500 characters. |
+| `/tts` | Join the caller's voice channel and read new text-chat messages aloud; bounded queue and idle-human departure are implemented. |
+| `/leave` | End Cyrene's active voice session. |
+| `/search <query>` | Registered but currently returns an explicit not-configured response until a search source is selected. |
 
 ### Other functions
 
-- Route AI requests through a required primary provider and an optional all-or-nothing fallback URL/key/model configuration.
+- Route AI mentions through a configured OpenAI-compatible primary provider and optional fallback; local compatible endpoints may omit API keys.
 - Keep guild/user conversation threads, recent messages, summaries, persona preferences, and usage records in PostgreSQL.
-- Bound synthesis concurrency, waiting queue size, text length, and provider deadline; coordinate voice admission with Robin through database leases.
-- Fail clearly when the AI/TTS provider or voice dependencies are not configured. Search is listed as an intended module responsibility in the roster, but no `/search` command is defined in the current Cyrene command files.
+- Bound synthesis concurrency, queue depth, message length, and request deadline; coordinate voice admission with Robin through database leases.
+- Local Qwen model hosting and target-VPS qualification remain open; current TTS still calls a configured HTTP endpoint.
 
 ## Robin
 
@@ -78,27 +80,24 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 
 | Command | Function |
 |---|---|
+| `/botinfo` | Show Robin's identity and status. |
+| `/ping` | Show Discord gateway latency. |
+| `/about` | Describe Ei Point and Ei-Flow and mention the configured owner. |
 | `/play <query>` | Resolve a URL or search query and enqueue/start playback. |
-| `/search <query>` | Search for tracks and present a five-item selection menu when needed. |
 | `/pause` | Pause current playback. |
 | `/resume` | Resume paused playback. |
 | `/skip` | Advance past the current track. |
 | `/stop` | Stop playback, clear the queue, and leave voice. |
-| `/seek <seconds>` | Seek within the current track. |
-| `/autoplay <enabled>` | Enable or disable related-track autoplay when the queue drains. |
 | `/queue` | Display upcoming tracks. |
-| `/nowplaying` | Show current track details and progress. |
 | `/shuffle` | Shuffle queued tracks while preserving the current track. |
 | `/loop <mode>` | Set loop mode to off, current track, or queue. |
 | `/volume <percent>` | Set playback volume (0–150%). |
-| `/claimmaster <role> <scope>` | Assign or claim a DJ/Master playback-control role, subject to authorization. |
-| `/masters` | List the guild's configured DJ/Master roles. |
 | `/disconnect` | Disconnect Robin from the voice channel. |
 
 ### Other functions
 
 - Resolve media using yt-dlp and stream through FFmpeg; bound metadata-resolution concurrency and voice sessions.
-- Advance queues, maintain playback state, and support track/queue loop, seeking, autoplay, and search selection callbacks.
+- Advance queues, maintain playback state, and support track/queue loop modes. Search/nowplaying/seek/autoplay/DJ administration commands are removed from public sync.
 - Persist queue snapshots and playback position in PostgreSQL and restore saved queue state after restart.
 - Maintain a size/TTL-bounded local audio cache and expose health/readiness status.
 
@@ -108,18 +107,23 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 
 | Command | Function |
 |---|---|
-| `/catalog` | List active services/packages with server-configured prices. |
-| `/order create <sku>` | Create an order for an active catalog item and return payment instructions when checkout configuration is valid. |
-| `/order status <order_id>` | Check order status. Access scoping needs the security remediation described in the audit before production use. |
-| `/order claim <order_id> <proof>` | Submit a payment reference/UTR/transaction hash for staff review; a claim is not itself settlement. |
-| `/settle <order_id>` | Allow authorized staff to settle a claimed order and trigger the configured fulfillment path. |
-| `/referral code` | Create or retrieve a referral code/link. |
-| `/referral stats` | Show referral activity and current-cycle rewards. |
+| `/botinfo` | Show Cipher's identity and status. |
+| `/ping` | Show Discord gateway latency. |
+| `/about` | Describe Ei Point and Ei-Flow and mention the configured owner. |
+| `/orders list` | List active services and server-set prices. |
+| `/orders create <sku>` | Create an order with server-authoritative pricing and configured UPI instructions. |
+| `/orders status <order_id>` | Check an order within buyer/staff authorization scope. |
+| `/orders claim <order_id> <proof>` | Submit a payment reference for staff review; the claim is not confirmation. |
+| `/orders settle <order_id>` | Settle a claimed order for authorized staff. |
+| `/referral link` | Create or retrieve a referral code/link. |
+| `/referral redeem <code>` | Save a valid guild-scoped referral code for the caller's next order. |
+| `/referral status` | Show referral activity and current-cycle rewards. |
+| `/payment` | Show which payment methods are configured; this deployment currently lacks card/wallet checkout. |
 
 ### Other functions
 
 - Create durable orders with server-authoritative catalog values and payment tokens; record claims and settlement state transactionally.
-- Build UPI payment payloads and support configured UPI/USDT checkout information; production payment reconciliation and end-to-end parity remain open.
+- Build UPI payment payloads; Razorpay card/wallet checkout and production payment reconciliation remain unimplemented.
 - Expose corresponding website API checkout, claim, status, and settlement flows through the web/API services.
 
 ## SilverWolf
@@ -128,19 +132,7 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 
 | Command | Function |
 |---|---|
-| `/setwelcome <channel> <message>` | Save the guild's join-message template and destination. |
-| `/setleave <channel> <message>` | Save the guild's leave-message template and destination. |
-| `/testwelcome [event]` | Preview the selected welcome/leave template. |
-| `/xp [enabled] [amount] [cooldown]` | Configure message XP and cooldown. |
-| `/setlevelchannel <channel>` | Select the level-up notification destination. |
 | `/rank [user]` | Show a member's XP, level, and rank. |
-| `/leaderboard` | Show the top members by XP. |
-| `/cardinfo <instance_id>` | Inspect a card instance and its guild-scoped metadata. |
-| `/cardstats [user]` | Show a user's card-collection statistics. |
-| `/play` | Deal a five-card draw round against the house. |
-| `/deck [reshuffle]` | Show or rebuild the member's five-card deck. |
-| `/hand` | Show the last round's hand. |
-| `/score` | Show the member's game score and record. |
 | `/cards [page]` | Browse the card catalog. |
 | `/inventory [page]` | List owned card instances. |
 | `/packs` | List available card packs. |
@@ -148,17 +140,13 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 | `/sell <instance> <price>` | Place a card instance into a market listing/escrow. |
 | `/market [page]` | Browse open market listings. |
 | `/buy <listing>` | Purchase an open listing transactionally. |
-| `/unlist <listing>` | Cancel the caller's open listing. |
-| `/trades [page]` | List the caller's pending and completed trades. |
 | `/trade offer <recipient> [offered] [requested] [offered_amount] [requested_amount] [ttl]` | Create a trade offer containing cards and/or berries with an expiry. |
 | `/trade accept <id>` | Accept a trade addressed to the caller. |
 | `/trade cancel <id>` | Cancel or reject a trade offer. |
 | `/balance` | Show the caller's berries balance. |
-| `/cardadmin credit <user> <amount>` | Guild-owner action to grant berries. |
-| `/cardadmin issue <user> <card>` | Guild-owner action to issue a card subject to supply limits. |
-| `/cardadmin revoke <instance>` | Guild-owner action to revoke an unreserved card instance. |
-| `/cardadmin define <json>` | Import a card definition with identity, rarity, artwork reference/checksum, and supply. |
-| `/cardadmin pack <json>` | Configure a pack, price, size, access mode, and weighted card contents. |
+| `/botinfo` | Show SilverWolf's identity and status. |
+| `/ping` | Show Discord gateway latency. |
+| `/about` | Describe Ei Point and Ei-Flow and mention the configured owner. |
 
 ### Other functions
 
@@ -173,7 +161,10 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 
 | Command | Function |
 |---|---|
-| `/announce <channel> <title> <description> [color] [ping_role]` | Validate and queue a styled announcement for delivery to a text/announcement channel. |
+| `/botinfo` | Show Himiko's identity and status. |
+| `/ping` | Show Discord gateway latency. |
+| `/about` | Describe Ei Point and Ei-Flow and mention the configured owner. |
+| `/announcement <channel> <title> <description> [color] [ping_role]` | Validate and queue a styled announcement for delivery to a text/announcement channel. |
 | `/embed <title> <description> [color]` | Build and return a validated embed preview without choosing a destination channel. |
 
 ### Other functions
@@ -184,13 +175,13 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 
 ## API-key configuration count
 
-The completion plan describes provider configuration but does not literally enumerate API-key variables. In the current runtime configuration there are **three provider-key slots**:
+The supplied completion plan names **zero specific third-party API keys** as required configuration; it refers to external credentials generally without naming providers. In the current `.env.example`, there are three optional provider-key slots:
 
 | Variable | Requirement | Used for |
 |---|---|---|
-| `AI_PROVIDER_PRIMARY_KEY` | Required when Cyrene's AI service is enabled | Primary AI provider authentication |
-| `AI_PROVIDER_FALLBACK_KEY` | Optional; fallback URL, key, and model must be configured together | AI fallback provider authentication |
-| `TTS_PROVIDER_KEY` | Required to use a configured TTS provider; TTS can remain unavailable without it | Cyrene speech synthesis authentication |
+| `AI_PROVIDER_PRIMARY_KEY` | Optional for a local compatible endpoint | Primary AI provider authentication |
+| `AI_PROVIDER_FALLBACK_KEY` | Optional for a local fallback endpoint | AI fallback provider authentication |
+| `TTS_PROVIDER_KEY` | Optional for a local TTS endpoint | Cyrene speech synthesis authentication |
 
 This count excludes Discord bot tokens, database credentials, payment addresses, and OAuth secrets because they are not provider API keys. See [.env.example](../.env.example) and the [bot identity runbook](bot-identities.md) for configuration context.
 

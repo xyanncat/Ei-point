@@ -16,6 +16,7 @@
     "@ei-point/contracts": "workspace:*",
     "@ei-point/module-ai": "workspace:*",
     "@ei-point/module-tts": "workspace:*",
+    "@ei-point/module-bot-ui": "workspace:*",
     "pg": "8.13.1",
     "opusscript": "0.1.1"
   },

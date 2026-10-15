@@ -17,6 +17,7 @@ import {
 } from "discord.js";
 import pg from "pg";
 import { himikoCommandDefinitions, validateAnnounceInput, buildAnnouncePayload } from "./commands.js";
+import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 
 const botKey = process.env.BOT_KEY ?? "himiko";
 const url = process.env.DATABASE_URL;
@@ -70,7 +71,8 @@ async function loadStaffScopes(guildId: string, roleIds: string[]): Promise<stri
   return res.rows.map((r) => r.scope);
 }
 
-client.on(Events.InteractionCreate, (interaction) => {
+client.on(Events.InteractionCreate, (rawInteraction) => {
+  const interaction = withEiEmbedReplies(rawInteraction);
   if (!interaction.isChatInputCommand()) return;
   if (!identityVerified) {
     guarded("not-ready", () =>
@@ -87,6 +89,7 @@ client.on(Events.InteractionCreate, (interaction) => {
   activeCommands++;
   guarded("command", async () => {
     try {
+      if (interaction.inCachedGuild() && await respondToCommonCommand(interaction, "Himiko", "Announcements, embed publishing, welcome and leave messages, and text and voice XP.")) return;
       let guildGrant = false;
       await dispatchGuildCommand({
         botKey,
@@ -123,7 +126,7 @@ client.on(Events.InteractionCreate, (interaction) => {
             return { content: "Preview (only you can see this):", embeds: [embed] };
           }
 
-          if (interaction.commandName !== "announce") return { content: "Unknown Himiko command." };
+          if (interaction.commandName !== "announcement") return { content: "Unknown Himiko command." };
           const channel = interaction.options.getChannel("channel", true);
           const pingRole = interaction.options.getRole("ping_role") ?? undefined;
           const checked = validateAnnounceInput({
@@ -190,7 +193,7 @@ client.on(Events.GuildCreate, (guild) => {
   if (identityVerified && client.user) {
     guarded("guild-create-setup", async () => {
       await client.rest.put(Routes.applicationGuildCommands(client.user!.id, guild.id), {
-        body: himikoCommandDefinitions.map((c) => c.toJSON()),
+        body: [...commonCommandDefinitions(), ...himikoCommandDefinitions].map((c) => c.toJSON()),
       });
     });
   }
@@ -268,7 +271,7 @@ client.once(Events.ClientReady, () => {
           continue;
         }
         await client.rest.put(Routes.applicationGuildCommands(client.user!.id, guild.id), {
-          body: himikoCommandDefinitions.map((c) => c.toJSON()),
+          body: [...commonCommandDefinitions(), ...himikoCommandDefinitions].map((c) => c.toJSON()),
         });
       } catch (err) {
         console.error(`Failed setup for guild ${guild.id}:`, err);
