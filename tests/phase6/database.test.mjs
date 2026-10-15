@@ -33,6 +33,10 @@ beforeEach(async () => {
 });
 const economy = () => new games.EconomyService(pool);
 const members = () => new community.CommunityService(pool);
+/** Migration 015 makes Himiko the sole community outbox consumer; register the test guild for it. */
+async function registerDeliveryGuild() {
+  await pool.query(`UPDATE config.bots SET guild_ids = ARRAY[$1::text] WHERE bot_key = 'himiko'`, [guild]);
+}
 async function catalog(supply = null) {
   await economy().defineCard({ cardId: 'test-card', name: 'Test card', rarity: 'common', artworkRef: '', checksum: 'a'.repeat(64), maxSupply: supply });
 }
@@ -227,19 +231,21 @@ test('opening an unaffordable pack rolls back minted cards and supply counters',
   assert.equal((await pool.query('SELECT issued_count FROM games.card_definitions')).rows[0].issued_count, '0');
 });
 test('outbox delivery persists success and does not redeliver completed notifications', async () => {
-  const { deliverMessages } = await import('../../apps/bots/community/dist/delivery.js');
+  await registerDeliveryGuild();
+  const { deliverCommunityMessages } = await import('../../packages/flow/dist/community-outbox.js');
   await members().configure(guild, { welcomeChannelId: bob });
   await members().memberEvent({ guildId: guild, userId: alice, guildName: 'Test', memberCount: 1, event: 'join', key: 'event' });
   const sent = [];
-  assert.equal(await deliverMessages(pool, [guild], async payload => sent.push(payload)), 1);
-  assert.equal(await deliverMessages(pool, [guild], async payload => sent.push(payload)), 0);
+  assert.equal(await deliverCommunityMessages(pool, [guild], async payload => sent.push(payload), 'himiko'), 1);
+  assert.equal(await deliverCommunityMessages(pool, [guild], async payload => sent.push(payload), 'himiko'), 0);
   assert.equal(sent.length, 1); assert.equal(sent[0].channelId, bob);
 });
 test('outbox delivery failures retain the event with bounded retry diagnostics', async () => {
-  const { deliverMessages } = await import('../../apps/bots/community/dist/delivery.js');
+  await registerDeliveryGuild();
+  const { deliverCommunityMessages } = await import('../../packages/flow/dist/community-outbox.js');
   await members().configure(guild, { welcomeChannelId: bob });
   await members().memberEvent({ guildId: guild, userId: alice, guildName: 'Test', memberCount: 1, event: 'join', key: 'event' });
-  assert.equal(await deliverMessages(pool, [guild], async () => { throw new Error('private-provider-detail'); }), 0);
+  assert.equal(await deliverCommunityMessages(pool, [guild], async () => { throw new Error('private-provider-detail'); }, 'himiko'), 0);
   const r = (await pool.query('SELECT published,attempts,last_error FROM ops.outbox')).rows[0];
   assert.deepEqual(r, { published: false, attempts: 1, last_error: 'delivery-failed' });
 });
