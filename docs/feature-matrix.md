@@ -12,8 +12,8 @@
 | cyrene (AI+TTS) | ai, search, tts | SendMessages, EmbedLinks, AttachFiles, Connect, Speak (TTS only) | approved guilds only | DISCORD_CYRENE_BOT_TOKEN + AI_PROVIDER_KEYS + TTS_PROVIDER_* |
 | robin (Music) | music | Connect, Speak, UseVAD, SendMessages, EmbedLinks | approved guilds only | DISCORD_ROBIN_BOT_TOKEN |
 | cipher (Commerce) | commerce | SendMessages, EmbedLinks, AttachFiles | approved guilds only | DISCORD_CIPHER_BOT_TOKEN + UPI/USDT config |
-| silverwolf (Community+Games) | community, games | SendMessages, EmbedLinks, AddReactions, ManageMessages (purge-scoped) | approved guilds only | DISCORD_SILVERWOLF_BOT_TOKEN |
-| himiko (Embed+Announce) | embed, announce | SendMessages, EmbedLinks, ManageMessages (announce edits only) | approved guilds only | DISCORD_HIMIKO_BOT_TOKEN |
+| silverwolf (Games) | games | SendMessages, EmbedLinks, AddReactions | approved guilds only | DISCORD_SILVERWOLF_BOT_TOKEN |
+| himiko (Community+Announcements) | embed, announce, welcome, community, leveling | SendMessages, EmbedLinks; callers need ManageGuild for community setup | approved guilds only | DISCORD_HIMIKO_BOT_TOKEN + Server Members Intent |
 
 Rule: adding/removing a bot = one registry row + deploy. No hard-coded bot lists in code (enforced in Phase 3 runtime review).
 

@@ -15,6 +15,15 @@ export interface CommunitySettings {
   xpEnabled: boolean;
   xpPerMessage: number;
   cooldownSeconds: number;
+  voiceXpEnabled: boolean;
+  voiceXpAmount: number;
+  voiceIntervalSeconds: number;
+}
+export interface XpAwardResult {
+  awarded: boolean;
+  duplicate: boolean;
+  xp: string;
+  level: number;
 }
 export const DEFAULT_SETTINGS: CommunitySettings = {
   welcomeChannelId: null,
@@ -25,6 +34,9 @@ export const DEFAULT_SETTINGS: CommunitySettings = {
   xpEnabled: true,
   xpPerMessage: 15,
   cooldownSeconds: 60,
+  voiceXpEnabled: false,
+  voiceXpAmount: 5,
+  voiceIntervalSeconds: 300,
 };
 function validate(settings: CommunitySettings): void {
   for (const channel of [
@@ -42,7 +54,14 @@ function validate(settings: CommunitySettings): void {
     settings.xpPerMessage > 100 ||
     !Number.isInteger(settings.cooldownSeconds) ||
     settings.cooldownSeconds < 5 ||
-    settings.cooldownSeconds > 3600
+    settings.cooldownSeconds > 3600 ||
+    typeof settings.voiceXpEnabled !== "boolean" ||
+    !Number.isInteger(settings.voiceXpAmount) ||
+    settings.voiceXpAmount < 1 ||
+    settings.voiceXpAmount > 100 ||
+    !Number.isInteger(settings.voiceIntervalSeconds) ||
+    settings.voiceIntervalSeconds < 60 ||
+    settings.voiceIntervalSeconds > 3600
   )
     throw new Error("invalid-xp-settings");
   for (const template of [settings.welcomeTemplate, settings.leaveTemplate])
@@ -137,7 +156,8 @@ export class CommunityService {
     userId: string;
     userName?: string;
     messageId: string;
-  }): Promise<{ awarded: boolean; xp: string; level: number }> {
+    source?: "message" | "voice";
+  }): Promise<XpAwardResult> {
     return transaction(this.pool, async (db) => {
       await lockApprovedGuild(db, input.guildId);
       const cfg = await db.query(
@@ -148,6 +168,11 @@ export class CommunityService {
         ...DEFAULT_SETTINGS,
         ...cfg.rows[0]?.template,
       } as CommunitySettings;
+      const source = input.source ?? "message";
+      const enabled = source === "message" ? settings.xpEnabled : settings.voiceXpEnabled;
+      const amount = source === "message" ? settings.xpPerMessage : settings.voiceXpAmount;
+      const cooldownSeconds = source === "message" ? settings.cooldownSeconds : settings.voiceIntervalSeconds;
+      const cooldownColumn = source === "message" ? "last_awarded_at" : "last_voice_awarded_at";
       const seen = await db.query(
         "INSERT INTO community.xp_events(guild_id,message_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
         [input.guildId, input.messageId],
@@ -158,24 +183,26 @@ export class CommunityService {
       );
       const old = (
         await db.query(
-          "SELECT xp,level,last_awarded_at FROM community.xp WHERE guild_id=$1 AND user_id=$2",
+          "SELECT xp,level,last_awarded_at,last_voice_awarded_at FROM community.xp WHERE guild_id=$1 AND user_id=$2",
           [input.guildId, input.userId],
         )
       ).rows[0]!;
-      if (seen.rowCount === 0 || !settings.xpEnabled)
-        return { awarded: false, xp: String(old.xp), level: old.level };
+      if (seen.rowCount === 0)
+        return { awarded: false, duplicate: true, xp: String(old.xp), level: old.level };
+      if (!enabled)
+        return { awarded: false, duplicate: false, xp: String(old.xp), level: old.level };
       const updated = await db.query(
-        `UPDATE community.xp SET xp=xp+$3,last_awarded_at=now(),updated_at=now()
-        WHERE guild_id=$1 AND user_id=$2 AND (last_awarded_at IS NULL OR last_awarded_at <= now()-make_interval(secs=>$4)) RETURNING xp`,
+        `UPDATE community.xp SET xp=xp+$3,${cooldownColumn}=now(),updated_at=now()
+        WHERE guild_id=$1 AND user_id=$2 AND (${cooldownColumn} IS NULL OR ${cooldownColumn} <= now()-make_interval(secs=>$4)) RETURNING xp`,
         [
           input.guildId,
           input.userId,
-          settings.xpPerMessage,
-          settings.cooldownSeconds,
+          amount,
+          cooldownSeconds,
         ],
       );
       if (!updated.rows[0])
-        return { awarded: false, xp: String(old.xp), level: old.level };
+        return { awarded: false, duplicate: false, xp: String(old.xp), level: old.level };
       const xp = String(updated.rows[0].xp),
         level = levelForXp(Number(xp));
       await db.query(
@@ -189,7 +216,7 @@ export class CommunityService {
           category: "leveling",
           content: `<@${input.userId}> reached level ${level}!`,
         });
-      return { awarded: true, xp, level };
+      return { awarded: true, duplicate: false, xp, level };
     });
   }
   async rank(

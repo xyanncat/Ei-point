@@ -75,10 +75,10 @@ No separate `/play`, `/deck`, `/hand`, `/score`, `/cardinfo`, `/cardstats`, `/tr
 Required commands:
 
 - `/announcement` and `/embed`
-- welcome and leave setup commands
-- `/leaderboard` and level-up configuration/status commands as needed for the specified feature
+- `/setwelcome`, `/setleave`, `/testwelcome`, `/xp`, and `/setlevelchannel`
+- `/leaderboard`
 
-Functions: deliver welcome/leave messages; award experience from text participation and eligible voice-channel participation; issue level-up announcements; display the leaderboard. XP awards require cooldowns and anti-farming rules and must ignore bots. Voice XP must exclude AFK/empty channels and avoid awarding for self-deafened members; persist progress transactionally.
+Functions: deliver welcome/leave messages; award experience from text participation and eligible voice-channel participation; issue level-up announcements; display the leaderboard. XP awards require cooldowns and anti-farming rules and must ignore bots. Voice XP must exclude AFK/empty channels and avoid awarding for self/server-deafened members; persist progress transactionally. Voice XP is opt-in per guild and requires at least two human members present so a user sitting alone cannot farm it. SilverWolf keeps the documented `/rank` readout, but does not award XP or own community events.
 
 ## VPS and local model capacity
 
@@ -120,7 +120,7 @@ This table reflects repository work in progress. A slash command appearing in so
 | Robin | Partial | Requested common commands are added and disallowed slash commands are removed from sync; several older direct responses still bypass embed formatting. |
 | Cipher | Partial | `/orders` and `/payment` plus one-time transactional referral redemption are implemented. `/orders list` lists the service catalog rather than the caller's order history; Razorpay card/wallet checkout, webhook verification, and sandbox acceptance remain open. |
 | SilverWolf | Partial | Requested game/economy commands are now the registered allowlist; integration tests and common reply/event formatting remain open. |
-| Himiko | Not complete | Announcements/embed exist; welcome/leave setup and text/voice XP/leaderboard functions still live elsewhere or are missing from Himiko. |
+| Himiko | Partial | Welcome/leave setup, text XP, opt-in voice XP, level-up outbox delivery, and leaderboard are registered under Himiko; Discord intent configuration, live guild delivery, and acceptance evidence remain open. |
 | VPS model qualification | Not started | No pinned local weights have been benchmarked on the target VPS. |
 
 ## Command-by-command function map
@@ -211,9 +211,12 @@ All Kafka rows above are owner-or-Administrator only. Temporary actions need ret
 |---|---|
 | `/announcement` | Publish a configured announcement embed to a selected channel. |
 | `/embed` | Preview an embed before posting. |
-| Welcome setup | Choose the welcome channel and message template. |
-| Leave setup | Choose the leave channel and message template. |
+| `/setwelcome` | Choose the welcome channel and message template. |
+| `/setleave` | Choose the leave channel and message template. |
+| `/testwelcome` | Preview the current welcome or leave template. |
+| `/xp` | Configure text XP, its per-source cooldown, and opt-in voice XP amount/interval. |
+| `/setlevelchannel` | Choose the level-up notification destination. |
 | Text message | Award XP to eligible human members subject to cooldown and anti-farming rules. |
-| Voice membership | Award XP only to eligible, non-AFK, non-self-deafened participants in non-empty voice channels. |
+| Voice membership | Award XP once per configured interval when at least two humans share a non-AFK channel; exclude bots and self/server-deafened members. |
 | Level-up event | Send a level notification to the configured channel. |
 | `/leaderboard` | Display the top members by XP. |

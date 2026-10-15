@@ -5,15 +5,15 @@ export type BotKey = (typeof BOT_KEYS)[number];
 
 // Legacy module keys (pre-rename) mapped to the new identities.
 // kafka = security+moderation+logging, cyrene = ai+search+tts,
-// robin = music, cipher = commerce, silverwolf = community+games,
-// himiko = embed+announce.
+// robin = music, cipher = commerce, silverwolf = games,
+// himiko = embed, announce, welcome, community, leveling.
 export const BOT_MODULES: Record<BotKey, string[]> = {
   kafka: ["security", "moderation", "logging"],
   cyrene: ["ai", "search", "tts"],
   robin: ["music"],
   cipher: ["commerce"],
-  silverwolf: ["community", "games"],
-  himiko: ["embed", "announce"],
+  silverwolf: ["games"],
+  himiko: ["embed", "announce", "welcome", "community", "leveling"],
 };
 
 export interface HealthReport {

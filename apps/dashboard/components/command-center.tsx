@@ -46,12 +46,12 @@ const BOT: Record<string, { name: string; summary: string; icon: IconName }> = {
   },
   silverwolf: {
     name: "Silver Wolf",
-    summary: "Welcome, levels & card economy",
+    summary: "Card games & economy",
     icon: "cards",
   },
   himiko: {
     name: "Himiko",
-    summary: "Embeds & announcements",
+    summary: "Welcome, community levels & announcements",
     icon: "activity",
   },
   // Legacy keys (pre-rename) render until cutover completes.

@@ -1,9 +1,6 @@
 import { deliverAnnouncement } from "./delivery.js";
-import { dispatchGuildCommand, isControlEnabled } from "@ei-point/flow";
-// Himiko: embed messages & announcements gateway (identity `himiko`).
-// Slash commands for staff announcements + embed previews. Scheduled
-// dashboard embeds continue through the workers outbox; this process owns
-// interactive /announce and /embed with guild allowlist + staff gating.
+import { applyCommunityConfiguration, deliverCommunityMessages, dispatchGuildCommand, isControlEnabled } from "@ei-point/flow";
+// Himiko owns announcements, welcome/leave events, and community XP/levels.
 
 import { createServer } from "node:http";
 import {
@@ -17,7 +14,10 @@ import {
 } from "discord.js";
 import pg from "pg";
 import { himikoCommandDefinitions, validateAnnounceInput, buildAnnouncePayload } from "./commands.js";
-import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
+import { COMMUNITY_ADMIN_COMMANDS, communityCommandDefinitions, respondToCommunityCommand } from "./community-commands.js";
+import { eligibleVoiceXpUsers, voiceXpEventKey } from "./voice-xp.js";
+import { CommunityService } from "@ei-point/module-community";
+import { commonCommandDefinitions, createEiEmbed, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 
 const botKey = process.env.BOT_KEY ?? "himiko";
 const url = process.env.DATABASE_URL;
@@ -43,11 +43,13 @@ const pool = new pg.Pool({
   statement_timeout: 5000,
   application_name: "bot-himiko",
 });
+const community = new CommunityService(pool);
+const controlQuery = async (sql: string, params?: unknown[]) => (await pool.query(sql, params)).rows;
 pool.on("error", () => console.error("himiko database connection interrupted"));
 process.on("unhandledRejection", (err) => console.error("unhandledRejection in bot-himiko:", err));
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates],
   makeCache: Options.cacheWithLimits({ MessageManager: 0 }),
 });
 
@@ -55,6 +57,11 @@ let stopping = false;
 let identityVerified = false;
 let lastDbReady = false;
 let activeCommands = 0;
+let activeXp = 0;
+let pumping = false;
+let lastXpCleanup = 0;
+let voiceXpPumping = false;
+const voiceXpCursors = new Map<string, number>();
 
 const guarded = (label: string, run: () => Promise<unknown>) => {
   void run().catch((err) =>
@@ -102,6 +109,12 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
             interaction.guildId, botKey, interaction.commandName, memberRoleIds))) {
             return { content: "This command is disabled, paused, or restricted by server controls." };
           }
+          if (COMMUNITY_ADMIN_COMMANDS.has(interaction.commandName)) {
+            return interaction.guild.ownerId === interaction.user.id ||
+              interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)
+              ? undefined
+              : { content: "Permission denied: Manage Server is required." };
+          }
           const scopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
           // Guild grants may bypass channel Manage Messages; destination checks still apply below.
           guildGrant = interaction.guild.ownerId === interaction.user.id || scopes.includes("announce") || scopes.includes("*");
@@ -113,6 +126,24 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         run: async (signal) => {
           signal.throwIfAborted();
           if (!interaction.inCachedGuild()) throw new Error("guild context unavailable");
+          const commandOptions: Record<string, string | number | boolean> = {};
+          const flatten = (values: typeof interaction.options.data): void => {
+            for (const option of values) {
+              if (option.value !== undefined) commandOptions[option.name] = option.value;
+              if (option.options) flatten(option.options);
+            }
+          };
+          flatten(interaction.options.data);
+          const communityResponse = await respondToCommunityCommand({
+            name: interaction.commandName,
+            guildId: interaction.guildId,
+            userId: interaction.user.id,
+            username: interaction.user.username,
+            guildName: interaction.guild.name,
+            memberCount: interaction.guild.memberCount,
+            options: commandOptions,
+          }, community);
+          if (communityResponse !== null) return { content: communityResponse.slice(0, 3900) };
           if (interaction.commandName === "embed") {
             const checked = validateAnnounceInput({
               channelId: interaction.channelId!,
@@ -138,8 +169,11 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
           });
           if (!checked.ok) return { content: `Invalid announcement: ${checked.reason}.` };
           const payload = buildAnnouncePayload(interaction.guildId!, checked.value);
-          const embed = new EmbedBuilder().setTitle(payload.title).setDescription(payload.description)
-            .setColor(parseInt(String(payload.color).slice(1), 16));
+          const embed = createEiEmbed({
+            title: payload.title,
+            description: payload.description,
+            color: parseInt(String(payload.color).slice(1), 16),
+          });
           const target = await interaction.guild.channels.fetch(payload.channel_id).catch(() => null);
           if (!target || !target.isTextBased() || !("send" in target)) return { content: "Destination channel is not a sendable text channel." };
           const callerPerms = "permissionsFor" in target ? target.permissionsFor(interaction.member) : null;
@@ -185,6 +219,129 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
   });
 });
 
+client.on(Events.MessageCreate, (message) => {
+  if (
+    !identityVerified ||
+    !message.guildId ||
+    !allowed.includes(message.guildId) ||
+    message.author.bot ||
+    message.webhookId ||
+    message.system ||
+    Date.now() - message.createdTimestamp > 7 * 86400000 ||
+    activeXp >= 32
+  ) return;
+  activeXp++;
+  guarded("message-xp", async () => {
+    try {
+      if (!(await isControlEnabled(controlQuery, message.guildId!, botKey))) return;
+      await community.awardXp({
+        guildId: message.guildId!,
+        userId: message.author.id,
+        messageId: message.id,
+        source: "message",
+      });
+    } finally {
+      activeXp--;
+    }
+  });
+});
+
+client.on(Events.GuildMemberAdd, (member) => {
+  if (!identityVerified || !allowed.includes(member.guild.id)) return;
+  guarded("welcome", async () => {
+    if (!(await isControlEnabled(controlQuery, member.guild.id, botKey))) return;
+    await community.memberEvent({
+      guildId: member.guild.id,
+      userId: member.id,
+      userName: member.user.username,
+      guildName: member.guild.name,
+      memberCount: member.guild.memberCount,
+      event: "join",
+      key: `join:${member.id}:${member.joinedTimestamp ?? Math.floor(Date.now() / 60000)}`,
+    });
+  });
+});
+
+client.on(Events.GuildMemberRemove, (member) => {
+  if (!identityVerified || !allowed.includes(member.guild.id)) return;
+  guarded("leave", async () => {
+    if (!(await isControlEnabled(controlQuery, member.guild.id, botKey))) return;
+    await community.memberEvent({
+      guildId: member.guild.id,
+      userId: member.id,
+      userName: member.user.username,
+      guildName: member.guild.name,
+      memberCount: member.guild.memberCount,
+      event: "leave",
+      key: `leave:${member.id}:${member.joinedTimestamp ?? Math.floor(Date.now() / 60000)}`,
+    });
+  });
+});
+
+const voiceXpTimer = setInterval(() => guarded("voice-xp", async () => {
+  if (!identityVerified || !client.isReady() || voiceXpPumping) return;
+  voiceXpPumping = true;
+  try {
+    const batches: Array<{ guildId: string; intervalSeconds: number; users: string[]; offset: number; next: number }> = [];
+    for (const guild of client.guilds.cache.values()) {
+      if (!allowed.includes(guild.id) || !(await isControlEnabled(controlQuery, guild.id, botKey))) continue;
+      const settings = await community.settings(guild.id);
+      if (!settings.voiceXpEnabled) continue;
+      const states = [...guild.voiceStates.cache.values()].flatMap((state) => {
+        const member = state.member;
+        if (!member) return [];
+        return [{
+          userId: member.id,
+          channelId: state.channelId,
+          isBot: member.user.bot,
+          isAfk: state.channelId !== null && state.channelId === guild.afkChannelId,
+          selfDeaf: Boolean(state.selfDeaf),
+          serverDeaf: Boolean(state.serverDeaf),
+        }];
+      });
+      const eligible = eligibleVoiceXpUsers(states);
+      if (eligible.length === 0) continue;
+      const offset = (voiceXpCursors.get(guild.id) ?? 0) % eligible.length;
+      batches.push({
+        guildId: guild.id,
+        intervalSeconds: settings.voiceIntervalSeconds,
+        users: [...eligible.slice(offset), ...eligible.slice(0, offset)],
+        offset,
+        next: 0,
+      });
+    }
+    let attempts = 0;
+    let awards = 0;
+    const voicePollNow = Date.now();
+    while (attempts < 64 && awards < 32 && activeXp < 32 && batches.some((batch) => batch.next < batch.users.length)) {
+      for (const batch of batches) {
+        if (attempts >= 64 || awards >= 32 || activeXp >= 32) break;
+        const userId = batch.users[batch.next];
+        if (!userId) continue;
+        batch.next++;
+        attempts++;
+        activeXp++;
+        try {
+          const result = await community.awardXp({
+            guildId: batch.guildId,
+            userId,
+            messageId: voiceXpEventKey(userId, voicePollNow, batch.intervalSeconds),
+            source: "voice",
+          });
+          if (result.awarded) awards++;
+        } finally {
+          activeXp--;
+        }
+      }
+    }
+    for (const batch of batches) {
+      voiceXpCursors.set(batch.guildId, (batch.offset + batch.next) % batch.users.length);
+    }
+  } finally {
+    voiceXpPumping = false;
+  }
+}), 60_000);
+
 client.on(Events.GuildCreate, (guild) => {
   if (!allowed.includes(guild.id)) {
     guarded("leave-unapproved", () => guild.leave());
@@ -193,15 +350,43 @@ client.on(Events.GuildCreate, (guild) => {
   if (identityVerified && client.user) {
     guarded("guild-create-setup", async () => {
       await client.rest.put(Routes.applicationGuildCommands(client.user!.id, guild.id), {
-        body: [...commonCommandDefinitions(), ...himikoCommandDefinitions].map((c) => c.toJSON()),
+        body: [...commonCommandDefinitions(), ...himikoCommandDefinitions, ...communityCommandDefinitions].map((c) => c.toJSON()),
       });
     });
   }
 });
 
 async function updateStatus(): Promise<void> {
-  if (stopping || !identityVerified || !client.isReady()) return;
+  if (stopping || !identityVerified || !client.isReady() || pumping) return;
+  pumping = true;
   try {
+    // Himiko is the sole community outbox consumer and XP event retention owner after the bot handoff.
+    for (const guildId of allowed) {
+      try {
+        if (await isControlEnabled(controlQuery, guildId, botKey)) {
+          await applyCommunityConfiguration(pool, guildId, botKey);
+        }
+      } catch (error) {
+        console.error(`himiko configuration update failed for guild ${guildId}:`, error instanceof Error ? error.message : String(error));
+      }
+    }
+    await deliverCommunityMessages(pool, allowed, async (payload, nonce) => {
+      if (!(await isControlEnabled(controlQuery, payload.guildId, botKey))) throw new Error("controls-disabled");
+      const channel = await client.channels.fetch(payload.channelId);
+      if (!channel || !channel.isTextBased() || !("guildId" in channel) || channel.guildId !== payload.guildId || !("send" in channel))
+        throw new Error("channel-unavailable");
+      const mention = payload.content.match(/<@!?(\d{17,20})>/)?.[1];
+      await channel.send({
+        embeds: [createEiEmbed({ title: "Himiko · Community", description: payload.content })],
+        allowedMentions: mention ? { users: [mention], roles: [], parse: [] } : { parse: [] },
+        nonce,
+        enforceNonce: true,
+      });
+    }, botKey);
+    if (Date.now() - lastXpCleanup > 60 * 60_000) {
+      lastXpCleanup = Date.now();
+      await pool.query("DELETE FROM community.xp_events WHERE created_at<now()-interval '7 days'");
+    }
     await pool.query(
       `INSERT INTO ops.service_status(service, liveness, gateway, db_ready, latency_ms)
        VALUES($1, 'ok', 'ok', true, $2)
@@ -211,6 +396,8 @@ async function updateStatus(): Promise<void> {
     lastDbReady = true;
   } catch {
     lastDbReady = false;
+  } finally {
+    pumping = false;
   }
 }
 
@@ -237,6 +424,7 @@ async function shutdown(): Promise<void> {
   if (stopping) return;
   stopping = true;
   clearInterval(statusTimer);
+  clearInterval(voiceXpTimer);
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();
   try {
@@ -271,7 +459,7 @@ client.once(Events.ClientReady, () => {
           continue;
         }
         await client.rest.put(Routes.applicationGuildCommands(client.user!.id, guild.id), {
-          body: [...commonCommandDefinitions(), ...himikoCommandDefinitions].map((c) => c.toJSON()),
+          body: [...commonCommandDefinitions(), ...himikoCommandDefinitions, ...communityCommandDefinitions].map((c) => c.toJSON()),
         });
       } catch (err) {
         console.error(`Failed setup for guild ${guild.id}:`, err);

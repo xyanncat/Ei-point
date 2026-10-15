@@ -179,6 +179,9 @@ importers:
       '@ei-point/module-bot-ui':
         specifier: workspace:*
         version: link:../../../packages/modules/bot-ui
+      '@ei-point/module-community':
+        specifier: workspace:*
+        version: link:../../../packages/modules/community
       discord.js:
         specifier: 14.27.0
         version: 14.27.0

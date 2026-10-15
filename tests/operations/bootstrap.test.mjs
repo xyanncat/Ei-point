@@ -24,6 +24,12 @@ test('one-shot administrative bootstrap creates a separate passworded non-superu
   assert.match(output,/least-privilege/);assert.doesNotMatch(output,/isolated-application-password/);
   application=new pg.Client({connectionString:appUrl});await application.connect();
   assert.equal((await application.query('SELECT rolsuper FROM pg_roles WHERE rolname=current_user')).rows[0].rolsuper,false);
+  const botModules=(await application.query("SELECT bot_key,modules FROM config.bots WHERE bot_key IN ('silverwolf','himiko') ORDER BY bot_key")).rows;
+  assert.deepEqual(botModules,[
+   {bot_key:'himiko',modules:['embed','announce','welcome','community','leveling']},
+   {bot_key:'silverwolf',modules:['games']},
+  ]);
+  await application.query('SELECT last_voice_awarded_at FROM community.xp LIMIT 0');
   await application.query('SELECT count(*) FROM commerce.orders');
   await assert.rejects(application.query('CREATE ROLE audit_escalation SUPERUSER'),/permission denied/i);
  }finally{await application?.end();await admin?.end();await server.stop();}

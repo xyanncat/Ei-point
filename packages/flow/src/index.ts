@@ -48,5 +48,6 @@ export * from "./discord-dispatch.js";
 export * from "./outbox.js";
 export * from "./shutdown.js";
 export * from "./database.js";
+export * from "./community-outbox.js";
 export * from "./controls.js";
 export * from "./embed-delivery.js";

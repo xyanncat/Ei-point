@@ -14,8 +14,8 @@ The six current identities are Kafka, Cyrene, Robin, Cipher, SilverWolf, and Him
 | [Cyrene](#cyrene) | AI chat, persona and persistent conversation state, TTS | `apps/bots/ai/src/commands.ts`, `apps/bots/ai/src/tts.ts` |
 | [Robin](#robin) | Music search, playback, voice and queue management | `apps/bots/music-py/src/main.py` |
 | [Cipher](#cipher) | Service catalog, orders, payment claims, settlement, referrals | `apps/bots/commerce/src/commands.ts` |
-| [SilverWolf](#silverwolf) | Welcome/leave, XP, cards, game, inventory, market and trades | `apps/bots/community/src/commands.ts` |
-| [Himiko](#himiko) | Embed previews and announcements | `apps/bots/himiko/src/commands.ts` |
+| [SilverWolf](#silverwolf) | Rank readout, cards, games, inventory, market and trades | `apps/bots/community/src/commands.ts` |
+| [Himiko](#himiko) | Welcome/leave, XP, levels, leaderboard, embed previews and announcements | `apps/bots/himiko/src/community-commands.ts`, `apps/bots/himiko/src/commands.ts` |
 
 ## Kafka
 
@@ -157,8 +157,7 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 
 ### Other functions
 
-- Render configured welcome/leave messages when members join or leave; send level notifications and update message XP.
-- Run community outbox delivery for supported notifications.
+- Keep the `/rank` profile read-only; Himiko owns XP awards, welcome/leave events, and level announcements.
 - Enforce guild scope, guild-owner-only catalog/economy administration, transaction boundaries, inventory uniqueness, and trade/market contention checks.
 - Keep economy balances, cards, game state, inventory, listings, trades, and operation receipts in PostgreSQL.
 
@@ -173,11 +172,19 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 | `/about` | Describe Ei Point and Ei-Flow and mention the configured owner. |
 | `/announcement <channel> <title> <description> [color] [ping_role]` | Validate and queue a styled announcement for delivery to a text/announcement channel. |
 | `/embed <title> <description> [color]` | Build and return a validated embed preview without choosing a destination channel. |
+| `/setwelcome <channel> <message>` | Set the welcome destination and template. Requires Manage Server. |
+| `/setleave <channel> <message>` | Set the leave destination and template. Requires Manage Server. |
+| `/testwelcome [event]` | Preview the current welcome or leave template. Requires Manage Server. |
+| `/xp [enabled] [amount] [cooldown] [voice_enabled] [voice_amount] [voice_interval]` | Configure text XP and opt-in voice XP, award sizes, and cooldown intervals. Requires Manage Server. |
+| `/setlevelchannel <channel>` | Choose where level-up embeds are delivered. Requires Manage Server. |
+| `/leaderboard` | Show the top ten members by XP. |
 
 ### Other functions
 
 - Validate channel/role IDs, non-empty content, title/body limits, and six-digit hex colors before building payloads.
 - Persist announcement intent and deliver through the dedicated delivery/worker path; scheduled delivery is not represented as a user-facing slash command in the current definitions.
+- Own welcome/leave events, text XP and opt-in voice XP. Voice awards require at least two human members in a non-AFK channel; bots and self/server-deafened members do not earn voice XP. Text and voice use independent per-member cooldown timestamps, and awards persist transactionally.
+- Deliver welcome, leave, and level-up notifications through a leased, retryable outbox and branded embeds.
 - Report delivery/readiness state without treating an accepted queue operation as proof of live Discord delivery.
 
 ## API-key configuration count

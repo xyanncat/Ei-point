@@ -3,7 +3,6 @@ import {
   Client,
   Events,
   GatewayIntentBits,
-  Options,
   PermissionFlagsBits,
   Routes,
 } from "discord.js";
@@ -12,12 +11,10 @@ import { CommunityService } from "@ei-point/module-community";
 import { EconomyService } from "@ei-point/module-games";
 import { commandDefinitions, respondToCommand } from "./commands.js";
 import { communityCommandPermissionDenial } from "./authorization.js";
-import { deliverMessages } from "./delivery.js";
 import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 import {
   dispatchGuildCommand,
   isControlEnabled,
-  applyCommunityConfiguration,
 } from "@ei-point/flow";
 const botKey = process.env.BOT_KEY ?? "silverwolf";
 
@@ -50,6 +47,7 @@ pool.on("error", () =>
 process.on("unhandledRejection", (err) =>
   console.error("unhandledRejection in bot-community:", err),
 );
+// This legacy `bot-community` process is SilverWolf's games gateway; Himiko now owns member events, XP awards, and community outbox delivery.
 const community = new CommunityService(pool),
   economy = new EconomyService(pool);
 const controlQuery = async (sql: string, params?: unknown[]) =>
@@ -57,18 +55,14 @@ const controlQuery = async (sql: string, params?: unknown[]) =>
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
   ],
-  makeCache: Options.cacheWithLimits({ MessageManager: 20 }),
 });
 let stopping = false,
   pumping: Promise<void> | null = null,
   lastMaintenance = 0,
   lastDbReady = false;
 let identityVerified = false;
-let activeCommands = 0,
-  activeXp = 0;
+let activeCommands = 0;
 const guarded = (label: string, run: () => Promise<unknown>) => {
   void run().catch(() =>
     console.error(`community ${label} failed; inspect service diagnostics`),
@@ -100,7 +94,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
   activeCommands++;
   guarded("command", async () => {
     try {
-      if (interaction.inCachedGuild() && await respondToCommonCommand(interaction, "SilverWolf", "Community XP and collectible card economy.")) return;
+      if (interaction.inCachedGuild() && await respondToCommonCommand(interaction, "SilverWolf", "Card games, collectibles, berries, trading, and rank profiles.")) return;
       await dispatchGuildCommand({
         botKey,
         allowlist: allowed,
@@ -121,8 +115,6 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         },
         run: async (signal) => {
           if (!interaction.inCachedGuild()) throw new Error("guild context unavailable");
-          signal.throwIfAborted();
-          await applyCommunityConfiguration(pool, interaction.guildId, botKey);
           signal.throwIfAborted();
           const options: Record<string, string | number | boolean> = {};
           const flatten = (values: typeof interaction.options.data): void => {
@@ -167,64 +159,6 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
     }
   });
 });
-client.on(Events.MessageCreate, (message) => {
-  if (
-    !identityVerified ||
-    !message.guildId ||
-    !allowed.includes(message.guildId) ||
-    message.author.bot ||
-    message.webhookId ||
-    Date.now() - message.createdTimestamp > 7 * 86400000
-  )
-    return;
-  if (activeXp >= 32) return; // Shed optional XP work before it can starve command replies.
-  activeXp++;
-  guarded("xp", async () => {
-    try {
-      if (!(await isControlEnabled(controlQuery, message.guildId!, botKey)))
-        return;
-      await community.awardXp({
-        guildId: message.guildId!,
-        userId: message.author.id,
-        messageId: message.id,
-      });
-    } finally {
-      activeXp--;
-    }
-  });
-});
-client.on(Events.GuildMemberAdd, (member) => {
-  if (!identityVerified || !allowed.includes(member.guild.id)) return;
-  guarded("welcome", async () => {
-    if (!(await isControlEnabled(controlQuery, member.guild.id, botKey)))
-      return;
-    await community.memberEvent({
-      guildId: member.guild.id,
-      userId: member.id,
-      userName: member.user.username,
-      guildName: member.guild.name,
-      memberCount: member.guild.memberCount,
-      event: "join",
-      key: `join:${member.id}:${member.joinedTimestamp ?? Math.floor(Date.now() / 60000)}`,
-    });
-  });
-});
-client.on(Events.GuildMemberRemove, (member) => {
-  if (!identityVerified || !allowed.includes(member.guild.id)) return;
-  guarded("leave", async () => {
-    if (!(await isControlEnabled(controlQuery, member.guild.id, botKey)))
-      return;
-    await community.memberEvent({
-      guildId: member.guild.id,
-      userId: member.id,
-      userName: member.user.username,
-      guildName: member.guild.name,
-      memberCount: member.guild.memberCount,
-      event: "leave",
-      key: `leave:${member.id}:${member.joinedTimestamp ?? Math.floor(Date.now() / 60000)}`,
-    });
-  });
-});
 client.on(Events.GuildCreate, (guild) => {
   if (!allowed.includes(guild.id))
     guarded("leave-unapproved", () => guild.leave());
@@ -234,34 +168,6 @@ client.on(Events.Error, () => console.error("community Discord gateway error"));
 async function pump(): Promise<void> {
   if (stopping || pumping || !identityVerified || !client.isReady()) return;
   pumping = (async () => {
-    for (const guildId of allowed) {
-      if (await isControlEnabled(controlQuery, guildId, botKey))
-        await applyCommunityConfiguration(pool, guildId, botKey);
-    }
-    await deliverMessages(
-      pool,
-      allowed,
-      async (payload, nonce) => {
-        if (!(await isControlEnabled(controlQuery, payload.guildId, botKey)))
-          throw new Error("controls-disabled");
-        const channel = await client.channels.fetch(payload.channelId);
-        if (
-          !channel ||
-          !channel.isTextBased() ||
-          !("guildId" in channel) ||
-          channel.guildId !== payload.guildId ||
-          !("send" in channel)
-        )
-          throw new Error("channel-unavailable");
-        await channel.send({
-          content: payload.content,
-          allowedMentions: { parse: [] },
-          nonce,
-          enforceNonce: true,
-        });
-      },
-      botKey,
-    );
     if (Date.now() - lastMaintenance > 60000) {
       lastMaintenance = Date.now();
       for (const guildId of allowed) {
@@ -277,9 +183,6 @@ async function pump(): Promise<void> {
         )
           await economy.expireTrades(guildId);
       }
-      await pool.query(
-        "DELETE FROM community.xp_events WHERE created_at<now()-interval '7 days'",
-      );
     }
     await pool.query(
       `INSERT INTO ops.service_status(service,liveness,gateway,db_ready,latency_ms) VALUES($1,'ok','ok',true,$2)

@@ -38,7 +38,7 @@ Ei Point is a TypeScript and Python monorepo for a coordinated fleet of Discord 
 <table>
   <tr>
     <td width="50%"><h3>🛡️ Protection &amp; moderation</h3><p>Scoped moderation, raid and antinuke logic, lockdown/restoration support, incident records, and audit-oriented event handling.</p></td>
-    <td width="50%"><h3>🎴 Community &amp; games</h3><p>Welcome flows, XP and leaderboards, cards, packs, inventories, listings, and trades backed by durable state.</p></td>
+    <td width="50%"><h3>🎴 Community &amp; games</h3><p>Himiko welcomes members, manages text and opt-in voice XP, and runs leaderboards; SilverWolf handles cards, packs, inventories, listings, and trades backed by durable state.</p></td>
   </tr>
   <tr>
     <td width="50%"><h3>◈ Commerce &amp; referrals</h3><p>Catalog and order flows, payment claims and settlement, verification, referral cycles, and guarded fulfillment.</p></td>
@@ -60,8 +60,8 @@ These describe the implemented product surface, not a claim that every archived 
 | **Cyrene** | `cyrene` | AI, search, TTS | Provider, voice playback, restart, and lifecycle acceptance remain open |
 | **Robin** | `robin` | Music and playback | Target-platform playback and lifecycle acceptance remain open |
 | **Cipher** | `cipher` | Commerce and referrals | Local guarded flows; live provider/payment and full acceptance remain open |
-| **SilverWolf** | `silverwolf` | Community and games | Local implementation; catalog/legacy parity and staging acceptance remain open |
-| **Himiko** | `himiko` | Embeds and announcements | Local delivery intent support; live Discord delivery acceptance remains open |
+| **SilverWolf** | `silverwolf` | Game economy and rank readout | Local implementation; catalog/legacy parity and staging acceptance remain open |
+| **Himiko** | `himiko` | Welcome, community leveling, embeds and announcements | Local implementation; Discord intent configuration and live delivery acceptance remain open |
 
 The bot count is configurable through the release roster. A manifest cannot create a bot: each identity also needs application code, Compose service, token/secret wiring, health checks, registry configuration, and verified permissions. See [bot identities](docs/bot-identities.md) and [release operations](docs/operations-release.md).
 
