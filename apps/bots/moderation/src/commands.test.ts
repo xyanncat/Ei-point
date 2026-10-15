@@ -77,6 +77,7 @@ it("temporary role persists expiry metadata before granting the selected role", 
   const trace: string[] = [];
   const pool = { query: async (sql: string, args: unknown[] = []) => {
     if (sql.includes("INSERT INTO moderation.cases")) { trace.push(`intent:${JSON.stringify(args[7])}`); return { rows: [{ case_id: "24" }] }; }
+    if (sql.includes("superseded_by")) { trace.push("supersede"); return { rows: [] }; }
     trace.push("applied"); return { rows: [] };
   } } as unknown as Pool;
   const role = { id: "role-1", managed: false, editable: true, permissions: { has: () => false } };
@@ -84,13 +85,14 @@ it("temporary role persists expiry metadata before granting the selected role", 
     targetMember: { manageable: true, roles: { cache: { has: () => false } } } as never, targetRole: role as never,
     addMemberRole: async (_member, selected, reason) => { assert.equal(selected.id, "role-1"); assert.equal(reason, "event access"); trace.push("discord-add"); } }), pool);
   assert.equal(JSON.parse(trace[0]!.slice("intent:".length)).roleId, "role-1");
-  assert.deepEqual(trace.slice(1), ["discord-add", "applied"]);
+  assert.deepEqual(trace.slice(1), ["discord-add", "applied", "supersede"]);
 });
 
 it("temporary restriction snapshots existing send permissions before denying them", async () => {
   const trace: string[] = [];
   const pool = { query: async (sql: string, args: unknown[] = []) => {
     if (sql.includes("INSERT INTO moderation.cases")) { trace.push(`intent:${JSON.stringify(args[7])}`); return { rows: [{ case_id: "25" }] }; }
+    if (sql.includes("superseded_by")) { trace.push("supersede"); return { rows: [] }; }
     trace.push("applied"); return { rows: [] };
   } } as unknown as Pool;
   await respondToModerationCommand(request({ name: "temp", subcommand: "restriction", options: { user: "target", minutes: 15, reason: "cooldown" }, canManage: true,
@@ -99,7 +101,7 @@ it("temporary restriction snapshots existing send permissions before denying the
   const metadata = JSON.parse(trace[0]!.slice("intent:".length));
   assert.equal(metadata.channelId, "channel-1");
   assert.deepEqual([metadata.previousSendMessages, metadata.previousSendMessagesInThreads], [true, null]);
-  assert.deepEqual(trace.slice(1), ["discord-deny", "applied"]);
+  assert.deepEqual(trace.slice(1), ["discord-deny", "applied", "supersede"]);
 });
 
 it("unsupported temporary restriction reads return a handled error before writing a case", async () => {

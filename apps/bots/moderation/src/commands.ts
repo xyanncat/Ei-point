@@ -12,6 +12,7 @@ import {
   planPurge,
   CREATE_CASE_SQL,
   LIST_CASES_SQL,
+  SUPERSEDE_OLDER_SQL,
   type CaseKind,
 } from "@ei-point/module-moderation";
 
@@ -171,7 +172,8 @@ export async function recordModerationCase(
 }
 
 
-/** Commit the case intent before Discord. Never replay an ambiguous external action automatically. */
+/** Commit the case intent before Discord. Never replay an ambiguous external action automatically.
+ *  When the sanction is applied, equal-kind older cases are superseded so their expiry cannot undo it (A06). */
 export async function executeSanction(
   pool: Pool, req: ModerationCommandRequest, targetId: string, kind: CaseKind,
   reason: string, effect: () => Promise<unknown>, expiresAt: string | null = null,
@@ -187,6 +189,11 @@ export async function executeSanction(
   try {
     await effect();
     await pool.query("UPDATE moderation.cases SET execution_status='applied' WHERE case_id=$1", [caseId]);
+    if (kind === "ban" || kind === "timeout" || kind === "temp_role" || kind === "temp_restriction") {
+      const supersedeKey = kind === "temp_role" ? "roleId" : kind === "temp_restriction" ? "channelId" : null;
+      const supersedeValue = supersedeKey && typeof metadata[supersedeKey] === "string" ? metadata[supersedeKey] : null;
+      await pool.query(SUPERSEDE_OLDER_SQL, [req.guildId, targetId, kind, caseId, supersedeKey, supersedeValue]);
+    }
   } catch (error) {
     await pool.query("UPDATE moderation.cases SET execution_status='unconfirmed' WHERE case_id=$1", [caseId]).catch(() => {});
     throw new Error(`Case #${caseId}: external outcome unconfirmed; inspect Discord before retrying.`, { cause: error });

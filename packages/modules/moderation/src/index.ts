@@ -71,10 +71,63 @@ export const LIST_CASES_SQL = `
   ORDER BY created_at DESC LIMIT $3`;
 
 export const DUE_EXPIRY_SQL = `
-  SELECT case_id, guild_id, user_id, kind, metadata FROM moderation.cases
+  SELECT case_id, guild_id, user_id, kind, metadata, attempt_count FROM moderation.cases
   WHERE execution_status = 'applied' AND expires_at IS NOT NULL AND expires_at <= now()
     AND kind IN ('ban', 'timeout', 'temp_role', 'temp_restriction')
-  ORDER BY expires_at LIMIT $1`;
+    AND superseded_by IS NULL
+    AND next_attempt_at <= now()
+    AND (lease_until IS NULL OR lease_until < now())
+  ORDER BY next_attempt_at, expires_at LIMIT $1`;
+
+/** Claim due expiry work with a bounded lease and fairness window (A07). */
+export const CLAIM_DUE_EXPIRY_SQL = `
+  WITH due AS (
+    SELECT case_id FROM moderation.cases
+    WHERE execution_status = 'applied' AND expires_at IS NOT NULL AND expires_at <= now()
+      AND kind IN ('ban', 'timeout', 'temp_role', 'temp_restriction')
+      AND superseded_by IS NULL
+      AND next_attempt_at <= now()
+      AND (lease_until IS NULL OR lease_until < now())
+    ORDER BY next_attempt_at, expires_at LIMIT $1
+    FOR UPDATE SKIP LOCKED
+  )
+  UPDATE moderation.cases c SET lease_owner = $2, lease_until = now() + interval '45 seconds'
+  FROM due WHERE c.case_id = due.case_id
+  RETURNING c.case_id, c.guild_id, c.user_id, c.kind, c.metadata, c.attempt_count`;
+
+/** Bounded exponential backoff, seconds: 5, 10, 20, ... capped at 300. */
+export function expiryBackoffSeconds(attemptCount: number): number {
+  const bounded = Math.min(Math.max(0, Math.trunc(attemptCount)), 10);
+  return Math.min(300, 5 * 2 ** bounded);
+}
+
+/** A failed cleanup retries later with bounded backoff; the attempt is charged. */
+export const RETRY_EXPIRY_SQL = `
+  UPDATE moderation.cases
+  SET attempt_count = attempt_count + 1,
+      next_attempt_at = now() + make_interval(secs => $2),
+      lease_owner = NULL, lease_until = NULL,
+      last_error_code = $3
+  WHERE case_id = $1 AND lease_owner = $4`;
+
+/** The owning case releases its lease on success, conflict or supersession. */
+export const CLEAR_EXPIRY_SQL = `
+  UPDATE moderation.cases
+  SET execution_status = $2, expires_at = NULL, lease_owner = NULL, lease_until = NULL
+  WHERE case_id = $1 AND execution_status = 'applied'`;
+
+/** New equal-kind sanctions supersede older applied cases (A06): expiry must not undo a newer action.
+ *  For temp_role/temp_restriction the metadata target ($5/$6) scopes the comparison to the same role/channel. */
+export const SUPERSEDE_OLDER_SQL = `
+  UPDATE moderation.cases SET superseded_by = $4, lease_owner = NULL, lease_until = NULL
+  WHERE guild_id = $1 AND user_id = $2 AND kind = $3 AND case_id <> $4
+    AND execution_status = 'applied' AND superseded_by IS NULL
+    AND ($5::text IS NULL OR metadata->>$5 IS NOT DISTINCT FROM $6)`;
+
+/** Release a lease without changing durability (used when work is no longer owned). */
+export const RELEASE_EXPIRY_SQL = `
+  UPDATE moderation.cases SET lease_owner = NULL, lease_until = NULL
+  WHERE case_id = $1`;
 
 export type TemporaryExpiryOutcome = "restored" | "conflict";
 

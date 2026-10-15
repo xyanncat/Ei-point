@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { canModerate, DUE_EXPIRY_SQL, planPurge, reconcileTemporaryEffect, requiredScope, validateTimeout } from "./index.js";
+import { canModerate, CLAIM_DUE_EXPIRY_SQL, expiryBackoffSeconds, planPurge, reconcileTemporaryEffect, requiredScope, validateTimeout } from "./index.js";
 
 describe("moderation permissions", () => {
   it("denies without the exact scope", () => {
@@ -40,9 +40,19 @@ describe("purge planner", () => {
 });
 
 describe("temporary moderation expiry", () => {
-  it("leases temporary role and restriction cases only after their recorded expiry", () => {
-    assert.match(DUE_EXPIRY_SQL, /kind IN \('ban', 'timeout', 'temp_role', 'temp_restriction'\)/);
-    assert.match(DUE_EXPIRY_SQL, /expires_at <= now\(\)/);
+  it("claims due cases with an unexpired lease and next-attempt fairness window", () => {
+    assert.match(CLAIM_DUE_EXPIRY_SQL, /kind IN \('ban', 'timeout', 'temp_role', 'temp_restriction'\)/);
+    assert.match(CLAIM_DUE_EXPIRY_SQL, /expires_at <= now\(\)/);
+    assert.match(CLAIM_DUE_EXPIRY_SQL, /next_attempt_at <= now\(\)/);
+    assert.match(CLAIM_DUE_EXPIRY_SQL, /lease_until IS NULL OR lease_until < now\(\)/);
+    assert.match(CLAIM_DUE_EXPIRY_SQL, /FOR UPDATE SKIP LOCKED/);
+  });
+
+  it("bounds backoff growth and keeps it positive", () => {
+    assert.equal(expiryBackoffSeconds(0), 5);
+    assert.equal(expiryBackoffSeconds(1), 10);
+    assert.equal(expiryBackoffSeconds(2), 20);
+    assert.equal(expiryBackoffSeconds(99), 300);
   });
 
   it("does not acknowledge a Discord failure and records conflicts without retrying them", async () => {
