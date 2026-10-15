@@ -1,7 +1,8 @@
+import { SUPPORTED_LEASE_SQL, scheduleCommerceExpiry, runCommerceExpiry, recoverExhaustedJobs, publishWorkerHeartbeat } from "./jobs.js";
 // Phase 3: job recovery worker — LISTEN + periodic reconciliation (§5).
-// Leases + bounded retries + backoff/jitter + dead-letter via ops.jobs; handlers land per-phase.
+// SQL maintenance leases only supported kinds; unknown jobs remain visible for operator action.
 import { Client } from "pg";
-import { LEASE_SQL, FAIL_SQL, nextBackoffMs } from "@ei-point/flow";
+import { nextBackoffMs } from "@ei-point/flow";
 import {
   installRejectionHandler,
   onShutdown,
@@ -19,13 +20,6 @@ if (DATABASE_URL == null) {
   process.exit(1);
 }
 
-if (!LEASE_SQL.includes("WHERE status IN")) {
-  throw new Error("LEASE_SQL does not contain expected WHERE clause; unable to exclude dashboard.embed");
-}
-const CONTROL_LEASE_SQL = LEASE_SQL.replace(
-  "WHERE status IN",
-  "WHERE kind <> 'dashboard.embed' AND status IN",
-);
 const OWNER = `worker-${process.pid}`;
 const LEASE_SEC = 120;
 const BATCH = 10;
@@ -34,6 +28,9 @@ const POLL_MS = 5000;
 const client = new Client({
   connectionString: DATABASE_URL,
   application_name: OWNER,
+  connectionTimeoutMillis: 5000,
+  statement_timeout: 10000,
+  idle_in_transaction_session_timeout: 15000,
 });
 // A dropped LISTEN connection must not become an uncaught exception: exit and let the
 // supervisor (compose restart policy / systemd) bring up a fresh connection + LISTEN.
@@ -93,38 +90,42 @@ async function pump(): Promise<void> {
       } catch (embedErr) {
         console.error("pumpEmbeds error:", embedErr);
       }
-      const leased = await client.query(CONTROL_LEASE_SQL, [
+      const query = async (sql: string, params?: unknown[]) => (await client.query(sql, params)).rows;
+      await scheduleCommerceExpiry(query);
+      await recoverExhaustedJobs(query);
+      const leased = await client.query(SUPPORTED_LEASE_SQL, [
         OWNER,
         LEASE_SEC,
         BATCH,
       ]);
       for (const job of leased.rows) {
         try {
-          // Phase 3: no domain handlers yet — park as failed with backoff so drills can observe recovery.
-          throw new Error(
-            `no-handler:${String((job as { kind: string }).kind)}`,
-          );
+          await runCommerceExpiry(query, job.job_id, OWNER);
         } catch (err) {
           const attempts = (job as { attempts: number }).attempts;
-          // nextBackoffMs returns ms; FAIL_SQL interval is seconds — round up, never shorten.
+          // nextBackoffMs returns ms; retry interval is seconds — round up, never shorten.
           try {
-            await client.query(FAIL_SQL, [
+            await client.query(`UPDATE ops.jobs SET status=CASE WHEN attempts>=max_attempts THEN 'dead' ELSE 'failed' END,
+              next_run_at=now()+($2 || ' seconds')::interval,last_error=$3,lease_owner=NULL,lease_expires_at=NULL,updated_at=now()
+              WHERE job_id=$1 AND kind='commerce.expire' AND lease_owner=$4 AND status='leased'`, [
               (job as { job_id: string }).job_id,
               Math.ceil(nextBackoffMs(attempts) / 1000),
               err instanceof Error ? err.message : String(err),
+              OWNER,
             ]);
           } catch (failErr) {
             // Never let one job's bookkeeping failure starve the rest of the batch.
-            console.error("FAIL_SQL failed", {
+            console.error("Job retry bookkeeping failed", {
               job: (job as { job_id: string }).job_id,
               failErr,
             });
           }
         }
       }
-      // Reconcile missed NOTIFYs: pump again if work remains due (same predicate as LEASE_SQL).
+      await publishWorkerHeartbeat(query);
+      // Reconcile missed NOTIFYs: pump again if work remains due (same supported-kind predicate as the lease).
       const pending = await client.query(
-        `SELECT 1 FROM ops.jobs WHERE kind <> 'dashboard.embed' AND status IN ('pending','leased','failed') AND next_run_at <= now() AND (lease_expires_at IS NULL OR lease_expires_at < now()) LIMIT 1`,
+        `SELECT 1 FROM ops.jobs WHERE kind = 'commerce.expire' AND attempts<max_attempts AND status IN ('pending','leased','failed') AND next_run_at <= now() AND (lease_expires_at IS NULL OR lease_expires_at < now()) LIMIT 1`,
       );
       if ((pending.rowCount ?? 0) > 0) {
         setTimeout(

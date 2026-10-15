@@ -44,6 +44,7 @@ export interface TelemetryFields {
 export * from "./auth.js";
 export * from "./jobs.js";
 export * from "./lifecycle.js";
+export * from "./discord-dispatch.js";
 export * from "./outbox.js";
 export * from "./shutdown.js";
 export * from "./database.js";

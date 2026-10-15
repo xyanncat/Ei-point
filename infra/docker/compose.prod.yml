@@ -1,18 +1,15 @@
-# Production overlay: pinned digests only. No build: — images must be prebuilt + tested.
-# Usage: docker compose -f compose.yml -f compose.prod.yml up -d <svc>
-# Resolve digests at release on the VPS and replace each REPLACE_ME below:
-#   docker pull postgres:17.5 && docker inspect --format='{{.RepoDigests}}' postgres:17.5
-#   docker pull nginx:1.27.3-alpine && docker inspect --format='{{.RepoDigests}}' nginx:1.27.3-alpine
-# TODO(release): replace digests + add pinned entries for api/web/workers/all bots.
+# Optional manually supplied production references. Prefer scripts/deploy.sh release.json,
+# which validates all image digests and generates a complete override without placeholders.
 services:
-  postgres: { build: null, image: "postgres:17.5@sha256:REPLACE_ME" }
-  nginx: { build: null, image: "nginx:1.27.3-alpine@sha256:REPLACE_ME" }
-  api: { build: null, image: "ei-point/api:REPLACE_ME" }
-  web: { build: null, image: "ei-point/web:REPLACE_ME" }
-  bot-security: { build: null, image: "ei-point/bot-security:REPLACE_ME" }
-  bot-moderation: { build: null, image: "ei-point/bot-moderation:REPLACE_ME" }
-  bot-community: { build: null, image: "ei-point/bot-community:REPLACE_ME" }
-  bot-ai: { build: null, image: "ei-point/bot-ai:REPLACE_ME" }
-  bot-music: { build: null, image: "ei-point/bot-music:REPLACE_ME" }
-  bot-commerce: { build: null, image: "ei-point/bot-commerce:REPLACE_ME" }
-  workers: { build: null, image: "ei-point/workers:REPLACE_ME" }
+  postgres: {build: null, image: "${RELEASE_POSTGRES_IMAGE:?immutable custom postgres+pgbackrest image required}"}
+  nginx: {build: null, image: "${RELEASE_NGINX_IMAGE:?immutable image required}"}
+  api: {build: null, image: "${RELEASE_API_IMAGE:?immutable image required}"}
+  migrate: {build: null, image: "${RELEASE_API_IMAGE:?immutable image required}"}
+  web: {build: null, image: "${RELEASE_WEB_IMAGE:?immutable image required}"}
+  workers: {build: null, image: "${RELEASE_WORKERS_IMAGE:?immutable image required}"}
+  bot-kafka: {build: null, image: "${RELEASE_KAFKA_IMAGE:?immutable image required}"}
+  bot-himiko: {build: null, image: "${RELEASE_HIMIKO_IMAGE:?immutable image required}"}
+  bot-community: {build: null, image: "${RELEASE_COMMUNITY_IMAGE:?immutable image required}"}
+  bot-ai: {build: null, image: "${RELEASE_AI_IMAGE:?immutable image required}"}
+  bot-music: {build: null, image: "${RELEASE_MUSIC_IMAGE:?immutable image required}"}
+  bot-commerce: {build: null, image: "${RELEASE_COMMERCE_IMAGE:?immutable image required}"}

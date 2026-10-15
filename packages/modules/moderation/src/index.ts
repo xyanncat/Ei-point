@@ -60,12 +60,25 @@ export const CREATE_CASE_SQL = `
   RETURNING case_id`;
 
 export const LIST_CASES_SQL = `
-  SELECT case_id, kind, reason, expires_at, moderator_id, created_at
+  SELECT case_id, kind, execution_status, reason, expires_at, moderator_id, created_at
   FROM moderation.cases
   WHERE guild_id = $1 AND user_id = $2
   ORDER BY created_at DESC LIMIT $3`;
 
 export const DUE_EXPIRY_SQL = `
   SELECT case_id, guild_id, user_id, kind FROM moderation.cases
-  WHERE expires_at IS NOT NULL AND expires_at <= now()
+  WHERE execution_status = 'applied' AND expires_at IS NOT NULL AND expires_at <= now()
   ORDER BY expires_at LIMIT $1`;
+
+/** An unconfirmed Discord failure must not consume the expiry retry. Discord 10026 means already unbanned. */
+export async function reconcileExpiry(
+  kind: string, unban: () => Promise<void>, clear: () => Promise<void>,
+): Promise<boolean> {
+  if (kind !== "ban" && kind !== "timeout") return false;
+  if (kind === "ban") {
+    try { await unban(); }
+    catch (error) { if ((error as { code?: number })?.code !== 10026) return false; }
+  }
+  await clear();
+  return true;
+}

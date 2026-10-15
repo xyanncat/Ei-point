@@ -1,8 +1,8 @@
-# Ei Point — Feature Matrix (Phase 1 — COMPLETE)
+# Ei Point — Feature Matrix (Phase 1 — traceability in progress)
 
 > Source: `EI_POINT_VPS_BUILD_PLAN.md` §2 + §10 Phase 1.
-> Status: **COMPLETE — All three archive source projects (`EI-point.zip`, `Ei Paradise.zip`, `swish.zip`) fully inventoried.**
-> 54 distinct commands, subcommands, routes, UI components, background events, and failure modes mapped to the 6-bot architecture, persistence layer, and §11 acceptance tests.
+> Status: **Not certified complete.** The 54 rows below are curated requirements grouped from the plan; they do not establish exhaustive archive coverage or implemented semantic parity.
+> A reproducible file/hash and command-declaration inventory now covers the three original ZIPs under explicit exclusions. Source-to-handler behavior and executable acceptance mapping remain open.
 
 ## Bot registry (target — 6 identities, operator roster 2026-10-12; see `docs/bot-identities.md`)
 
@@ -17,7 +17,7 @@
 
 Rule: adding/removing a bot = one registry row + deploy. No hard-coded bot lists in code (enforced in Phase 3 runtime review).
 
-## Complete source inventory (mapped from archives)
+## Curated requirements (54 grouped rows; implementation and parity require evidence)
 
 | # | Source project | Kind | Name | Module → Bot | Persistence | Acceptance test (§11) |
 |---|---|---|---|---|---|---|
@@ -48,7 +48,7 @@ Rule: adding/removing a bot = one registry row + deploy. No hard-coded bot lists
 | 25 | EI-point (nami) | command | `/leaderboard` | community → community | `community.member_xp` | Top members paginated; cached with 60s invalidation |
 | 26 | EI-point (nami) | command | `/setlevelchannel` | community → community | `community.guild_config` | Level notification channel routing persisted |
 | 27 | EI-point (luffy) | command | `/cards` | games → community | `games.cards` | Catalog pagination with rarity and attribute filters |
-| 28 | EI-point (luffy) | command | `/cardinfo` | games → community | `games.cards` | Card metadata, circulation count, and serial supply shown |
+| 28 | EI-point (luffy) | command | `/cardinfo` | games → community | `games.card_instances`, `games.card_definitions` | Guild-scoped metadata, circulation count and serial supply; verified by Phase 6 PostgreSQL integration test |
 | 29 | EI-point (luffy) | command | `/inventory` | games → community | `games.instances` | Owned cards listed by serial; pagination supported |
 | 30 | EI-point (luffy) | command | `/open` (pack) | games → community | `games.instances`, `games.packs` (tx) | Concurrent pack opens cannot double-mint or duplicate serials |
 | 31 | EI-point (luffy) | command | `/market browse\|buy\|cancel` | games → community | `games.market_listings` (tx) | Concurrent buy: exactly one winner, loser refunded cleanly |
@@ -90,4 +90,24 @@ Rule: adding/removing a bot = one registry row + deploy. No hard-coded bot lists
 
 ## Gate to Phase 2+
 
-Phase 1 is complete. All commands, events, routes, components, and failure modes are accounted for and mapped to their respective modules, bots, database tables, and acceptance tests.
+Phase 1 remains open until every source behavior has a reviewed disposition: retained with a verified target handler and executable acceptance test, deliberately changed, or omitted with an operator decision. The acceptance descriptions above are requirements, not passing test evidence. Later phases may proceed independently, but this document does not certify their gates.
+
+## Reproducible archive traceability (2026-10-15)
+
+[archive-command-inventory.json](archive-command-inventory.json) records each included archive entry's path, byte length and SHA-256, plus detected capability declarations and source lines. [legacy-behavior-map.json](audits/legacy-behavior-map.json) links detected declarations to target candidates, tests and review status. Archive hashes identify the exact inputs. The original ZIPs are read in place; source bodies and environment/credential contents are not extracted or stored in these artifacts.
+
+Regenerate with `node scripts/inventory-archives.mjs --archive-dir "<path-to-original-archives>"` (or set `LEGACY_ARCHIVE_DIR`). Run `node scripts/inventory-archives.mjs --self-test` and `node --test tests/feature-coverage.test.mjs` for parser/checker fixtures. Run `node scripts/check-feature-coverage.mjs` to identify unresolved rows; a nonzero exit is expected while mappings or acceptance tests remain open. The scripts need installed workspace TypeScript and Python. Paths can be changed with `--archive-dir` and `--output`.
+
+| Archive | Included files | Source files | Command declarations | Other static declarations | Exact-name command candidates | No exact-name command candidate |
+|---|---:|---:|---:|---:|---:|---:|
+| Ei Paradise.zip | 69 | 34 | 12 | 27 | 3 | 9 |
+| EI-point.zip | 531 | 350 | 85 | 33 | 47 | 38 |
+| swish.zip | 37 | 25 | 18 | 4 | 16 | 2 |
+
+These counts describe the scanner's scope and declarations, including subcommands and duplicate names in different source files. They are not counts of unique installed commands or completed migrations. Source files include JavaScript, TypeScript, Python, HTML, CSS, SQL, shell, YAML, PHP, Vue and Svelte; non-source assets also receive hashes. Dependencies, generated/build/cache files, agent state, environment files (including examples), potential credential/runtime files and unsafe paths are excluded by the rules embedded in the JSON and scanner. This differs from the earlier audit's narrower executable-source count.
+
+JavaScript/TypeScript detection uses the TypeScript AST for root commands, subcommands/groups, literal descriptions, route-like HTTP calls, event listeners, custom IDs, scheduled-job calls and static asset paths. Python detection uses command/route/component/task decorators and `on_*` handlers. These are heuristic declaration candidates: dynamic registrations, parse/encoding limits, HTML/PHP/framework-specific routes, nested callback behavior and non-static asset paths remain explicit review gaps. No archive code is executed.
+
+The initial behavior map contains 179 detected declarations: 115 commands, 58 event listeners and 6 route-like declarations. Of these, 65 have a current command-name candidate and a related test-file reference, but remain `implemented-unverified`; 114 rows are `decision-required`. No row is `verified` or `replaced`. In particular, the archive's exact-name candidate count does not mean the mapped handler has equivalent behavior, authorization, financial effects, persistence or error handling. An absent candidate means this scanner found none; wrappers, renames and dynamic registration can require manual lookup. For example, archived `hand`, `deck`, `score`, `addmaster` and `removemaster` need reviewed retention/rename/omission decisions rather than an assumed parity claim.
+
+The remaining gate is a per-behavior ledger linking archive file/line and intent to the actual target handler, a concrete executable acceptance test and its result, or an approved omission. Events, routes, components, dashboard controls, scheduled jobs, asset flows and persistence also require source-level review. Neither the automated inventory nor the 54 curated rows exhaust these behaviors.

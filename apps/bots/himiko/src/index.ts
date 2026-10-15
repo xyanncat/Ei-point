@@ -1,3 +1,5 @@
+import { deliverAnnouncement } from "./delivery.js";
+import { dispatchGuildCommand, isControlEnabled } from "@ei-point/flow";
 // Himiko: embed messages & announcements gateway (identity `himiko`).
 // Slash commands for staff announcements + embed previews. Scheduled
 // dashboard embeds continue through the workers outbox; this process owns
@@ -85,129 +87,95 @@ client.on(Events.InteractionCreate, (interaction) => {
   activeCommands++;
   guarded("command", async () => {
     try {
-      if (!interaction.inCachedGuild() || !allowed.includes(interaction.guildId)) {
-        await interaction.reply({ content: "This server is not approved for Himiko.", ephemeral: true });
-        return;
-      }
-      // Defer before any DB work: slow queries must not breach the 3s ack window.
-      await interaction.deferReply({ ephemeral: true });
-      const memberRoleIds = [...interaction.member.roles.cache.keys()];
-      const scopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
-      // Guild-level grants (owner / staff scope). Channel-scoped Discord
-      // permissions are checked per command below against the destination.
-      const guildGrant =
-        interaction.guild.ownerId === interaction.user.id ||
-        scopes.includes("announce") ||
-        scopes.includes("*");
-      const guildManage = interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages);
-      if (!guildGrant && !guildManage) {
-        await interaction.editReply("Permission denied: Manage Messages or announce staff scope required.");
-        return;
-      }
-
-      if (interaction.commandName === "embed") {
-        const title = String(interaction.options.getString("title", true));
-        const description = String(interaction.options.getString("description", true));
-        const color = interaction.options.getString("color") ?? "#B6A0FF";
-        const checked = validateAnnounceInput({
-          channelId: interaction.channelId!,
-          title,
-          description,
-          color,
-        });
-        if (!checked.ok) {
-          await interaction.editReply(`Invalid embed: ${checked.reason}.`);
-          return;
-        }
-        const embed = new EmbedBuilder()
-          .setTitle(checked.value.title)
-          .setDescription(checked.value.description)
-          .setColor(parseInt(checked.value.color!.slice(1), 16));
-        await interaction.editReply({ content: "Preview (only you can see this):", embeds: [embed] });
-        return;
-      }
-
-      if (interaction.commandName === "announce") {
-        const channel = interaction.options.getChannel("channel", true);
-        const title = String(interaction.options.getString("title", true));
-        const description = String(interaction.options.getString("description", true));
-        const color = interaction.options.getString("color") ?? undefined;
-        const pingRole = interaction.options.getRole("ping_role") ?? undefined;
-        const checked = validateAnnounceInput({
-          channelId: channel.id,
-          title,
-          description,
-          ...(color ? { color } : {}),
-          ...(pingRole ? { pingRoleId: pingRole.id } : {}),
-        });
-        if (!checked.ok) {
-          await interaction.editReply(`Invalid announcement: ${checked.reason}.`);
-          return;
-        }
-        const payload = buildAnnouncePayload(interaction.guildId, checked.value);
-        const embed = new EmbedBuilder()
-          .setTitle(payload.title)
-          .setDescription(payload.description)
-          .setColor(parseInt(String(payload.color).slice(1), 16));
-        const target = await interaction.guild.channels.fetch(payload.channel_id).catch(() => null);
-        if (!target || !target.isTextBased() || !("send" in target)) {
-          await interaction.editReply("Destination channel is not a sendable text channel.");
-          return;
-        }
-        // Caller and bot permissions resolved against the DESTINATION channel
-        // (guild-level flags do not account for channel overwrites).
-        const callerPerms =
-          target && "permissionsFor" in target ? target.permissionsFor(interaction.member) : null;
-        // /announce requires Manage Messages in the DESTINATION channel unless
-        // covered by the guild-level owner/scope grant above.
-        if (!guildGrant && !callerPerms?.has(PermissionFlagsBits.ManageMessages)) {
-          await interaction.editReply("Permission denied: Manage Messages is required in the destination channel.");
-          return;
-        }
-        // Bot must be able to post embeds in the destination channel.
-        const me = interaction.guild.members.me;
-        const perms = me && "permissionsFor" in target ? target.permissionsFor(me) : null;
-        if (!perms?.has(PermissionFlagsBits.SendMessages) || !perms?.has(PermissionFlagsBits.EmbedLinks)) {
-          await interaction.editReply("Himiko cannot post there: missing Send Messages / Embed Links in that channel.");
-          return;
-        }
-        // Role pings require either a mentionable role or Mention Everyone
-        // in the destination channel.
-        if (checked.value.pingRoleId) {
-          const canMention =
-            callerPerms?.has(PermissionFlagsBits.MentionEveryone) === true ||
-            pingRole?.mentionable === true;
-          if (!canMention) {
-            await interaction.editReply("That role is not mentionable and you lack Mention Everyone there.");
-            return;
+      let guildGrant = false;
+      await dispatchGuildCommand({
+        botKey,
+        allowlist: allowed,
+        interaction,
+        authorize: async () => {
+          if (!interaction.inCachedGuild()) return { content: "Himiko commands are only available in an approved server." };
+          const memberRoleIds = [...interaction.member.roles.cache.keys()];
+          if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows,
+            interaction.guildId, botKey, interaction.commandName, memberRoleIds))) {
+            return { content: "This command is disabled, paused, or restricted by server controls." };
           }
-        }
-        await target.send({
-          ...(payload.content ? { content: payload.content } : {}),
-          embeds: [embed],
-          allowedMentions: payload.content ? { roles: [checked.value.pingRoleId!] } : { parse: [] },
-        });
-        // Audit-only: the announcement is already delivered, so an outbox
-        // failure must not flip the user-visible result to failure.
-        try {
-          await pool.query(
-            `INSERT INTO ops.outbox (aggregate, aggregate_id, type, payload, correlation_id)
-             VALUES ('announce', $1, 'announce.sent', $2, $3) ON CONFLICT DO NOTHING`,
-            [interaction.guildId, JSON.stringify({ ...payload, by: interaction.user.id }), interaction.id],
-          );
-        } catch (err) {
-          console.warn("himiko announce audit insert failed:", err instanceof Error ? err.message : String(err));
-        }
-        await interaction.editReply(`Announcement posted to <#${payload.channel_id}>.`);
-        return;
-      }
+          const scopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
+          // Guild grants may bypass channel Manage Messages; destination checks still apply below.
+          guildGrant = interaction.guild.ownerId === interaction.user.id || scopes.includes("announce") || scopes.includes("*");
+          const guildManage = interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages);
+          return guildGrant || guildManage
+            ? undefined
+            : { content: "Permission denied: Manage Messages or announce staff scope required." };
+        },
+        run: async (signal) => {
+          signal.throwIfAborted();
+          if (!interaction.inCachedGuild()) throw new Error("guild context unavailable");
+          if (interaction.commandName === "embed") {
+            const checked = validateAnnounceInput({
+              channelId: interaction.channelId!,
+              title: interaction.options.getString("title", true),
+              description: interaction.options.getString("description", true),
+              color: interaction.options.getString("color") ?? "#B6A0FF",
+            });
+            if (!checked.ok) return { content: `Invalid embed: ${checked.reason}.` };
+            const embed = new EmbedBuilder().setTitle(checked.value.title).setDescription(checked.value.description)
+              .setColor(parseInt(checked.value.color!.slice(1), 16));
+            return { content: "Preview (only you can see this):", embeds: [embed] };
+          }
 
-      await interaction.editReply("Unknown Himiko command.");
-    } catch (err) {
-      console.error("himiko command failed:", err instanceof Error ? err.message : String(err));
-      if (interaction.deferred) {
-        await interaction.editReply({ content: "Himiko operation failed safely." }).catch(() => {});
-      }
+          if (interaction.commandName !== "announce") return { content: "Unknown Himiko command." };
+          const channel = interaction.options.getChannel("channel", true);
+          const pingRole = interaction.options.getRole("ping_role") ?? undefined;
+          const checked = validateAnnounceInput({
+            channelId: channel.id,
+            title: interaction.options.getString("title", true),
+            description: interaction.options.getString("description", true),
+            ...(interaction.options.getString("color") ? { color: interaction.options.getString("color")! } : {}),
+            ...(pingRole ? { pingRoleId: pingRole.id } : {}),
+          });
+          if (!checked.ok) return { content: `Invalid announcement: ${checked.reason}.` };
+          const payload = buildAnnouncePayload(interaction.guildId!, checked.value);
+          const embed = new EmbedBuilder().setTitle(payload.title).setDescription(payload.description)
+            .setColor(parseInt(String(payload.color).slice(1), 16));
+          const target = await interaction.guild.channels.fetch(payload.channel_id).catch(() => null);
+          if (!target || !target.isTextBased() || !("send" in target)) return { content: "Destination channel is not a sendable text channel." };
+          const callerPerms = "permissionsFor" in target ? target.permissionsFor(interaction.member) : null;
+          if (!guildGrant && !callerPerms?.has(PermissionFlagsBits.ManageMessages)) {
+            return { content: "Permission denied: Manage Messages is required in the destination channel." };
+          }
+          const me = interaction.guild.members.me;
+          const perms = me && "permissionsFor" in target ? target.permissionsFor(me) : null;
+          if (!perms?.has(PermissionFlagsBits.SendMessages) || !perms?.has(PermissionFlagsBits.EmbedLinks)) {
+            return { content: "Himiko cannot post there: missing Send Messages / Embed Links in that channel." };
+          }
+          if (checked.value.pingRoleId && callerPerms?.has(PermissionFlagsBits.MentionEveryone) !== true && pingRole?.mentionable !== true) {
+            return { content: "That role is not mentionable and you lack Mention Everyone there." };
+          }
+          signal.throwIfAborted();
+          await deliverAnnouncement(async(sql,args)=>(await pool.query(sql,args)).rows, interaction.id,
+            { ...payload, by: interaction.user.id, guild_id: interaction.guildId }, async nonce => {
+              await target.send({
+                ...(payload.content ? { content: payload.content } : {}),
+                embeds: [embed],
+                allowedMentions: payload.content ? { roles: [checked.value.pingRoleId!] } : { parse: [] },
+                nonce, enforceNonce: true,
+              });
+            });
+          return { content: `Announcement posted to <#${payload.channel_id}>.` };
+        },
+        failureReply: (category) => ({
+          content: category === "auth"
+            ? "This server is not approved for Himiko."
+            : category === "permissions"
+              ? "Permission denied."
+              : category === "timeout"
+                ? "Himiko operation outcome is unconfirmed. Check its status before retrying."
+                : "Himiko operation outcome is unconfirmed. Inspect system logs before retrying.",
+        }),
+        onTelemetry: (event) => console.info("himiko interaction lifecycle", event),
+      });
+    } catch {
+      // The lifecycle owns result/error replies; this guard only protects the event loop.
     } finally {
       activeCommands--;
     }
@@ -233,9 +201,9 @@ async function updateStatus(): Promise<void> {
   try {
     await pool.query(
       `INSERT INTO ops.service_status(service, liveness, gateway, db_ready, latency_ms)
-       VALUES('bot-himiko', 'ok', 'ok', true, $1)
+       VALUES($1, 'ok', 'ok', true, $2)
        ON CONFLICT(service) DO UPDATE SET liveness='ok', gateway='ok', db_ready=true, latency_ms=EXCLUDED.latency_ms, updated_at=now()`,
-      [Math.max(0, Math.round(client.ws.ping))],
+      [`bot-${botKey}`, Math.max(0, Math.round(client.ws.ping))],
     );
     lastDbReady = true;
   } catch {
@@ -286,6 +254,12 @@ process.on("SIGTERM", () => void shutdown());
 
 client.once(Events.ClientReady, () => {
   guarded("startup", async () => {
+    const registered = (await pool.query("SELECT application_id FROM config.bots WHERE bot_key=$1", [botKey])).rows[0];
+    if (registered?.application_id !== client.user!.id) {
+      console.error("Token identity does not match the registered BOT_KEY");
+      await shutdown();
+      return;
+    }
     identityVerified = true;
     for (const guild of client.guilds.cache.values()) {
       try {

@@ -28,3 +28,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA access, config, ops, security, moderation, co
 ALTER DEFAULT PRIVILEGES IN SCHEMA access, config, ops, security, moderation, community, games, ai, music, commerce GRANT USAGE, SELECT ON SEQUENCES TO ei_point_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA ops GRANT SELECT, INSERT, UPDATE ON TABLES TO ei_point_worker;
 ALTER DEFAULT PRIVILEGES IN SCHEMA ops GRANT USAGE, SELECT ON SEQUENCES TO ei_point_worker;
+-- Domain cleanup is deliberately narrower than the application role.
+GRANT SELECT, UPDATE ON commerce.orders, commerce.rewards TO ei_point_worker;
+GRANT SELECT, DELETE ON commerce.checkout_rate_limits TO ei_point_worker;

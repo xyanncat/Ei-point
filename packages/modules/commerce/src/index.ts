@@ -86,7 +86,7 @@ export const CREATE_ORDER_SQL = `
   ON CONFLICT (idempotency_key) DO NOTHING`;
 
 export const LOCK_ORDER_SQL = `
-  SELECT order_id, status, amount_minor FROM commerce.orders WHERE order_id = $1 FOR UPDATE`;
+  SELECT * FROM commerce.orders WHERE order_id = $1 AND guild_id=$2 AND ($3::text IS NULL OR buyer_id=$3) FOR UPDATE`;
 
 export const CREATE_CLAIM_SQL = `
   INSERT INTO commerce.claims (order_id, proof_ref, idempotency_key)
@@ -117,22 +117,31 @@ export interface DbTx {
   query: (sql: string, params: unknown[]) => Promise<{ rows: Array<Record<string, unknown>>; rowCount: number }>;
 }
 
-export type ClaimFailure = "not-pending" | "already-claimed";
+export type ClaimFailure = "not-pending" | "already-claimed" | "invalid-proof" | "expired";
 export type SettleFailure = "not-claimable" | "already-settled";
 
 // Claim: pending -> claimed, exactly once per order (UNIQUE claims.order_id +
 // status-guarded update; the second claimant finds no pending order).
 export async function executeClaim(
   db: DbTx,
-  args: { orderId: string; proofRef: string; idempotencyKey: string },
+  args: { orderId: string; proofRef: string; idempotencyKey: string; guildId: string; buyerId: string },
 ): Promise<{ ok: true } | { ok: false; reason: ClaimFailure }> {
-  const found = await db.query(LOCK_ORDER_SQL, [args.orderId]);
+  const found = await db.query(LOCK_ORDER_SQL, [args.orderId, args.guildId ?? null, "buyerId" in args ? args.buyerId ?? null : null]);
   const status = (found.rows[0] as { status: string } | undefined)?.status;
   if (status == null || (status !== "pending" && status !== "claimed")) {
     return { ok: false, reason: "not-pending" };
   }
-  if (status === "claimed") return { ok: false, reason: "already-claimed" };
-  await db.query(CREATE_CLAIM_SQL, [args.orderId, args.proofRef, args.idempotencyKey]);
+  const order=found.rows[0]!;
+  const method=order.method === "usdt" ? "usdt" : "upi";
+  const raw=args.proofRef.replace(new RegExp(`^${method}:`),"");
+  if(!(method==="usdt"?/^[a-fA-F0-9]{64}$/:/^\d{12}$/).test(raw))return {ok:false,reason:"invalid-proof"};
+  const proofRef=`${method}:${raw.toLowerCase()}`;
+  if (status === "claimed") {
+    const claim=(await db.query("SELECT proof_ref FROM commerce.claims WHERE order_id=$1",[args.orderId])).rows[0];
+    return claim?.proof_ref===proofRef?{ok:true}:{ok:false,reason:"already-claimed"};
+  }
+  if(order.expires_at && new Date(String(order.expires_at)).getTime()<Date.now())return {ok:false,reason:"expired"};
+  await db.query(CREATE_CLAIM_SQL, [args.orderId, proofRef, args.idempotencyKey]);
   const marked = await db.query(MARK_CLAIMED_SQL, [args.orderId]);
   if (marked.rowCount !== 1) return { ok: false, reason: "already-claimed" };
   return { ok: true };
@@ -142,9 +151,9 @@ export async function executeClaim(
 // status-guarded update; concurrent settlers serialize on the row lock).
 export async function executeSettle(
   db: DbTx,
-  args: { orderId: string; settledBy: string; idempotencyKey: string },
+  args: { orderId: string; settledBy: string; idempotencyKey: string; guildId: string; referralRewardMinor?: number },
 ): Promise<{ ok: true } | { ok: false; reason: SettleFailure }> {
-  const found = await db.query(LOCK_ORDER_SQL, [args.orderId]);
+  const found = await db.query(LOCK_ORDER_SQL, [args.orderId, args.guildId ?? null, "buyerId" in args ? args.buyerId ?? null : null]);
   const status = (found.rows[0] as { status: string } | undefined)?.status;
   if (status == null || (status !== "claimed" && status !== "settled")) {
     return { ok: false, reason: "not-claimable" };
@@ -153,5 +162,15 @@ export async function executeSettle(
   await db.query(CREATE_SETTLEMENT_SQL, [args.orderId, args.settledBy, args.idempotencyKey]);
   const marked = await db.query(MARK_SETTLED_SQL, [args.orderId]);
   if (marked.rowCount !== 1) return { ok: false, reason: "already-settled" };
+  await fulfillOrder(async(sql, params) => (await db.query(sql, params ?? [])).rows, found.rows[0]!, args.referralRewardMinor ?? 0);
   return { ok: true };
+}
+
+// Called only while holding the order row lock, in the settlement transaction.
+export async function fulfillOrder(q:(sql:string,params?:unknown[])=>Promise<Record<string,any>[]>,o:Record<string,any>,reward:number):Promise<void>{
+ const guild=o.guild_id,cycle=cycleFor(new Date());
+ if(Number(o.membership_days)>0)await q(`INSERT INTO commerce.memberships(guild_id,user_id,expires_at) VALUES($1,$2,now()+$3*interval '1 day') ON CONFLICT(guild_id,user_id) DO UPDATE SET expires_at=greatest(commerce.memberships.expires_at,now())+$3*interval '1 day',updated_at=now()`,[guild,o.buyer_id,o.membership_days]);
+ await q("UPDATE commerce.rewards SET status='expired' WHERE guild_id=$1 AND status='reserved' AND cycle<$2",[guild,cycle]);
+ if(o.referral_code){const r=(await q("UPDATE commerce.referrals SET uses=uses+1 WHERE code=$1 AND guild_id=$2 AND cycle=$3 RETURNING referrer_id",[o.referral_code,guild,cycle]))[0];if(r&&Number.isSafeInteger(reward)&&reward>0)await q("INSERT INTO commerce.rewards(guild_id,user_id,cycle,amount_minor,idempotency_key) VALUES($1,$2,$3,$4,$5)",[guild,r.referrer_id,cycle,reward,`checkout:${o.order_id}`]);}
+ await q("UPDATE commerce.claims SET status='confirmed' WHERE order_id=$1",[o.order_id]);
 }

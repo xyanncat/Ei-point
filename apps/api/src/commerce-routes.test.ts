@@ -29,3 +29,17 @@ test("public RP status excludes buyer and proof and maps settled to confirmed",a
 test("staff settlement requires administrator scope",async()=>{
  const app=fixture(env); const res=await app.inject({method:"POST",url:`/api/guilds/${guild}/commerce/orders/RP-ABC123/settle`,payload:{}});assert.equal(res.statusCode,403);await app.close();
 });
+
+test("lost create response recovers only with original client secret",async()=>{
+ let order:any;
+ const app=fixture(env,async(sql,p)=>{
+  if(sql.includes('access.guilds'))return [{guild_id:guild}];
+  if(sql.includes('SELECT * FROM commerce.orders'))return order?[order]:[];
+  if(sql.includes('commerce.catalog'))return [{sku:'membership',name:'Membership',price_minor:70000,currency:'INR',membership_days:30}];
+  if(sql.includes('INSERT INTO commerce.orders')){order={guild_id:p![0],buyer_id:p![1],sku:p![2],amount_minor:p![3],order_token_hash:p![4],public_id:p![6],method:p![7],request_hash:p![9],service_name:p![10],expires_at:new Date(Date.now()+60000),status:'pending'};return [order];}return [];
+ });
+ const request={method:'POST' as const,url:'/api/payments/upi-qr',headers:{origin:env.PAYMENT_ORIGIN},payload:{serviceId:'membership',discordId:guild,paymentMethod:'upi',idempotencyKey:'recover-key-123',recoveryToken:'a'.repeat(43)}};
+ const first=await app.inject(request),retry=await app.inject(request);
+ assert.equal(first.statusCode,200);assert.equal(retry.statusCode,200);assert.equal(first.json().token,retry.json().token);assert.equal(first.json().orderId,retry.json().orderId);
+ const attacker=await app.inject({...request,payload:{...request.payload,recoveryToken:'b'.repeat(43)}});assert.equal(attacker.statusCode,409);await app.close();
+});

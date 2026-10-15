@@ -1,6 +1,24 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { drawPack, drawRarity, executeBuy, tradeTransition, withTransaction } from "./index.js";
+import { createDeck, dealRound, drawPack, drawRarity, evaluateHand, executeBuy, resolveRound, tradeTransition, withTransaction } from "./index.js";
+
+describe("legacy five-card game rules", () => {
+  it("creates a unique 52-card deck and deals two five-card hands", () => {
+    const deck = createDeck();
+    assert.equal(deck.length, 52);
+    assert.equal(new Set(deck).size, 52);
+    const deal = dealRound(deck);
+    assert.equal(deal?.player.length, 5);
+    assert.equal(deal?.house.length, 5);
+    assert.equal(deal?.rest.length, 42);
+    assert.equal(dealRound(["As", "As"]), null);
+  });
+  it("evaluates a wheel straight flush and resolves tiebreakers", () => {
+    assert.equal(evaluateHand(["As", "2s", "3s", "4s", "5s"]).name, "Straight flush");
+    assert.equal(resolveRound(["As", "Ah", "2s", "3d", "4c"], ["Ks", "Kh", "2h", "3c", "4d"]).outcome, "win");
+    assert.throws(() => evaluateHand(["As", "As", "3s", "4s", "5s"]), /invalid-hand/);
+  });
+});
 
 // Seeded RNG: cycles through a fixed sequence — deterministic draws.
 function seeded(values: number[]): () => number {

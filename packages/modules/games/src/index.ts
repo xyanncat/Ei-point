@@ -138,3 +138,4 @@ export const SET_TRADE_SQL = `
   UPDATE games.trades SET status = $2 WHERE trade_id = $1 AND status = 'pending'`;
 
 export * from './service.js';
+export * from './card-game.js';

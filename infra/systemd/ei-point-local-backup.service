@@ -1,11 +1,15 @@
 [Unit]
-Description=Ei Point local backup to /srv/backups (§9 local tier)
+Description=Ei Point logical and physical local backup
 After=docker.service
 Requires=docker.service
-
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/ei-point-local-backup.sh
+User=root
+WorkingDirectory=/srv/ei-point
+Environment=ENV_FILE=/srv/ei-point/.env
+ExecStart=/usr/bin/bash /srv/ei-point/infra/backup/local-backup.sh
+TimeoutStartSec=5h
+UMask=0077
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7

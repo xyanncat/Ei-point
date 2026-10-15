@@ -81,16 +81,20 @@ export function createTtsQueue(opts: {
   queued: () => number;
 } {
   const deadlineMs = opts.deadlineMs ?? TTS_DEADLINE_MS;
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0 || deadlineMs > TTS_DEADLINE_MS) throw new Error("Invalid TTS deadline");
   let active = 0;
   const waiting: Array<() => void> = [];
 
   async function run(text: string, voice: string): Promise<TtsAudio> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), deadlineMs);
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_,reject) => {
+      timer=setTimeout(()=>{controller.abort();reject(new Error("deadline-exceeded"));},deadlineMs);
+    });
     try {
-      return await opts.synthesize(text, voice, controller.signal);
+      return await Promise.race([opts.synthesize(text, voice, controller.signal),timeout]);
     } finally {
-      clearTimeout(timer);
+      clearTimeout(timer!);
     }
   }
 

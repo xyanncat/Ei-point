@@ -3,42 +3,50 @@ import { INTERACTION_DEADLINE_MS, type FailureCategory, type TelemetryFields } f
 import { isGuildApproved } from "./auth.js";
 import { newCorrelationId } from "./jobs.js";
 
-export interface LifecycleDeps {
+export interface LifecycleDeps<TReply = string> {
   botKey: string;
   guildId: string | null;
   allowlist: string[];
   /** Defer within 3 s when work may be slow; resolves when the ack is sent. */
   defer: () => Promise<void>;
+  /** Runs after the optional authorizer. A denial value is replied without starting work. */
+  authorize?: () => Promise<TReply | undefined>;
   /** The real work. Rejects on failure. Receives an abort signal at deadline. */
-  run: (signal: AbortSignal) => Promise<string>;
-  /** Exactly-once sink (reply or follow-up). Second call must throw or be ignored by caller guard. */
-  reply: (message: string) => Promise<void>;
+  run: (signal: AbortSignal) => Promise<TReply>;
+  /** Exactly-once sink (reply or follow-up). Second call is blocked by this lifecycle. */
+  reply: (message: TReply) => Promise<void>;
+  /** Response payload used for authorization, acknowledgement, timeout and work failures. */
+  failureReply: (category: FailureCategory) => TReply;
   onTelemetry: (t: TelemetryFields) => void;
   ackTimeoutMs?: number;
   deadlineMs?: number;
 }
 
-export async function handleInteraction(deps: LifecycleDeps): Promise<void> {
+export async function handleInteraction<TReply = string>(deps: LifecycleDeps<TReply>): Promise<void> {
   const correlationId = newCorrelationId();
   const started = Date.now();
   let replied = false;
-  const replyOnce = async (message: string): Promise<void> => {
+  const replyOnce = async (message: TReply): Promise<void> => {
     if (replied) throw new Error("double-reply blocked");
     replied = true;
     await deps.reply(message);
   };
   const done = (failureCategory?: FailureCategory): void => {
-    deps.onTelemetry({
-      correlationId,
-      botKey: deps.botKey,
-      latencyMs: Date.now() - started,
-      ...(failureCategory !== undefined ? { failureCategory } : {}),
-    });
+    try {
+      deps.onTelemetry({
+        correlationId,
+        botKey: deps.botKey,
+        latencyMs: Date.now() - started,
+        ...(failureCategory !== undefined ? { failureCategory } : {}),
+      });
+    } catch {
+      // Telemetry must not break acknowledgement, authorization or the result path.
+    }
   };
 
   // Step 2 first: never side-effect for unauthorized guilds.
   if (!isGuildApproved(deps.guildId, deps.allowlist)) {
-    await replyOnce("This server is not approved for Ei Point.");
+    await replyOnce(deps.failureReply("auth"));
     done("auth");
     return;
   }
@@ -49,7 +57,7 @@ export async function handleInteraction(deps: LifecycleDeps): Promise<void> {
     await withTimeout(deps.defer(), ackTimeout);
   } catch {
     try {
-      await replyOnce("Service is starting — please retry in a moment.");
+      await replyOnce(deps.failureReply("timeout"));
     } catch {
       // interaction already expired or dead; surface via telemetry
     }
@@ -59,27 +67,41 @@ export async function handleInteraction(deps: LifecycleDeps): Promise<void> {
 
   // Steps 3–4: deadline + cancellation, exactly one result.
   const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(), deps.deadlineMs ?? 60000);
+  let deadline: NodeJS.Timeout | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    deadline = setTimeout(() => { controller.abort(); reject(new Error("work-deadline")); }, deps.deadlineMs ?? 60000);
+  });
   try {
-    const result = await deps.run(controller.signal);
+    const denied = await Promise.race([
+      Promise.resolve().then(() => deps.authorize?.()),
+      expired,
+    ]);
+    if (denied !== undefined) {
+      await replyOnce(denied);
+      done("permissions");
+      return;
+    }
+    const result = await Promise.race([Promise.resolve().then(() => deps.run(controller.signal)), expired]);
     await replyOnce(result);
     done();
   } catch (err) {
     const aborted = controller.signal.aborted;
     try {
-      await replyOnce(
-        aborted
-          ? "Request timed out — safe to retry; no duplicate charge or card move was made."
-          : "Something failed safely — nothing was applied. Please retry.",
-      );
+      await replyOnce(deps.failureReply(aborted ? "timeout" : classifyFailure(err)));
     } catch {
       // replyOnce throwing means a double-reply bug; surface via telemetry only.
     }
-    const msg = err instanceof Error ? err.message : String(err);
-    done(aborted ? "timeout" : (/rate.?limit/i.test(msg) ? "rate-limit" : "unknown"));
+    done(aborted ? "timeout" : classifyFailure(err));
   } finally {
     clearTimeout(deadline);
   }
+}
+
+function classifyFailure(err: unknown): FailureCategory {
+  const message = err instanceof Error ? `${err.name} ${err.message}` : String(err);
+  if (/rate.?limit/i.test(message)) return "rate-limit";
+  if (/ECONN|57P01|database.*unavailable/i.test(message)) return "db-unavailable";
+  return "unknown";
 }
 
 function withTimeout(p: Promise<void>, ms: number): Promise<void> {

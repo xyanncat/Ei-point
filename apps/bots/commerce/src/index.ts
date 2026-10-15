@@ -1,3 +1,4 @@
+import { dispatchGuildCommand, isControlEnabled } from "@ei-point/flow";
 import { createServer } from "node:http";
 import {
   Client,
@@ -9,6 +10,7 @@ import {
 } from "discord.js";
 import pg from "pg";
 import { commerceCommandDefinitions, respondToCommerceCommand } from "./commands.js";
+import { canSettleCommerce } from "./authorization.js";
 
 const botKey = process.env.BOT_KEY ?? "cipher";
 const url = process.env.DATABASE_URL;
@@ -82,56 +84,69 @@ client.on(Events.InteractionCreate, (interaction) => {
   activeCommands++;
   guarded("command", async () => {
     try {
-      if (!interaction.inCachedGuild() || !allowed.includes(interaction.guildId)) {
-        await interaction.reply({ content: "This server is not approved for commerce bot.", ephemeral: true });
-        return;
-      }
-
-      await interaction.deferReply({ ephemeral: true });
-
-      const options: Record<string, string | number | boolean> = {};
-      for (const opt of interaction.options.data) {
-        if (opt.value !== undefined) options[opt.name] = opt.value;
-        if (opt.options) {
-          for (const subOpt of opt.options) {
-            if (subOpt.value !== undefined) options[subOpt.name] = subOpt.value;
+      let userScopes: string[] = [];
+      const canManage = interaction.inCachedGuild() && interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild);
+      const isOwner = interaction.inCachedGuild() && interaction.guild.ownerId === interaction.user.id;
+      await dispatchGuildCommand({
+        botKey,
+        allowlist: allowed,
+        interaction,
+        authorize: async () => {
+          if (!interaction.inCachedGuild()) return { content: "Commerce commands are only available in an approved server." };
+          const memberRoleIds = [...interaction.member.roles.cache.keys()];
+          if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows,
+            interaction.guildId, botKey, interaction.commandName, memberRoleIds))) {
+            return { content: "This bot, server, or command is disabled for your roles." };
           }
-        }
-      }
-
-      const memberRoleIds = [...interaction.member.roles.cache.keys()];
-      const userScopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
-
-      const sub = interaction.options.getSubcommand(false) ?? undefined;
-
-      await respondToCommerceCommand(
-        {
-          name: interaction.commandName,
-          subcommand: sub,
-          options,
-          guildId: interaction.guildId,
-          userId: interaction.user.id,
-          key: interaction.id,
-          isOwner: interaction.guild.ownerId === interaction.user.id,
-          canManage: interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild),
-          userScopes,
-          paymentOrigin: process.env.PAYMENT_ORIGIN ?? "http://localhost:3000",
-          payeeVpa: process.env.UPI_PAYEE_VPA ?? "payments@upi",
-          payeeName: process.env.UPI_PAYEE_NAME ?? "Ei Point",
-          usdtAddress: process.env.USDT_TRC20_ADDRESS ?? "",
-          defer: async () => {},
-          reply: async (text) => {
-            await interaction.editReply({ content: text, allowedMentions: { parse: [] } });
-          },
+          const identity = (await pool.query("SELECT application_id FROM config.bots WHERE bot_key=$1", [botKey])).rows[0];
+          if (identity?.application_id !== client.user!.id) return { content: "Registered bot identity is unavailable." };
+          userScopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
+          if (interaction.commandName === "settle" && !canSettleCommerce({ isOwner, canManage, userScopes })) {
+            return { content: "❌ Permission denied: `commerce-settle` role or Manage Server required." };
+          }
+          return undefined;
         },
-        pool,
-      );
-    } catch (err) {
-      if (interaction.deferred) {
-        await interaction
-          .editReply({ content: "Commerce operation failed safely. Please retry." })
-          .catch(() => {});
-      }
+        run: async (signal) => {
+          if (!interaction.inCachedGuild()) throw new Error("guild context unavailable");
+          signal.throwIfAborted();
+          const options: Record<string, string | number | boolean> = {};
+          for (const opt of interaction.options.data) {
+            if (opt.value !== undefined) options[opt.name] = opt.value;
+            if (opt.options) for (const subOpt of opt.options) {
+              if (subOpt.value !== undefined) options[subOpt.name] = subOpt.value;
+            }
+          }
+          let response: string | undefined;
+          await respondToCommerceCommand({
+            name: interaction.commandName,
+            subcommand: interaction.options.getSubcommand(false) ?? undefined,
+            options,
+            guildId: interaction.guildId,
+            userId: interaction.user.id,
+            key: interaction.id,
+            isOwner,
+            canManage,
+            userScopes,
+            paymentOrigin: process.env.PAYMENT_ORIGIN ?? "",
+            payeeVpa: process.env.UPI_PAYEE_VPA ?? "",
+            payeeName: process.env.UPI_PAYEE_NAME ?? "",
+            usdtAddress: process.env.USDT_TRC20_ADDRESS ?? "",
+            defer: async () => {},
+            reply: async (text) => { response = text; },
+          }, pool);
+          return { content: (response ?? "Command completed without a response.").slice(0, 2000), allowedMentions: { parse: [] as string[] } };
+        },
+        failureReply: (category) => ({
+          content: category === "auth" ? "This server is not approved for commerce bot."
+            : category === "permissions" ? "This bot, server, or command is disabled for your roles."
+              : category === "timeout" ? "Commerce outcome is unconfirmed. Check your order status before retrying."
+                : "Commerce outcome is unconfirmed. Check your order status before retrying.",
+          allowedMentions: { parse: [] as string[] },
+        }),
+        onTelemetry: (event) => console.info("commerce interaction lifecycle", event),
+      });
+    } catch {
+      console.error("commerce command dispatch failed; inspect service diagnostics");
     } finally {
       activeCommands--;
     }
@@ -147,9 +162,9 @@ async function updateStatus(): Promise<void> {
   try {
     await pool.query(
       `INSERT INTO ops.service_status(service, liveness, gateway, db_ready, latency_ms)
-       VALUES('bot-commerce', 'ok', 'ok', true, $1)
+       VALUES($2, 'ok', 'ok', true, $1)
        ON CONFLICT(service) DO UPDATE SET liveness='ok', gateway='ok', db_ready=true, latency_ms=EXCLUDED.latency_ms, updated_at=now()`,
-      [Math.max(0, Math.round(client.ws.ping))],
+      [Math.max(0, Math.round(client.ws.ping)),`bot-${botKey}`],
     );
     lastDbReady = true;
   } catch {
@@ -201,6 +216,8 @@ process.on("SIGTERM", () => void shutdown());
 
 client.once(Events.ClientReady, () => {
   guarded("startup", async () => {
+    const identity=(await pool.query("SELECT application_id FROM config.bots WHERE bot_key=$1",[botKey])).rows[0];
+    if(identity?.application_id!==client.user!.id){await shutdown();return;}
     identityVerified = true;
     for (const guild of client.guilds.cache.values()) {
       if (!allowed.includes(guild.id)) {

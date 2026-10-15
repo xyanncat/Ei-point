@@ -1,66 +1,34 @@
 #!/usr/bin/env bash
-# Ei Point — Automated Recovery Drill Script (§9, §11, docs/recovery-drills.md)
-# Targets: DB RPO <= 5 min, files RPO <= 24 h, full-service RTO <= 2 h.
+# Isolated logical artifact restore. This is not a WAL/PITR or RPO certification.
 set -euo pipefail
-
-DRILL_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-TEMP_PG_CONTAINER="ei-point-restore-test-$$"
-TEMP_RESTORE_DIR=$(mktemp -d /tmp/ei-point-restore-XXXXXX)
-START_TIME=$(date +%s)
-
-cleanup() {
-  echo "[CLEANUP] Tearing down drill test resources..."
-  docker rm -f "$TEMP_PG_CONTAINER" 2>/dev/null || true
-  rm -rf "$TEMP_RESTORE_DIR" 2>/dev/null || true
-}
+umask 077
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+: "${BACKUP_SNAPSHOT:?Select an explicit completed BACKUP_SNAPSHOT directory}"
+RTO_SECONDS=${RTO_SECONDS:-7200}
+READY_SECONDS=${READY_SECONDS:-60}
+[[ "$RTO_SECONDS" =~ ^[1-9][0-9]*$ && "$READY_SECONDS" =~ ^[1-9][0-9]*$ ]] || exit 1
+START=$(date +%s)
+DEADLINE=$((START+RTO_SECONDS))
+bounded(){ local remaining=$((DEADLINE-$(date +%s))); ((remaining>0)) || { echo 'RTO exceeded' >&2; return 1; }; timeout "$remaining" "$@"; }
+# Verify every required artifact before starting any Docker operation.
+metadata=$(bounded node "$ROOT/scripts/verify-backup.mjs" "$BACKUP_SNAPSHOT")
+database=$(printf '%s' "$metadata" | node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(s).database))')
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/ei-point-restore-XXXXXX")
+CONTAINER="ei-point-restore-$$-$(date +%s)"
+cleanup(){ timeout 15 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; rm -rf -- "$WORK"; }
 trap cleanup EXIT
-
-echo "=== Starting Ei Point Restore Drill: $DRILL_DATE ==="
-
-# 1. Isolated PostgreSQL Database Restore Test
-echo "[STEP 1/3] Launching isolated ephemeral PostgreSQL container..."
-docker run -d --name "$TEMP_PG_CONTAINER" \
-  -e POSTGRES_PASSWORD=drill_pass \
-  -e POSTGRES_DB=ei_point_drill \
-  postgres:17.5 >/dev/null
-
-echo "[WAIT] Waiting for ephemeral Postgres to become ready..."
-until docker exec "$TEMP_PG_CONTAINER" pg_isready -U postgres -d ei_point_drill >/dev/null 2>&1; do
+password=$(node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("hex"))')
+bounded docker run -d --name "$CONTAINER" --network none --label ei-point.restore-drill=true -e POSTGRES_USER=ei_restore_probe -e "POSTGRES_PASSWORD=$password" -e "POSTGRES_DB=$database" postgres:17.5 >/dev/null
+READY_DEADLINE=$(( $(date +%s)+READY_SECONDS ))
+until bounded docker exec "$CONTAINER" pg_isready -h 127.0.0.1 -U ei_restore_probe -d "$database" >/dev/null 2>&1; do
+  (( $(date +%s)<READY_DEADLINE && $(date +%s)<DEADLINE )) || { echo 'Restore database readiness timeout' >&2; exit 1; }
   sleep 1
 done
-
-echo "[STEP 2/3] Simulating database restore & schema verification..."
-# Apply migrations to isolated DB
-for f in infra/postgres/migrations/*.sql; do
-  docker exec -i "$TEMP_PG_CONTAINER" psql -U postgres -d ei_point_drill < "$f" >/dev/null
-done
-
-# Verify table presence and constraints across all schemas
-TABLE_COUNT=$(docker exec "$TEMP_PG_CONTAINER" psql -U postgres -d ei_point_drill -t -c "
-  SELECT count(*) FROM information_schema.tables 
-  WHERE table_schema IN ('access', 'config', 'ops', 'security', 'moderation', 'community', 'games', 'ai', 'music', 'commerce');
-")
-TABLE_COUNT=$(echo "$TABLE_COUNT" | tr -d '[:space:]')
-echo "[OK] Restored $TABLE_COUNT schema tables in isolated instance."
-
-if [ "$TABLE_COUNT" -lt 15 ]; then
-  echo "[FATAL] Table count $TABLE_COUNT is less than expected schema count!" >&2
-  exit 1
-fi
-
-# 2. File Volume Restore Simulation (artwork/uploads)
-echo "[STEP 3/3] Verifying durable assets checksum in $TEMP_RESTORE_DIR..."
-mkdir -p "$TEMP_RESTORE_DIR/artwork"
-if [ -d "project assets/services" ]; then
-  cp -r "project assets/services" "$TEMP_RESTORE_DIR/services"
-  echo "[OK] Service definition files verified and readable."
-fi
-
-END_TIME=$(date +%s)
-RTO_SEC=$((END_TIME - START_TIME))
-echo "[SUCCESS] Restore drill completed in ${RTO_SEC}s (Target RTO <= 7200s)."
-
-# Log drill result to docs/recovery-drills.md
-ENTRY="| $DRILL_DATE | Full isolated restore drill | PASS | RPO <= 5m | RTO ${RTO_SEC}s | Verified $TABLE_COUNT tables in ephemeral Postgres instance |"
-echo "$ENTRY" >> docs/recovery-drills.md
-echo "[INFO] Recorded drill entry into docs/recovery-drills.md"
+bounded docker exec -i "$CONTAINER" psql -X -v ON_ERROR_STOP=1 -U ei_restore_probe -d "$database" < "$BACKUP_SNAPSHOT/roles.sql"
+bounded docker exec -i "$CONTAINER" pg_restore --exit-on-error -U ei_restore_probe -d "$database" < "$BACKUP_SNAPSHOT/postgres.dump"
+# A real SQL read after restore; schema recreation from migrations is forbidden.
+bounded docker exec "$CONTAINER" psql -X -v ON_ERROR_STOP=1 -U ei_restore_probe -d "$database" -c "SELECT count(*) AS restored_user_tables FROM pg_catalog.pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema');"
+bounded python3 "$ROOT/infra/backup/extract-artwork.py" "$BACKUP_SNAPSHOT/artwork.tar.gz" "$WORK/artwork"
+ELAPSED=$(( $(date +%s)-START ))
+((ELAPSED<=RTO_SECONDS)) || { echo 'Restore exceeded RTO' >&2; exit 1; }
+printf 'Logical bundle restore PASS: database=%s elapsed=%ss; artifact hashes, pg_restore, SQL read and extracted artwork content verified. WAL/PITR and recovery-point age were not tested.\n' "$database" "$ELAPSED"

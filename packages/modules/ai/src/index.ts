@@ -53,16 +53,20 @@ export function createRouter(opts: {
   queued: () => number;
 } {
   const deadlineMs = opts.deadlineMs ?? AI_DEADLINE_MS;
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0 || deadlineMs > AI_DEADLINE_MS) throw new Error("Invalid AI deadline");
   let active = 0;
   const waiting: Array<() => void> = [];
 
   async function runWith(provider: ProviderFn, prompt: ChatMessage[]): Promise<ProviderResult> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), deadlineMs);
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => { controller.abort(); reject(new Error("deadline-exceeded")); }, deadlineMs / 2);
+    });
     try {
-      return await provider(prompt, controller.signal);
+      return await Promise.race([provider(prompt, controller.signal), timeout]);
     } finally {
-      clearTimeout(timer);
+      clearTimeout(timer!);
     }
   }
 
@@ -103,7 +107,7 @@ export const UPSERT_THREAD_SQL = `
   INSERT INTO ai.threads (guild_id, user_id, persona, updated_at)
   VALUES ($1, $2, $3, now())
   ON CONFLICT (guild_id, user_id, persona) DO UPDATE SET updated_at = now()
-  RETURNING thread_id`;
+  RETURNING thread_id, summary`;
 
 export const ADD_MESSAGE_SQL = `
   INSERT INTO ai.messages (thread_id, role, content, tokens)
@@ -124,3 +128,28 @@ export const USAGE_TODAY_SQL = `
   SELECT COALESCE(SUM(tokens_in + tokens_out), 0) AS used
   FROM ai.usage_ledger
   WHERE guild_id = $1 AND user_id = $2 AND created_at >= date_trunc('day', now())`;
+
+
+/** OpenAI-compatible HTTP adapter. Configuration and all malformed/error responses fail closed. */
+export function makeHttpProvider(apiUrl?: string, apiKey?: string, request: typeof fetch = fetch, model?: string): ProviderFn {
+  return async (messages, signal) => {
+    if (!apiUrl || !apiKey) throw new Error("provider-not-configured");
+    const response = await request(apiUrl, {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ ...(model ? { model } : {}), messages, max_tokens: 1000 }), signal,
+    });
+    if (!response.ok) throw new Error(`provider-http-${response.status}`);
+    const data = await response.json() as any;
+    const text = data?.choices?.[0]?.message?.content;
+    const tokensIn = data?.usage?.prompt_tokens;
+    const tokensOut = data?.usage?.completion_tokens;
+    if (typeof text !== "string" || !text.trim() || !Number.isSafeInteger(tokensIn) || tokensIn < 0 || !Number.isSafeInteger(tokensOut) || tokensOut < 0)
+      throw new Error("invalid-provider-response");
+    return { text, tokensIn, tokensOut };
+  };
+}
+
+/** Bounded extractive memory, explicitly quoted data rather than additional instructions. */
+export function summarizeConversation(previous: string | null, messages: ChatMessage[]): string {
+  return [previous ?? "", ...messages.map(m => `${m.role}: ${m.content}`)].filter(Boolean).join("\n").slice(-2000);
+}

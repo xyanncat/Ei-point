@@ -114,8 +114,9 @@ export async function recordModerationCase(
   reason: string,
   moderatorId: string,
   expiresAt: string | null = null,
+  interactionKey?: string,
 ): Promise<string> {
-  const idempotencyKey = `case-${guildId}-${userId}-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const idempotencyKey = interactionKey ? `moderation:${guildId}:${interactionKey}:${kind}` : `case-${guildId}-${userId}-${kind}-${crypto.randomUUID()}`;
   const res = await pool.query<{ case_id: string }>(CREATE_CASE_SQL, [
     guildId,
     userId,
@@ -126,6 +127,29 @@ export async function recordModerationCase(
     idempotencyKey,
   ]);
   return res.rows[0]?.case_id ?? "unknown";
+}
+
+
+/** Commit the case intent before Discord. Never replay an ambiguous external action automatically. */
+export async function executeSanction(
+  pool: Pool, req: ModerationCommandRequest, targetId: string, kind: CaseKind,
+  reason: string, effect: () => Promise<unknown>, expiresAt: string | null = null,
+): Promise<string> {
+  const key = `moderation:${req.guildId}:${req.key}:${kind}`;
+  const result = await pool.query<{ case_id: string }>(
+    `INSERT INTO moderation.cases(guild_id,user_id,kind,reason,expires_at,moderator_id,idempotency_key,execution_status)
+     VALUES($1,$2,$3,$4,$5,$6,$7,'pending') ON CONFLICT(idempotency_key) DO NOTHING RETURNING case_id`,
+    [req.guildId, targetId, kind, reason, expiresAt, req.userId, key]);
+  const caseId = result.rows[0]?.case_id;
+  if (!caseId) throw new Error("This interaction already has a durable case; inspect its execution status before retrying.");
+  try {
+    await effect();
+    await pool.query("UPDATE moderation.cases SET execution_status='applied' WHERE case_id=$1", [caseId]);
+  } catch (error) {
+    await pool.query("UPDATE moderation.cases SET execution_status='unconfirmed' WHERE case_id=$1", [caseId]).catch(() => {});
+    throw new Error(`Case #${caseId}: external outcome unconfirmed; inspect Discord before retrying.`, { cause: error });
+  }
+  return caseId;
 }
 
 export async function respondToModerationCommand(
@@ -146,7 +170,7 @@ export async function respondToModerationCommand(
     }
     const targetUserId = String(options.user);
     const reason = String(options.reason);
-    const caseId = await recordModerationCase(pool, guildId, targetUserId, "warn", reason, userId);
+    const caseId = await recordModerationCase(pool, guildId, targetUserId, "warn", reason, userId, null, req.key);
     await req.reply(`⚠️ **Warned** <@${targetUserId}> (Case #${caseId}). Reason: ${reason}`);
     return;
   }
@@ -161,8 +185,7 @@ export async function respondToModerationCommand(
     const days = Number(options.days ?? 0);
     const deleteSeconds = days * 86400;
 
-    await req.banUser(targetUserId, deleteSeconds, reason);
-    const caseId = await recordModerationCase(pool, guildId, targetUserId, "ban", reason, userId);
+    const caseId = await executeSanction(pool, req, targetUserId, "ban", reason, () => req.banUser(targetUserId, deleteSeconds, reason));
     await req.reply(`🔨 **Banned** <@${targetUserId}> (Case #${caseId}). Reason: ${reason}`);
     return;
   }
@@ -175,8 +198,7 @@ export async function respondToModerationCommand(
     const targetUserId = String(options.user_id);
     const reason = String(options.reason);
 
-    await req.unbanUser(targetUserId, reason);
-    const caseId = await recordModerationCase(pool, guildId, targetUserId, "unban", reason, userId);
+    const caseId = await executeSanction(pool, req, targetUserId, "unban", reason, () => req.unbanUser(targetUserId, reason));
     await req.reply(`✅ **Unbanned** \`${targetUserId}\` (Case #${caseId}). Reason: ${reason}`);
     return;
   }
@@ -201,9 +223,8 @@ export async function respondToModerationCommand(
       return;
     }
 
-    await req.timeoutMember(req.targetMember, durationMs, reason);
     const expiresAt = new Date(Date.now() + durationMs).toISOString();
-    const caseId = await recordModerationCase(pool, guildId, targetUserId, "timeout", reason, userId, expiresAt);
+    const caseId = await executeSanction(pool, req, targetUserId, "timeout", reason, () => req.timeoutMember(req.targetMember!, durationMs, reason), expiresAt);
     await req.reply(`⏳ **Timed out** <@${targetUserId}> for ${minutes}m (Case #${caseId}). Reason: ${reason}`);
     return;
   }
@@ -221,25 +242,25 @@ export async function respondToModerationCommand(
       return;
     }
 
-    const deleted = await req.bulkDeleteMessages(count);
-    await recordModerationCase(
-      pool,
-      guildId,
-      userId,
-      "purge",
-      `Purged ${deleted} messages in channel`,
-      userId,
-    );
+    let deleted = 0;
+    await executeSanction(pool, req, userId, "purge", `Requested purge of ${count} messages`, async () => {
+      deleted = await req.bulkDeleteMessages(count);
+    });
     await req.reply(`🧹 Deleted **${deleted}** messages.`);
     return;
   }
 
   if (name === "cases") {
+    if (!checkPerm("note")) {
+      await req.reply("Permission denied: moderation-note scope or Manage Server required to read internal case history.");
+      return;
+    }
     const targetUserId = String(options.user);
     const limit = Number(options.limit ?? 10);
     const res = await pool.query<{
       case_id: string;
       kind: string;
+      execution_status: string;
       reason: string;
       expires_at: Date | null;
       moderator_id: string;
@@ -253,7 +274,7 @@ export async function respondToModerationCommand(
 
     const lines = res.rows.map((c) => {
       const exp = c.expires_at ? ` (Expires: ${new Date(c.expires_at).toLocaleDateString()})` : "";
-      return `• **Case #${c.case_id}** [${c.kind.toUpperCase()}] by <@${c.moderator_id}>: ${c.reason}${exp}`;
+      return `• **Case #${c.case_id}** [${c.kind.toUpperCase()}; ${c.execution_status}] by <@${c.moderator_id}>: ${c.reason}${exp}`;
     });
     await req.reply(`**Moderation Cases for <@${targetUserId}>:**\n${lines.join("\n")}`);
     return;
@@ -266,7 +287,7 @@ export async function respondToModerationCommand(
     }
     const targetUserId = String(options.user);
     const text = String(options.text);
-    const caseId = await recordModerationCase(pool, guildId, targetUserId, "note", text, userId);
+    const caseId = await recordModerationCase(pool, guildId, targetUserId, "note", text, userId, null, req.key);
     await req.reply(`📝 Recorded staff note #${caseId} on <@${targetUserId}>.`);
     return;
   }

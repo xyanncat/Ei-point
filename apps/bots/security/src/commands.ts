@@ -1,16 +1,14 @@
-import { PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import { validateRestorableSnapshot, type GuildSnapshot } from "./snapshot.js";
+import { SlashCommandBuilder } from "discord.js";
 import type { Pool } from "pg";
 import {
   snapshotChecksum,
   verifySnapshot,
   planRestore,
   trustBand,
-  SET_LOCKDOWN_SQL,
-  CLEAR_LOCKDOWN_SQL,
   WHITELIST_ADD_SQL,
   SAVE_SNAPSHOT_SQL,
   RECORD_INCIDENT_SQL,
-  type RestoreStep,
 } from "@ei-point/module-security";
 
 export interface SecurityCommandRequest {
@@ -25,6 +23,9 @@ export interface SecurityCommandRequest {
   canManage: boolean;
   defer(): Promise<void>;
   reply(text: string): Promise<void>;
+  captureSnapshot?(): Promise<GuildSnapshot>;
+  restoreSnapshot?(snapshot: GuildSnapshot, snapshotId: string): Promise<void>;
+  setLockdown?(active: boolean, reason: string): Promise<void>;
   getGuildChannels(): Promise<Array<{ id: string; name: string }>>;
   getGuildRoles(): Promise<Array<{ id: string; name: string }>>;
 }
@@ -81,6 +82,8 @@ export const securityCommandDefinitions = [
         .setDescription("Manage guild state snapshots for restore drills")
         .addSubcommand((sub) => sub.setName("create").setDescription("Create a checksum-verified guild snapshot"))
         .addSubcommand((sub) => sub.setName("list").setDescription("List recent snapshots"))
+        .addSubcommand((sub) => sub.setName("restore").setDescription("Owner-only: execute guild configuration recovery from snapshot")
+          .addStringOption(opt => opt.setName("snapshot_id").setDescription("Snapshot UUID").setRequired(true)))
         .addSubcommand((sub) =>
           sub
             .setName("plan")
@@ -107,8 +110,8 @@ export async function respondToSecurityCommand(
 
   if (subcommand === "status") {
     const [lockdownRes, incidentRes, whitelistRes] = await Promise.all([
-      pool.query<{ active: boolean; reason: string | null; updated_at: Date }>(
-        "SELECT active, reason, updated_at FROM security.lockdown_state WHERE guild_id = $1",
+      pool.query<{ active: boolean; reason: string | null; effects_status: string; updated_at: Date }>(
+        "SELECT active, reason, effects_status, updated_at FROM security.lockdown_state WHERE guild_id = $1",
         [guildId],
       ),
       pool.query<{ count: string }>(
@@ -123,7 +126,7 @@ export async function respondToSecurityCommand(
 
     const lockdown = lockdownRes.rows[0];
     const statusText = lockdown?.active
-      ? `🔴 **LOCKDOWN ACTIVE** (Reason: ${lockdown.reason ?? "None specified"})`
+      ? `🔴 **LOCKDOWN ${lockdown.effects_status === "applied" ? "ACTIVE" : "INCOMPLETE - retry or restore"}** (Reason: ${lockdown.reason ?? "None specified"})`
       : "🟢 Normal Operations";
 
     await req.reply(
@@ -144,26 +147,26 @@ export async function respondToSecurityCommand(
     const mode = String(options.mode ?? "on");
     const reason = options.reason ? String(options.reason) : null;
 
+    if (!req.setLockdown) throw new Error("Discord lockdown executor unavailable; no lockdown was reported.");
+    await req.setLockdown(mode === "on", reason ?? "Manual security lockdown");
     if (mode === "on") {
-      await pool.query(SET_LOCKDOWN_SQL, [guildId, reason ?? "Manual lockdown triggered", userId]);
       await pool.query(RECORD_INCIDENT_SQL, [
         guildId,
         "lockdown_engaged",
         userId,
         "high",
         JSON.stringify({ reason }),
-        `lockdown-on-${guildId}-${Date.now()}`,
+        `lockdown-on-${guildId}-${req.key}`,
       ]);
       await req.reply(`🚨 **Lockdown ENGAGED** by <@${userId}>. Reason: ${reason ?? "Not provided"}`);
     } else {
-      await pool.query(CLEAR_LOCKDOWN_SQL, [guildId]);
       await pool.query(RECORD_INCIDENT_SQL, [
         guildId,
         "lockdown_cleared",
         userId,
         "medium",
         JSON.stringify({ reason }),
-        `lockdown-off-${guildId}-${Date.now()}`,
+        `lockdown-off-${guildId}-${req.key}`,
       ]);
       await req.reply(`✅ **Lockdown CLEARED** by <@${userId}>.`);
     }
@@ -244,16 +247,10 @@ export async function respondToSecurityCommand(
     }
 
     if (subcommand === "create") {
-      const channels = await req.getGuildChannels();
-      const roles = await req.getGuildRoles();
-      const payload: Record<string, { name: string; kind: RestoreStep["kind"] }> = {};
-
-      for (const ch of channels) {
-        payload[ch.id] = { name: ch.name, kind: "channel" };
-      }
-      for (const ro of roles) {
-        payload[ro.id] = { name: ro.name, kind: "role" };
-      }
+      if (!req.captureSnapshot) { await req.reply("Full snapshot capture is unavailable."); return; }
+      const payload = await req.captureSnapshot();
+      const channels = payload.channels;
+      const roles = payload.roles;
 
       const checksum = snapshotChecksum(payload);
       const res = await pool.query<{ snapshot_id: string }>(
@@ -292,7 +289,7 @@ export async function respondToSecurityCommand(
       return;
     }
 
-    if (subcommand === "plan") {
+    if (subcommand === "plan" || subcommand === "restore") {
       const snapshotId = String(options.snapshot_id);
       const res = await pool.query<{ payload: any; checksum: string }>(
         "SELECT payload, checksum FROM security.snapshots WHERE snapshot_id = $1 AND guild_id = $2",
@@ -309,6 +306,18 @@ export async function respondToSecurityCommand(
         return;
       }
 
+      if (subcommand === "restore") {
+        if (!isOwner) { await req.reply("Only the current guild owner may execute snapshot recovery."); return; }
+        if (!req.restoreSnapshot) { await req.reply("Snapshot recovery executor unavailable."); return; }
+        try {
+          validateRestorableSnapshot(payload, guildId);
+          await req.restoreSnapshot(payload, snapshotId);
+          await req.reply("Snapshot configuration recovery completed: roles, channels, permissions, positions, and captured guild settings applied. Deleted message history is not recoverable.");
+        } catch (error) {
+          await req.reply(`Snapshot recovery incomplete: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return;
+      }
       const currentChannels = await req.getGuildChannels();
       const currentRoles = await req.getGuildRoles();
       const currentIds = new Set([
@@ -316,9 +325,13 @@ export async function respondToSecurityCommand(
         ...currentRoles.map((r) => r.id),
       ]);
 
-      const steps = planRestore(payload, currentIds);
+      const entities = payload.version === 2 ? Object.fromEntries([
+        ...payload.roles.map((role: any) => [role.id, { name: role.name, kind: "role" }]),
+        ...payload.channels.map((channel: any) => [channel.id, { name: channel.name, kind: "channel" }]),
+      ]) : payload;
+      const steps = planRestore(entities, currentIds);
       if (steps.length === 0) {
-        await req.reply("✅ Guild matches snapshot perfectly. No restoration steps needed.");
+        await req.reply("✅ All captured entity IDs exist. Permissions, settings, names and ordering still require comparison or owner recovery.");
         return;
       }
 
@@ -329,7 +342,7 @@ export async function respondToSecurityCommand(
       const more = steps.length > 10 ? `\n...and ${steps.length - 10} more items.` : "";
 
       await req.reply(
-        `**Restore Plan (${steps.length} changes detected):**\n${preview}${more}\n\n*Note: Run through disaster recovery procedures to execute.*`,
+        `**Restore Plan (${steps.length} changes detected):**\n${preview}${more}\n\n*Owner execution: /security snapshot restore snapshot_id:<id>. Legacy snapshots and unsupported channel types fail closed.*`,
       );
       return;
     }

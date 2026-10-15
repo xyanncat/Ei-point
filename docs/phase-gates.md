@@ -1,11 +1,13 @@
+> Current status: the 2026-10-14 audit found gaps in these historical checklists. See `docs/audits/2026-10-15-remediation.md` for current fixes and remaining live acceptance gates. Checkmarks below describe implemented code, not production certification.
+
 # Phase 1 — audit status
 
 - [x] Bot registry defined (6 identities, §2) in `docs/feature-matrix.md`
 - [x] Failure modes mapped from `VPS_BENCHMARK.md` findings #1–12
-- [x] Full per-command inventory — complete: all three source archives (`EI-point.zip`, `Ei Paradise.zip`, `swish.zip`) indexed and mapped into `docs/feature-matrix.md`.
+- [ ] Exhaustive semantic command/event/UI parity. All three ZIPs now have reproducible file/hash and command-declaration inventory; candidate matches still need behavior/test mapping.
 
 
-- Gate: Phase 1 passes completely. Full matrix established.
+- Gate remains open: inventory candidates are not proof of implemented semantic parity.
 
 # Phase 2 — audit status
 
@@ -30,7 +32,8 @@
 
 # Phase 3 — audit status
 
-- [x] Interaction lifecycle: ack → authorize → deadline → exactly-once reply → telemetry (`packages/flow/src/lifecycle.ts`)
+- [x] Shared interaction lifecycle helper: acknowledgement, guild approval, authorization boundary, deadline, exactly-once reply and telemetry (`packages/flow/src/lifecycle.ts`)
+- [ ] Fleet adoption is incomplete: Himiko, community and commerce now use the shared lifecycle; Kafka, AI, moderation/security and music still require dispatcher integration and per-dispatcher acceptance tests.
 - [x] Guild allowlist + scopes (`auth.ts`); backoff/jitter + lease SQL (`jobs.ts`); outbox SQL (`outbox.ts`)
 - [x] Graceful shutdown helper with explicit rejection-handler setup (`shutdown.ts`)
 - [x] Worker LISTEN + reconciliation loop with graceful drain (`apps/workers/src/index.ts`)
@@ -51,7 +54,7 @@
 - [ ] Full-fleet latency, soak and backup/restore acceptance remain launch gates.
 - Handoff: `docs/phase4-dashboard.md`. Feature-specific settings forms are outside this foundation phase.
 
-# Phase 5 — protection modules (done, self-audited)
+# Phase 5 — protection modules (local repairs; live acceptance open)
 
 - [x] Security: raid detection, trust scoring + bands, antinuke verdicts, whitelist/lockdown/incident/snapshot SQL,
       checksum-guarded snapshots + restore planner (`packages/modules/security/`)
@@ -70,11 +73,11 @@
 - [x] Real PostgreSQL integration tests: 18/18 pass, including concurrent double-buy, trade acceptance, supply issuance and injected transaction rollback. Existing community/games tests: 14/14 pass. Full `pnpm test` passes.
 - [x] Workspace typecheck passes; production community package imports and all command schemas validate.
 - [ ] Linux image build and live Discord command/delivery verification. Docker is unavailable here. Phase 4 now passes the normal Windows workspace build; Linux standalone images remain unverified.
-- [ ] Actual catalog/assets and archived-command parity: source/asset drops are absent; no invented production data.
+- [ ] Actual catalog/assets and archived-command parity: source archives and 19 service definitions are present; production card definitions/artwork and semantic command coverage remain open.
 - [ ] VPS two-guild latency/load, 72-hour soak and backup/restore acceptance remain Phase 10 launch gates.
 - Handoff and operator instructions: `docs/phase6-community-economy.md`. These replace the earlier premature gate based only on SQL/helpers and simulated concurrency.
 
-# Phase 7 — commerce + website (done, self-audited)
+# Phase 7 — commerce + website (local repairs; live acceptance open)
 
 - [x] Catalog/money rules, order token hashing, UPI payload builder, USDT (tron/erc20) validation
 - [x] Order state machine, referral codes + YYYY-MM cycles + month-boundary expiry
@@ -83,7 +86,7 @@
 - [x] Public verification API (`GET /api/orders/verify`, hash lookup, safe fields) + verify page
 - [x] Tests 9/9 pass, `tsc` clean — including one test-caught fix (TRON vector length)
 
-# Phase 8 — AI + music (done, self-audited)
+# Phase 8 — AI + music (local repairs; provider and voice acceptance open)
 
 - [x] AI memory: bounded prompt window (count + char caps) with summary prefix; thread/message/
       summary/usage SQL (`packages/modules/ai/`)
@@ -108,15 +111,15 @@
 - [x] Demo proves all routes 200 with live fixture data; fixed two real relative-path bugs
       (`globals.css` theme import, nested `../../components` imports)
 
-# Phase 9 — Operations (done, self-audited)
+# Phase 9 — Operations (tooling repaired; actual recovery acceptance open)
 
 - [x] Backups: pgBackRest configuration (`infra/backup/pgbackrest.conf`) for base backups and WAL streaming to off-host S3; restic file volume backup script (`infra/backup/restic-backup.sh`) with 7-daily/4-weekly retention and music-cache exclusions.
 - [x] Local VPS tier (no outer source): `infra/backup/local-backup.sh` (pg_dump -Fc + roles + artwork tarball + manifest, 700/600 perms) on a 6h systemd timer (`infra/systemd/ei-point-local-backup.*`), 28-snapshot retention, atomic publish via `.partial` + rename.
 - [x] Host Watchdog: startup grace check, consecutive-failure threshold, bounded hourly restart budget (`MAX_RESTARTS_PER_HOUR=3`), and disk usage alerts at 70/80/90% (`infra/systemd/ei-point-watchdog.sh`).
 - [x] Resolver checks: DNS audit script asserting 1.1.1.1 is never used and probing fallback resolvers (`scripts/check-dns-resolvers.sh`).
 - [x] Monitoring & Fleet Health: multi-service health probe covering all 6 bot HTTP ports, API, Nginx, and `ops.service_status` (`scripts/health-fleet.sh`).
-- [x] Deployment: rolling zero-downtime deployment script with pre-flight checks, schema migrations, asset validation, and health gating (`scripts/deploy.sh`).
-- [x] Restore Drills: automated isolated restore drill with ephemeral DB, schema assertion, and hash checks (`scripts/restore-drill.sh`).
+- [x] Deployment: immutable-release deployment and application rollback scripts with pre-flight checks, schema migrations, asset validation, and health gating (`scripts/deploy.sh`).
+- [x] Restore Drills: artifact-based logical restore drill with bounded readiness, strict SQL errors, artifact hashes and verified artwork extraction; real execution remains an operator staging gate (`scripts/restore-drill.sh`).
 
 # Phase 10 — Staging and launch (fleet ready; VPS gates open)
 

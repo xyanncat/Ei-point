@@ -1,19 +1,20 @@
 name: ei-point
 services:
   postgres:
-    # Pin patch + digest at release time. Digest below is a placeholder — resolve with:
-    #   docker pull postgres:17.5 && docker inspect --format='{{.RepoDigests}}' postgres:17.5
-    image: "postgres:17.5"
+    # Local custom pgBackRest image; release manifests must pin its published digest.
+    image: "ei-point/postgres:local"
+    build: { context: ../.., dockerfile: infra/backup/Dockerfile }
     restart: unless-stopped
-    # Phase 2: archiving OFF. Phase 9 enables pgBackRest with a real archive_command + repo mount.
-    command: ["postgres", "-c", "max_connections=120", "-c", "shared_buffers=2GB", "-c", "wal_level=replica"]
+    # Archive each completed WAL segment into the durable pgBackRest repository.
+    command: ["postgres", "-c", "max_connections=120", "-c", "shared_buffers=2GB", "-c", "wal_level=replica", "-c", "archive_mode=on", "-c", "archive_timeout=60s", "-c", "archive_command=pgbackrest --stanza=ei-point archive-push %p"]
     environment:
       POSTGRES_USER: ${POSTGRES_ADMIN_USER:-ei_point_admin}
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - backup-staging:/var/backups/ei-point:ro
+      - pgbackrest:/var/lib/pgbackrest
+      - ../backup/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
     networks: [data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy:
@@ -30,6 +31,18 @@ services:
     # Note: POSTGRES_USER here is the admin bootstrap login (see .env.example).
     # App services connect via DATABASE_URL with the least-privilege ei_point_app login.
 
+  migrate:
+    profiles: ["maintenance"]
+    build: { context: ../.., dockerfile: apps/api/Dockerfile }
+    restart: "no"
+    command: ["sh", "-c", "node infra/postgres/run-migrations.mjs && node infra/postgres/bootstrap-role.mjs"]
+    environment:
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:-}
+      APPLICATION_DATABASE_URL: ${DATABASE_URL}
+    networks: [data]
+    depends_on: { postgres: { condition: service_healthy } }
+    deploy: { resources: { limits: { cpus: "0.25", memory: 256M } } }
+
   nginx:
     image: "nginx:1.27.3-alpine"
     restart: unless-stopped
@@ -44,7 +57,10 @@ services:
       - /tmp
       - /var/cache/nginx
       - /run
-    networks: [edge, app]
+    networks:
+      edge: {}
+      app:
+        ipv4_address: ${TRUSTED_PROXY_IP:-172.29.10.2}
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy:
       resources:
@@ -69,6 +85,7 @@ services:
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
       OAUTH_REDIRECT_URL: ${OAUTH_REDIRECT_URL}
       COOKIE_SECURE: "true"
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_IP:-172.29.10.2}/32
       DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN}
       DASHBOARD_ADMIN_IDS: ${DASHBOARD_ADMIN_IDS:-}
       VAULT_SECRET: ${VAULT_SECRET}
@@ -97,6 +114,12 @@ services:
       BOT_TOKEN: ${EMBED_WORKER_BOT_TOKEN:-}
     networks: [app, data]
     ports: ["127.0.0.1:3001:3001"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy:
       resources:
@@ -107,6 +130,12 @@ services:
   web:
     build: { context: ../.., dockerfile: apps/dashboard/Dockerfile }
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/dashboard').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     environment:
       API_INTERNAL_URL: http://api:3001
       NEXT_PUBLIC_API_BASE: http://api:3001
@@ -120,19 +149,20 @@ services:
 
   # --- Bots: 5× Node (discord.js 14) + 1× Python (music). Caps per §7. ---
   bot-security:
+    profiles: ["legacy-disabled"]
     build: { context: ../.., dockerfile: apps/bots/security/Dockerfile }
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      BOT_KEY: kafka
-      BOT_TOKEN: ${DISCORD_KAFKA_BOT_TOKEN:-${DISCORD_SECURITY_BOT_TOKEN:-}}
+      BOT_KEY: security
+      BOT_TOKEN: ${DISCORD_SECURITY_BOT_TOKEN:-}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
     networks: [app, data]
     ports: ["127.0.0.1:3101:3101"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3101/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3101/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -141,19 +171,20 @@ services:
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
   bot-moderation:
+    profiles: ["legacy-disabled"]
     build: { context: ../.., dockerfile: apps/bots/moderation/Dockerfile }
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      BOT_KEY: kafka
-      BOT_TOKEN: ${DISCORD_KAFKA_BOT_TOKEN:-${DISCORD_MODERATION_BOT_TOKEN:-}}
+      BOT_KEY: moderation
+      BOT_TOKEN: ${DISCORD_MODERATION_BOT_TOKEN:-}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
     networks: [app, data]
     ports: ["127.0.0.1:3102:3102"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3102/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3102/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -177,7 +208,7 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3103/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3103/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -194,6 +225,15 @@ services:
       BOT_KEY: cyrene
       BOT_TOKEN: ${DISCORD_CYRENE_BOT_TOKEN:-${DISCORD_AI_BOT_TOKEN:-}}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
+      AI_PROVIDER_PRIMARY: ${AI_PROVIDER_PRIMARY:-}
+      AI_PROVIDER_PRIMARY_MODEL: ${AI_PROVIDER_PRIMARY_MODEL:-}
+      AI_PROVIDER_FALLBACK_MODEL: ${AI_PROVIDER_FALLBACK_MODEL:-}
+      AI_PROVIDER_PRIMARY_KEY: ${AI_PROVIDER_PRIMARY_KEY:-}
+      AI_PROVIDER_FALLBACK: ${AI_PROVIDER_FALLBACK:-}
+      AI_PROVIDER_FALLBACK_KEY: ${AI_PROVIDER_FALLBACK_KEY:-}
+      AI_CONCURRENT: ${AI_CONCURRENT:-2}
+      AI_QUEUE_MAX: ${AI_QUEUE_MAX:-20}
+      AI_DEADLINE_MS: ${AI_DEADLINE_MS:-60000}
       TTS_PROVIDER_URL: ${TTS_PROVIDER_URL:-}
       TTS_PROVIDER_KEY: ${TTS_PROVIDER_KEY:-}
       TTS_PROVIDER_NAME: ${TTS_PROVIDER_NAME:-default}
@@ -202,7 +242,7 @@ services:
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "0.75", memory: 2G } } }
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3104/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3104/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -226,7 +266,7 @@ services:
     volumes: ["music-cache:/srv/music-cache"]
     deploy: { resources: { limits: { cpus: "1.00", memory: 3G } } }
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:3105/health/live')\" || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:3105/health/ready')\" || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -240,6 +280,12 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       BOT_KEY: cipher
+      PAYMENT_ORIGIN: ${PAYMENT_ORIGIN}
+      UPI_PAYEE_VPA: ${UPI_PAYEE_VPA:-}
+      UPI_PAYEE_NAME: ${UPI_PAYEE_NAME:-Ei point}
+      USDT_TRC20_ADDRESS: ${USDT_TRC20_ADDRESS:-}
+      INR_PER_USDT: ${INR_PER_USDT:-}
+      COMMERCE_REFERRAL_REWARD_MINOR: ${COMMERCE_REFERRAL_REWARD_MINOR:-0}
       BOT_TOKEN: ${DISCORD_CIPHER_BOT_TOKEN:-${DISCORD_COMMERCE_BOT_TOKEN:-}}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
     networks: [app, data]
@@ -247,7 +293,7 @@ services:
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "0.50", memory: 2G } } }
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3106/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3106/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -255,13 +301,8 @@ services:
     depends_on: { postgres: { condition: service_healthy } }
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
-  # --- Cutover targets (profiles: cutover). Start explicitly with
-  # `docker compose --profile cutover up bot-kafka bot-himiko` in the test guild.
-  # bot-kafka replaces bot-security + bot-moderation (single Kafka token, one
-  # gateway connection). Uses port 3108 side-by-side so legacy 3101/3102 keep
-  # running until cutover; on cutover it takes 3101 and the legacy pair stops.
+  # Canonical fleet. Legacy services are isolated behind legacy-disabled; never run both.
   bot-kafka:
-    profiles: ["cutover"]
     build: { context: ../.., dockerfile: apps/bots/kafka/Dockerfile }
     restart: unless-stopped
     environment:
@@ -275,7 +316,7 @@ services:
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3108/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3108/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -284,7 +325,6 @@ services:
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
   bot-himiko:
-    profiles: ["cutover"]
     build: { context: ../.., dockerfile: apps/bots/himiko/Dockerfile }
     restart: unless-stopped
     environment:
@@ -298,7 +338,7 @@ services:
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy: { resources: { limits: { cpus: "0.50", memory: 2G } } }
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3107/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3107/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -309,6 +349,12 @@ services:
   workers:
     build: { context: ../.., dockerfile: apps/workers/Dockerfile }
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "--input-type=module", "-e", "import pg from 'pg';const c=new pg.Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:3000});try{await c.connect();const r=await c.query(\"SELECT 1 FROM ops.service_status WHERE service='workers' AND liveness='ok' AND db_ready AND updated_at>now()-interval '90 seconds'\");process.exitCode=r.rowCount===1?0:1;}catch{process.exitCode=1;}finally{await c.end();}"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     environment:
       DATABASE_URL: ${DATABASE_URL}
       DISCORD_SECURITY_BOT_TOKEN: ${DISCORD_SECURITY_BOT_TOKEN:-}
@@ -333,11 +379,15 @@ services:
 
 networks:
   edge: { name: ei-point_edge }
-  app: { name: ei-point_app }
+  app:
+    name: ei-point_app
+    ipam:
+      config: [{subnet: "${APP_SUBNET:-172.29.10.0/24}"}]
   data: { name: ei-point_data, internal: true }
 
 volumes:
   pgdata: { name: ei-point_pgdata }
+  pgbackrest: { name: ei-point_pgbackrest }
   artwork: { name: ei-point_artwork }
   music-cache: { name: ei-point_music-cache }
   logs: { name: ei-point_logs }

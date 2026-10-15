@@ -11,8 +11,10 @@ import pg from "pg";
 import { CommunityService } from "@ei-point/module-community";
 import { EconomyService } from "@ei-point/module-games";
 import { commandDefinitions, respondToCommand } from "./commands.js";
+import { communityCommandPermissionDenial } from "./authorization.js";
 import { deliverMessages } from "./delivery.js";
 import {
+  dispatchGuildCommand,
   isControlEnabled,
   applyCommunityConfiguration,
 } from "@ei-point/flow";
@@ -96,74 +98,67 @@ client.on(Events.InteractionCreate, (interaction) => {
   activeCommands++;
   guarded("command", async () => {
     try {
-      if (
-        !interaction.inCachedGuild() ||
-        !allowed.includes(interaction.guildId)
-      ) {
-        await interaction.reply({
-          content: "This server is not approved.",
-          ephemeral: true,
-        });
-        return;
-      }
-      await interaction.deferReply({ ephemeral: true });
-      if (
-        !(await isControlEnabled(
-          controlQuery,
-          interaction.guildId,
-          botKey,
-          interaction.commandName,
-          [...interaction.member.roles.cache.keys()],
-        ))
-      ) {
-        await interaction.editReply({
-          content: "This bot, server, or command is disabled for your roles.",
-          allowedMentions: { parse: [] },
-        });
-        return;
-      }
-      await applyCommunityConfiguration(pool, interaction.guildId, botKey);
-      const options: Record<string, string | number | boolean> = {};
-      const flatten = (values: typeof interaction.options.data): void => {
-        for (const option of values) {
-          if (option.value !== undefined) options[option.name] = option.value;
-          if (option.options) flatten(option.options);
-        }
-      };
-      flatten(interaction.options.data);
-      options.username = interaction.user.username;
-      options.guild_name = interaction.guild.name;
-      options.member_count = interaction.guild.memberCount;
-      const sub = interaction.options.getSubcommand(false);
-      await respondToCommand(
-        {
-          name: interaction.commandName,
-          ...(sub ? { subcommand: sub } : {}),
-          options,
-          guildId: interaction.guildId,
-          userId: interaction.user.id,
-          key: interaction.id,
-          isOwner: interaction.guild.ownerId === interaction.user.id,
-          canManage: interaction.memberPermissions.has(
-            PermissionFlagsBits.ManageGuild,
-          ),
-          defer: async () => {},
-          reply: (content) =>
-            interaction
-              .editReply({ content, allowedMentions: { parse: [] } })
-              .then(() => {}),
+      await dispatchGuildCommand({
+        botKey,
+        allowlist: allowed,
+        interaction,
+        authorize: async () => {
+          if (!interaction.inCachedGuild()) return { content: "This server is not approved." };
+          if (!(await isControlEnabled(controlQuery, interaction.guildId, botKey,
+            interaction.commandName, [...interaction.member.roles.cache.keys()]))) {
+            return { content: "This bot, server, or command is disabled for your roles." };
+          }
+          const commandDenial = communityCommandPermissionDenial(
+            interaction.commandName,
+            interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild),
+            interaction.guild.ownerId === interaction.user.id,
+          );
+          if (commandDenial) return { content: commandDenial };
+          return undefined;
         },
-        { community, economy },
-      );
+        run: async (signal) => {
+          if (!interaction.inCachedGuild()) throw new Error("guild context unavailable");
+          signal.throwIfAborted();
+          await applyCommunityConfiguration(pool, interaction.guildId, botKey);
+          signal.throwIfAborted();
+          const options: Record<string, string | number | boolean> = {};
+          const flatten = (values: typeof interaction.options.data): void => {
+            for (const option of values) {
+              if (option.value !== undefined) options[option.name] = option.value;
+              if (option.options) flatten(option.options);
+            }
+          };
+          flatten(interaction.options.data);
+          options.username = interaction.user.username;
+          options.guild_name = interaction.guild.name;
+          options.member_count = interaction.guild.memberCount;
+          const sub = interaction.options.getSubcommand(false);
+          let response: string | undefined;
+          await respondToCommand({
+            name: interaction.commandName,
+            ...(sub ? { subcommand: sub } : {}),
+            options,
+            guildId: interaction.guildId,
+            userId: interaction.user.id,
+            key: interaction.id,
+            isOwner: interaction.guild.ownerId === interaction.user.id,
+            canManage: interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild),
+            defer: async () => {},
+            reply: async (content) => { response = content; },
+          }, { community, economy });
+          return { content: (response ?? "Command completed without a response.").slice(0, 2000), allowedMentions: { parse: [] as string[] } };
+        },
+        failureReply: (category) => ({
+          content: category === "auth" ? "This server is not approved."
+            : category === "permissions" ? "This bot, server, or command is disabled for your roles."
+              : category === "timeout" ? "The outcome is unconfirmed. Check the operation before retrying."
+                : "Server controls are temporarily unavailable. Check the operation before retrying.",
+          allowedMentions: { parse: [] as string[] },
+        }),
+        onTelemetry: (event) => console.info("community interaction lifecycle", event),
+      });
     } catch {
-      if (interaction.deferred)
-        await interaction
-          .editReply({
-            content:
-              "Server controls are temporarily unavailable. Please retry shortly.",
-            allowedMentions: { parse: [] },
-          })
-          .catch(() => {});
+      console.error("community command dispatch failed; inspect service diagnostics");
     } finally {
       activeCommands--;
     }
@@ -284,9 +279,9 @@ async function pump(): Promise<void> {
       );
     }
     await pool.query(
-      `INSERT INTO ops.service_status(service,liveness,gateway,db_ready,latency_ms) VALUES('bot-community','ok','ok',true,$1)
+      `INSERT INTO ops.service_status(service,liveness,gateway,db_ready,latency_ms) VALUES($1,'ok','ok',true,$2)
       ON CONFLICT(service) DO UPDATE SET liveness='ok',gateway='ok',db_ready=true,latency_ms=EXCLUDED.latency_ms,updated_at=now()`,
-      [Math.max(0, Math.round(client.ws.ping))],
+      [`bot-${botKey}`, Math.max(0, Math.round(client.ws.ping))],
     );
     lastDbReady = true;
   })();

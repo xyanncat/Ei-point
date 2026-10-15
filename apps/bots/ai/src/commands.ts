@@ -1,8 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { SlashCommandBuilder } from "discord.js";
 import type { Pool } from "pg";
 import {
   buildPromptWindow,
-  budgetExceeded,
+  summarizeConversation,
   UPSERT_THREAD_SQL,
   ADD_MESSAGE_SQL,
   RECENT_MESSAGES_SQL,
@@ -90,13 +91,7 @@ export async function processConversation(
   askRouter: AiCommandRequest["askRouter"],
   dailyBudgetCap: number,
 ): Promise<string> {
-  // 1. Check user budget
-  const usageRes = await pool.query<{ used: string }>(USAGE_TODAY_SQL, [guildId, userId]);
-  const usedToday = Number(usageRes.rows[0]?.used ?? 0);
-  if (budgetExceeded(usedToday, dailyBudgetCap)) {
-    return "⚠️ You have reached your daily AI usage limit. Please try again tomorrow.";
-  }
-
+  if (userPrompt.length > 4000) return "Please keep your AI prompt within 4000 characters.";
   // 2. Fetch or create thread
   const threadRes = await pool.query<{ thread_id: string; summary: string | null }>(
     UPSERT_THREAD_SQL,
@@ -120,31 +115,50 @@ export async function processConversation(
   // 4. Build prompt window with summary
   const window = buildPromptWindow(history, thread.summary, 12, 4000);
 
-  // 5. Ask router
-  const response = await askRouter(window);
-  if (!response.ok || !response.result) {
-    if (response.reason === "queue-full") {
-      return "⏳ The AI service is currently at capacity. Please try again in a few moments.";
+  // Reserve a conservative token ceiling atomically before invoking either provider.
+  const reservedTokens = new TextEncoder().encode(window.map(m => m.content).join(" ")).length + window.length * 16 + 1000;
+  const reservation = randomUUID();
+  const admission = await pool.connect();
+  try {
+    await admission.query("BEGIN");
+    await admission.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`ai-budget:${guildId}:${userId}`]);
+    const usage = await admission.query<{used: string}>(USAGE_TODAY_SQL, [guildId, userId]);
+    const pending = await admission.query<{reserved: string}>("SELECT COALESCE(SUM(tokens),0) reserved FROM ai.budget_reservations WHERE guild_id=$1 AND user_id=$2 AND expires_at>now()", [guildId,userId]);
+    if (Number(usage.rows[0]?.used ?? 0) + Number(pending.rows[0]?.reserved ?? 0) + reservedTokens > dailyBudgetCap) {
+      await admission.query("ROLLBACK");
+      return "Your remaining daily AI budget is too small for this request.";
     }
-    return "❌ The AI provider is temporarily unreachable. Please retry shortly.";
+    await admission.query("INSERT INTO ai.budget_reservations VALUES($1,$2,$3,$4,date_trunc('day',now())+interval '1 day')", [reservation,guildId,userId,reservedTokens]);
+    await admission.query("COMMIT");
+  } catch (error) { await admission.query("ROLLBACK"); throw error; }
+  finally { admission.release(); }
+
+  let releaseReservation = false;
+  try {
+    const response = await askRouter(window);
+    if (!response.ok || !response.result) {
+      releaseReservation = true;
+      return response.reason === "queue-full" ? "The AI service is at capacity. Please retry shortly." : "The AI provider is temporarily unreachable. Please retry shortly.";
+    }
+    const result = response.result;
+    const transaction = await pool.connect();
+    try {
+      await transaction.query("BEGIN");
+      await transaction.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`ai-budget:${guildId}:${userId}`]);
+      await transaction.query(ADD_MESSAGE_SQL, [threadId,"user",userPrompt,result.tokensIn]);
+      await transaction.query(ADD_MESSAGE_SQL, [threadId,"assistant",result.text,result.tokensOut]);
+      await transaction.query(RECORD_USAGE_SQL, [guildId,userId,response.via ?? "primary",result.tokensIn,result.tokensOut]);
+      await transaction.query(SAVE_SUMMARY_SQL, [threadId,summarizeConversation(thread.summary,[...history,{role:"assistant",content:result.text}])]);
+      await transaction.query("DELETE FROM ai.budget_reservations WHERE reservation_id=$1", [reservation]);
+      await transaction.query("COMMIT");
+      releaseReservation = true;
+    } catch (error) { await transaction.query("ROLLBACK"); throw error; }
+    finally { transaction.release(); }
+    return result.text;
+  } finally {
+    if (releaseReservation) await pool.query("DELETE FROM ai.budget_reservations WHERE reservation_id=$1", [reservation]);
   }
 
-  const result = response.result;
-
-  // 6. Persist user message and assistant reply
-  await Promise.all([
-    pool.query(ADD_MESSAGE_SQL, [threadId, "user", userPrompt, result.tokensIn]),
-    pool.query(ADD_MESSAGE_SQL, [threadId, "assistant", result.text, result.tokensOut]),
-    pool.query(RECORD_USAGE_SQL, [
-      guildId,
-      userId,
-      response.via ?? "primary",
-      result.tokensIn,
-      result.tokensOut,
-    ]),
-  ]);
-
-  return result.text;
 }
 
 export async function respondToAiCommand(

@@ -1,59 +1,47 @@
 #!/usr/bin/env bash
-# Ei Point — Safe Deployment and Cutover Script (§10, §12)
-# Enforces pre-flight checks, schema migrations, asset validation, container updates, and health gating.
+# Deploy an explicit immutable release; never silently build/reuse a mutable image.
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+umask 077
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
-
-echo "=========================================================="
-echo " Starting Ei Point Fleet Deployment"
-echo "=========================================================="
-
-# 1. Pre-flight Environment Checks
-echo "[STEP 1/5] Checking environment and resource envelopes..."
-if [ ! -f ".env" ]; then
-  echo "[FATAL] .env file not found! Copy from .env.example and configure secrets." >&2
-  exit 1
-fi
-
-# Disk usage check
-DISK_USAGE=$(df -P / | awk 'NR==2{print $5}' | tr -d '%')
-if [ "$DISK_USAGE" -ge 85 ]; then
-  echo "[FATAL] Host disk usage is critical (${DISK_USAGE}%). Clean disk before deploying." >&2
-  exit 1
-fi
-echo "[OK] Host disk usage is ${DISK_USAGE}%."
-
-# 2. Asset and Manifest Validation
-echo "[STEP 2/5] Validating project assets and generating manifests..."
-node scripts/build-project-assets.mjs
-
-# 3. Database Schema Migrations (backward-compatible)
-echo "[STEP 3/5] Applying forward database migrations..."
-node infra/postgres/run-migrations.mjs
-
-# 4. Compose Service Rolling Update
-echo "[STEP 4/5] Deploying container release with Docker Compose..."
-docker compose --env-file .env -f infra/docker/compose.yml up -d --remove-orphans
-
-# 5. Post-deploy Fleet Health Gate
-echo "[STEP 5/5] Running fleet health check and gating..."
-ATTEMPTS=0
-MAX_ATTEMPTS=12
-until bash scripts/health-fleet.sh || [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; do
-  ATTEMPTS=$((ATTEMPTS + 1))
-  echo "[WAIT] Fleet warming up... attempt $ATTEMPTS of $MAX_ATTEMPTS (sleeping 5s)"
-  sleep 5
+RELEASE_MANIFEST=${1:?Usage: deploy.sh release.json}
+ENV_FILE=${ENV_FILE:-$ROOT_DIR/.env}
+STATE_DIR=${RELEASE_STATE_DIR:-$ROOT_DIR/.releases}
+[[ -f "$ENV_FILE" && -f "$RELEASE_MANIFEST" ]] || { echo 'Release and environment files required' >&2; exit 1; }
+: "${BACKUP_SNAPSHOT:?Select a verified BACKUP_SNAPSHOT before deployment}"
+node scripts/verify-backup.mjs "$BACKUP_SNAPSHOT" --max-age-hours "${DEPLOY_BACKUP_MAX_AGE_HOURS:-24}" >/dev/null
+USE=$(df -P "$ROOT_DIR" | awk 'NR==2{gsub(/%/,"",$5);print $5}')
+(( USE<85 )) || { echo 'Insufficient deployment disk headroom' >&2; exit 1; }
+mkdir -p "$STATE_DIR"
+exec 9>"$STATE_DIR/deploy.lock"
+flock -n 9 || { echo 'Another deployment is active' >&2; exit 1; }
+WORK=$(mktemp -d "$STATE_DIR/deploy.XXXXXX")
+trap 'rm -rf -- "$WORK"' EXIT
+node scripts/release-manifest.mjs "$RELEASE_MANIFEST" "$WORK/release.compose.json"
+mapfile -t BOTS < <(sed '/^$/d' "$WORK/release.compose.json.bots")
+COMPOSE=(docker compose --project-name ei-point --env-file "$ENV_FILE" -f infra/docker/compose.yml -f "$WORK/release.compose.json")
+"${COMPOSE[@]}" config --quiet
+"${COMPOSE[@]}" pull postgres nginx api web workers "${BOTS[@]}" migrate
+# A single identity must never have old and replacement handlers running together.
+"${COMPOSE[@]}" --profile legacy-disabled stop bot-security bot-moderation
+bash scripts/stop-retired-bots.sh "$WORK/release.compose.json.bots"
+"${COMPOSE[@]}" up -d --no-build --wait --wait-timeout 90 postgres
+pgid=$("${COMPOSE[@]}" ps -q postgres)
+docker exec --user postgres "$pgid" sh -c 'exec pgbackrest --stanza=ei-point --pg1-user="$POSTGRES_USER" stanza-create'
+docker exec --user postgres "$pgid" sh -c 'exec pgbackrest --stanza=ei-point --pg1-user="$POSTGRES_USER" check'
+# Do not mutate the schema until WAL archiving has a usable repository.
+"${COMPOSE[@]}" --profile maintenance run --rm --no-deps migrate
+"${COMPOSE[@]}" up -d --no-build --remove-orphans --wait --wait-timeout 120 api web workers "${BOTS[@]}" nginx
+healthy=false
+for attempt in {1..12}; do
+ if bash scripts/health-fleet.sh "$RELEASE_MANIFEST"; then healthy=true; break; fi
+ sleep 5
 done
-
-if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
-  echo "[FATAL] Fleet health check failed after deploy!" >&2
-  echo "[ROLLBACK] To roll back, run: docker compose --env-file .env -f infra/docker/compose.yml down && docker compose --env-file .env -f infra/docker/compose.yml up -d" >&2
-  exit 1
+if [[ "$healthy" != true ]]; then
+ printf 'Release readiness failed. Previous release is preserved; use scripts/rollback.sh %s/current.json. Do not restore the database automatically.\n' "$STATE_DIR" >&2
+ exit 1
 fi
-
-echo "=========================================================="
-echo " [SUCCESS] Ei Point Fleet Deployed and Verified Healthy"
-echo "=========================================================="
+[[ ! -f "$STATE_DIR/current.json" ]] || cp -- "$STATE_DIR/current.json" "$STATE_DIR/previous.json"
+cp -- "$RELEASE_MANIFEST" "$WORK/current.json"
+mv -f -- "$WORK/current.json" "$STATE_DIR/current.json"
+echo 'Release is ready; load/soak and restore acceptance remain separate gates.'

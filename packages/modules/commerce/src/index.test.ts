@@ -98,18 +98,18 @@ describe("claims + settlement", () => {
 
   it("claims a pending order once; rejects the rest", async () => {
     assert.deepEqual(
-      await executeClaim(fake("pending").db, { orderId: "o", proofRef: "p", idempotencyKey: "k" }),
+      await executeClaim(fake("pending").db, { orderId: "o", guildId:"guild", buyerId:"buyer", proofRef: "123456789012", idempotencyKey: "k" }),
       { ok: true },
     );
-    assert.deepEqual(await executeClaim(fake("claimed").db, { orderId: "o", proofRef: "p", idempotencyKey: "k2" }), {
+    assert.deepEqual(await executeClaim(fake("claimed").db, { orderId: "o", guildId:"guild", buyerId:"buyer", proofRef: "123456789012", idempotencyKey: "k2" }), {
       ok: false,
       reason: "already-claimed",
     });
-    assert.deepEqual(await executeClaim(fake("rejected").db, { orderId: "o", proofRef: "p", idempotencyKey: "k3" }), {
+    assert.deepEqual(await executeClaim(fake("rejected").db, { orderId: "o", guildId:"guild", buyerId:"buyer", proofRef: "123456789012", idempotencyKey: "k3" }), {
       ok: false,
       reason: "not-pending",
     });
-    assert.deepEqual(await executeClaim(fake(null).db, { orderId: "o", proofRef: "p", idempotencyKey: "k4" }), {
+    assert.deepEqual(await executeClaim(fake(null).db, { orderId: "o", guildId:"guild", buyerId:"buyer", proofRef: "123456789012", idempotencyKey: "k4" }), {
       ok: false,
       reason: "not-pending",
     });
@@ -117,21 +117,27 @@ describe("claims + settlement", () => {
 
   it("settles a claimed order once; rejects duplicates and wrong states", async () => {
     assert.deepEqual(
-      await executeSettle(fake("claimed").db, { orderId: "o", settledBy: "s", idempotencyKey: "k" }),
+      await executeSettle(fake("claimed").db, { orderId: "o", guildId:"guild", settledBy: "s", idempotencyKey: "k" }),
       { ok: true },
     );
-    assert.deepEqual(await executeSettle(fake("settled").db, { orderId: "o", settledBy: "s", idempotencyKey: "k2" }), {
+    assert.deepEqual(await executeSettle(fake("settled").db, { orderId: "o", guildId:"guild", settledBy: "s", idempotencyKey: "k2" }), {
       ok: false,
       reason: "already-settled",
     });
-    assert.deepEqual(await executeSettle(fake("pending").db, { orderId: "o", settledBy: "s", idempotencyKey: "k3" }), {
+    assert.deepEqual(await executeSettle(fake("pending").db, { orderId: "o", guildId:"guild", settledBy: "s", idempotencyKey: "k3" }), {
       ok: false,
       reason: "not-claimable",
     });
     // Lost update race: mark affects 0 rows -> already-settled, never double-paid.
     assert.deepEqual(
-      await executeSettle(fake("claimed", false).db, { orderId: "o", settledBy: "s", idempotencyKey: "k4" }),
+      await executeSettle(fake("claimed", false).db, { orderId: "o", guildId:"guild", settledBy: "s", idempotencyKey: "k4" }),
       { ok: false, reason: "already-settled" },
     );
   });
+});
+
+describe("claim validation boundary",()=>{
+ it("rejects expired orders and malformed payment proof before any write",async()=>{
+  for(const [proof,expires,reason] of [["wrong",new Date(Date.now()+10000),"invalid-proof"],["123456789012",new Date(0),"expired"]] as const){let calls=0;const db={query:async()=>{calls++;return {rows:[{status:"pending",method:"upi",expires_at:expires}],rowCount:1};}};assert.deepEqual(await executeClaim(db,{orderId:"o",guildId:"g",buyerId:"b",proofRef:proof,idempotencyKey:"key"}),{ok:false,reason});assert.equal(calls,1);}
+ });
 });

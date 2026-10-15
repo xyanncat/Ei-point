@@ -12,3 +12,5 @@ tmp/
 music-cache/
 logs/
 coverage/
+
+.releases/

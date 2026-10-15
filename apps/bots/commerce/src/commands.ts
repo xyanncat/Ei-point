@@ -1,5 +1,7 @@
+import { randomBytes } from "node:crypto";
 import { PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import type { Pool } from "pg";
+import { canSettleCommerce } from "./authorization.js";
 import {
   buildUpiPayload,
   executeClaim,
@@ -80,10 +82,10 @@ export async function respondToCommerceCommand(
   pool: Pool,
 ): Promise<void> {
   const { name, subcommand, options, guildId, userId, isOwner, canManage, userScopes } = req;
-  const isPrivileged = isOwner || canManage || userScopes.includes("commerce-settle");
+  const isPrivileged = canSettleCommerce({ isOwner, canManage, userScopes });
 
   if (name === "catalog") {
-    const res = await pool.query<{ sku: string; name: string; price_minor: string; currency: string }>(
+    const res = await pool.query<{ sku: string; name: string; price_minor: string; currency: string; membership_days: number }>(
       "SELECT sku, name, price_minor, currency FROM commerce.catalog WHERE active = TRUE ORDER BY price_minor ASC",
     );
     if (res.rows.length === 0) {
@@ -100,9 +102,13 @@ export async function respondToCommerceCommand(
 
   if (name === "order") {
     if (subcommand === "create") {
+      if (!buildUpiPayload({payeeVpa:req.payeeVpa,payeeName:req.payeeName?.trim()??"",amountMinor:1,note:"configuration check"}) || !req.paymentOrigin) {
+        await req.reply("Payments are not configured for Discord checkout. Use the website checkout for configured payment methods or contact staff.");
+        return;
+      }
       const sku = String(options.sku).trim();
-      const catRes = await pool.query<{ sku: string; name: string; price_minor: string; currency: string }>(
-        "SELECT sku, name, price_minor, currency FROM commerce.catalog WHERE sku = $1 AND active = TRUE",
+      const catRes = await pool.query<{ sku: string; name: string; price_minor: string; currency: string; membership_days: number }>(
+        "SELECT sku, name, price_minor, currency, membership_days FROM commerce.catalog WHERE sku = $1 AND active = TRUE",
         [sku],
       );
       if (catRes.rows.length === 0) {
@@ -112,25 +118,27 @@ export async function respondToCommerceCommand(
 
       const item = catRes.rows[0]!;
       const priceMinor = Number(item.price_minor);
+      if(item.currency!=="INR" || !Number.isSafeInteger(priceMinor) || priceMinor<=0){await req.reply("This service is unavailable for Discord UPI checkout. Use the website checkout for configured payment methods.");return;}
       const { token, hash } = newOrderToken();
-      const idempotencyKey = `ord-${guildId}-${userId}-${sku}-${Date.now()}`;
+      const idempotencyKey = `ord-${req.key}`;
+      const publicId=`RP-${randomBytes(3).toString("hex").toUpperCase()}`;
 
       const orderRes = await pool.query<{ order_id: string }>(
-        `INSERT INTO commerce.orders (guild_id, buyer_id, sku, amount_minor, order_token_hash, idempotency_key)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO commerce.orders (guild_id, buyer_id, sku, amount_minor, order_token_hash, idempotency_key, service_name, membership_days,public_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9)
          RETURNING order_id`,
-        [guildId, userId, sku, priceMinor, hash, idempotencyKey],
+        [guildId, userId, sku, priceMinor, hash, idempotencyKey, item.name, item.membership_days,publicId],
       );
       const orderId = orderRes.rows[0]!.order_id;
 
       const upiUrl = buildUpiPayload({
-        payeeVpa: req.payeeVpa || "payments@upi",
-        payeeName: req.payeeName || "Ei Point",
+        payeeVpa: req.payeeVpa,
+        payeeName: req.payeeName,
         amountMinor: priceMinor,
         note: `Ei-${orderId.slice(0, 8)}`,
       });
 
-      const verifyUrl = `${req.paymentOrigin}/verify?token=${token}`;
+      const verifyUrl = `${req.paymentOrigin}/verify?id=${publicId}`;
 
       await req.reply(
         `🧾 **Order Placed Successfully!**\n` +
@@ -139,7 +147,6 @@ export async function respondToCommerceCommand(
           `• Amount: **₹${(priceMinor / 100).toFixed(2)}**\n` +
           `• Status: **Pending Payment**\n\n` +
           (upiUrl ? `📲 **UPI Pay Link:** <${upiUrl}>\n` : "") +
-          (req.usdtAddress ? `💳 **USDT (TRC20):** \`${req.usdtAddress}\`\n` : "") +
           `🔗 **Verification & Claim Page:** <${verifyUrl}>\n\n` +
           `*After payment, claim your order using \`/order claim order_id:${orderId} proof:<your_utr_or_tx_id>\`*`,
       );
@@ -156,8 +163,8 @@ export async function respondToCommerceCommand(
         created_at: Date;
         buyer_id: string;
       }>(
-        "SELECT order_id, sku, amount_minor, status, created_at, buyer_id FROM commerce.orders WHERE order_id = $1",
-        [orderId],
+        "SELECT order_id, sku, amount_minor, status, created_at, buyer_id FROM commerce.orders WHERE order_id = $1 AND guild_id=$2 AND (buyer_id=$3 OR $4::boolean)",
+        [orderId,guildId,userId,isPrivileged],
       );
       if (res.rows.length === 0) {
         await req.reply("❌ Order not found.");
@@ -179,7 +186,7 @@ export async function respondToCommerceCommand(
     if (subcommand === "claim") {
       const orderId = String(options.order_id).trim();
       const proof = String(options.proof).trim();
-      const idempotencyKey = `claim-${orderId}-${Date.now()}`;
+      const idempotencyKey = `claim-${req.key}`;
 
       const client = await pool.connect();
       try {
@@ -191,7 +198,7 @@ export async function respondToCommerceCommand(
               return { rows: r.rows, rowCount: r.rowCount ?? 0 };
             },
           },
-          { orderId, proofRef: proof, idempotencyKey },
+          { orderId, proofRef: proof, idempotencyKey, guildId, buyerId:userId },
         );
         if (!claimResult.ok) {
           await client.query("ROLLBACK");
@@ -218,7 +225,7 @@ export async function respondToCommerceCommand(
       return;
     }
     const orderId = String(options.order_id).trim();
-    const idempotencyKey = `settle-${orderId}-${Date.now()}`;
+    const idempotencyKey = `settle-${req.key}`;
 
     const client = await pool.connect();
     try {
@@ -230,7 +237,7 @@ export async function respondToCommerceCommand(
             return { rows: r.rows, rowCount: r.rowCount ?? 0 };
           },
         },
-        { orderId, settledBy: userId, idempotencyKey },
+        { orderId, settledBy: userId, idempotencyKey, guildId, referralRewardMinor:Number(process.env.COMMERCE_REFERRAL_REWARD_MINOR??0) },
       );
       if (!settleResult.ok) {
         await client.query("ROLLBACK");

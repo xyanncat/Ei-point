@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import pg from 'pg';
-import EmbeddedPostgres from 'embedded-postgres';
+import EmbeddedPostgres from '../helpers/embedded-postgres.mjs';
 import * as games from '../../packages/modules/games/dist/index.js';
 import * as community from '../../packages/modules/community/dist/index.js';
 
@@ -28,7 +28,7 @@ after(async () => { await pool?.end(); await server?.stop(); });
 beforeEach(async () => {
   assert.equal(typeof games.EconomyService, 'function', 'Phase 6 must provide a real transaction service');
   assert.equal(typeof community.CommunityService, 'function', 'Phase 6 must persist community events');
-  await pool.query(`TRUNCATE games.operations, games.trade_items, games.trades, games.listings, games.pack_items, games.packs, games.card_instances, games.card_definitions, games.balances, games.ledger, community.xp_events, community.xp, community.welcome_templates, ops.outbox CASCADE`);
+  await pool.query(`TRUNCATE games.operations, games.card_games, games.trade_items, games.trades, games.listings, games.pack_items, games.packs, games.card_instances, games.card_definitions, games.balances, games.ledger, community.xp_events, community.xp, community.welcome_templates, ops.outbox CASCADE`);
   await pool.query(`INSERT INTO access.guilds(guild_id,name,owner_id,approved) VALUES ($1,'Test', $2,true) ON CONFLICT(guild_id) DO UPDATE SET approved=true`, [guild, alice]);
 });
 const economy = () => new games.EconomyService(pool);
@@ -143,6 +143,38 @@ test('finite supply issuance under concurrency never duplicates serials', async 
   const rows = await pool.query('SELECT serial_number FROM games.card_instances ORDER BY serial_number');
   assert.deepEqual(rows.rows.map(r => r.serial_number), ['1', '2']);
 });
+test('card inspection stays within the guild and the legacy five-card game persists concurrent rounds', async () => {
+  const issued = await issue(alice, 'legacy-card');
+  const details = await economy().cardInfo(guild, issued.instanceId);
+  assert.equal(details.cardId, 'test-card');
+  assert.equal(details.ownerUserId, alice);
+  assert.equal(details.serialNumber, '1');
+  const otherGuild = '100000000000000099';
+  await pool.query(`INSERT INTO access.guilds(guild_id,name,owner_id,approved) VALUES ($1,'Other',$2,true) ON CONFLICT(guild_id) DO UPDATE SET approved=true`, [otherGuild, bob]);
+  assert.equal(await economy().cardInfo(otherGuild, issued.instanceId), null);
+  assert.deepEqual(await economy().cardStats(guild, alice), {
+    total: 1, unique: 1, byRarity: { common: 1 },
+  });
+  await economy().revokeCard({ guildId: guild, userId: alice, key: 'revoke-card', instanceId: issued.instanceId });
+  assert.equal((await economy().cardInfo(guild, issued.instanceId)).status, 'revoked');
+  assert.deepEqual(await economy().cardStats(guild, alice), { total: 0, unique: 0, byRarity: {} });
+  await assert.rejects(economy().createListing({ guildId: guild, userId: alice, key: 'list-revoked', instanceId: issued.instanceId, price: 10 }), /card-unavailable/);
+  const initial = await economy().cardGame(guild, alice);
+  assert.equal(initial.deck.length, 52);
+  assert.equal(new Set(initial.deck).size, 52);
+  const rounds = await Promise.all([
+    economy().playCardRound({ guildId: guild, userId: alice, key: 'round-1' }),
+    economy().playCardRound({ guildId: guild, userId: alice, key: 'round-2' }),
+  ]);
+  assert.equal(rounds.length, 2);
+  const final = await economy().cardGame(guild, alice);
+  assert.equal(final.gamesPlayed, '2');
+  assert.equal(final.deck.length, 32);
+  assert.equal(final.hand.length, 5);
+  assert.ok(['win', 'loss', 'push'].includes(rounds[0].outcome));
+  assert.deepEqual(rounds[0], await economy().playCardRound({ guildId: guild, userId: alice, key: 'round-1' }));
+  assert.equal((await economy().cardGame(guild, alice)).gamesPlayed, '2');
+});
 test('rank returns the correct position and successful level-up is durable', async () => {
   await members().configure(guild, { xpPerMessage: 100, levelChannelId: bob });
   await members().awardXp({ guildId: guild, userId: alice, messageId: 'a' });
@@ -167,6 +199,8 @@ test('cross-guild purchase and unauthorized trade accept cannot mutate cards', a
 test('Discord command dispatch acknowledges before work and restricts admin commands', async () => {
   const bot = await import('../../apps/bots/community/dist/commands.js').catch(() => ({}));
   assert.equal(typeof bot.respondToCommand, 'function', 'Phase 6 needs a usable Discord command handler');
+  const registered = new Set(bot.commandDefinitions.map(command => command.toJSON().name));
+  for (const name of ['cardinfo', 'cardstats', 'play', 'deck', 'hand', 'score']) assert.ok(registered.has(name), `community bot must register legacy ${name}`);
   const messages = [], order = [];
   const context = { guildId: guild, userId: bob, key: 'command', isOwner: false, canManage: false, defer: async () => order.push('ack'), reply: async text => messages.push(text) };
   await bot.respondToCommand({ ...context, name: 'rank', options: {} }, { community: members(), economy: economy() });
@@ -174,6 +208,16 @@ test('Discord command dispatch acknowledges before work and restricts admin comm
   await bot.respondToCommand({ ...context, name: 'cardadmin', subcommand: 'credit', options: { amount: 100, user: bob } }, { community: members(), economy: economy() });
   assert.match(messages[1], /owner/i);
   assert.equal(await economy().balance(guild, bob), '0');
+  const actor = { ...context, userId: alice, isOwner: true, canManage: true };
+  await bot.respondToCommand({ ...actor, key: 'play-idempotent', name: 'play', options: {} }, { community: members(), economy: economy() });
+  const firstPlay = messages.at(-1);
+  await bot.respondToCommand({ ...actor, key: 'play-idempotent', name: 'play', options: {} }, { community: members(), economy: economy() });
+  assert.equal(messages.at(-1), firstPlay);
+  assert.equal((await economy().cardGame(guild, alice)).gamesPlayed, '1');
+  await bot.respondToCommand({ ...actor, name: 'hand', key: 'hand', options: {} }, { community: members(), economy: economy() });
+  assert.match(messages.at(-1), /Last hand/);
+  await bot.respondToCommand({ ...actor, name: 'score', key: 'score', options: {} }, { community: members(), economy: economy() });
+  assert.match(messages.at(-1), /Rounds: 1/);
 });
 test('opening an unaffordable pack rolls back minted cards and supply counters', async () => {
   await catalog(2);

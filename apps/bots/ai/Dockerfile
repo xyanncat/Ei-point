@@ -6,6 +6,7 @@ RUN pnpm install --frozen-lockfile && pnpm --filter @ei-point/flow build && pnpm
 RUN pnpm --filter @ei-point/bot-ai deploy --prod /release
 
 FROM node:24.8.0-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build --chown=node:node /release /app
 USER node

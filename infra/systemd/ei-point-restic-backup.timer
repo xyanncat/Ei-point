@@ -1,0 +1,9 @@
+[Unit]
+Description=Ei Point off-host WAL repository and artwork backup every five minutes
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Persistent=true
+Unit=ei-point-restic-backup.service
+[Install]
+WantedBy=timers.target

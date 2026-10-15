@@ -1,5 +1,6 @@
 import { createHash, randomInt, randomUUID } from 'node:crypto';
 import { lockApprovedGuild, transaction, type SqlClient, type SqlPool } from '@ei-point/flow';
+import { createDeck, dealRound, formatHand, MIN_DECK, resolveRound, shuffle } from './card-game.js';
 
 type Actor = { guildId: string; userId: string; key: string };
 export type Amount = number | string;
@@ -37,6 +38,47 @@ export class EconomyService {
   }
   private async read<T>(guildId: string, run: (db: SqlClient) => Promise<T>): Promise<T> {
     return transaction(this.pool, async db => { await lockApprovedGuild(db, guildId); return run(db); });
+  }
+  async cardInfo(guildId: string, instanceId: string): Promise<Record<string, any> | null> {
+    return this.read(guildId, async db => (await db.query(`SELECT i.instance_id AS "instanceId",i.owner_user_id AS "ownerUserId",i.serial_number AS "serialNumber",i.status,i.locked,i.reservation_type AS "reservationType",d.card_id AS "cardId",d.name,d.rarity,d.artwork_ref AS "artworkRef",d.max_supply AS "maxSupply",d.issued_count AS "issuedCount"
+      FROM games.card_instances i JOIN games.card_definitions d USING(card_id) WHERE i.owner_guild_id=$1 AND i.instance_id=$2`, [guildId, instanceId])).rows[0] ?? null);
+  }
+  async cardStats(guildId: string, userId: string): Promise<{total:number;unique:number;byRarity:Record<string,number>}> {
+    return this.read(guildId, async db => {
+      const totals=(await db.query("SELECT count(*)::int AS total,count(DISTINCT i.card_id)::int AS unique FROM games.card_instances i JOIN games.card_definitions d USING(card_id) WHERE i.owner_guild_id=$1 AND i.owner_user_id=$2 AND i.status='active' AND d.active=true",[guildId,userId])).rows[0]!;
+      const counts=(await db.query("SELECT d.rarity,count(*)::int AS count FROM games.card_instances i JOIN games.card_definitions d USING(card_id) WHERE i.owner_guild_id=$1 AND i.owner_user_id=$2 AND i.status='active' AND d.active=true GROUP BY d.rarity",[guildId,userId])).rows;
+      return {total:totals.total,unique:totals.unique,byRarity:Object.fromEntries(counts.map(row=>[row.rarity,row.count]))};
+    });
+  }
+  private async ensureCardGame(db:SqlClient,guildId:string,userId:string):Promise<void> {
+    await db.query('INSERT INTO games.card_games(guild_id,user_id,deck) VALUES($1,$2,$3) ON CONFLICT(guild_id,user_id) DO NOTHING',[guildId,userId,JSON.stringify(shuffle(createDeck()))]);
+  }
+  async cardGame(guildId:string,userId:string):Promise<{deck:string[];hand:string[];score:string;gamesPlayed:string;gamesWon:string}> {
+    return this.read(guildId,async db=>{
+      await this.ensureCardGame(db,guildId,userId);
+      const row=(await db.query('SELECT deck,hand,score,games_played AS "gamesPlayed",games_won AS "gamesWon" FROM games.card_games WHERE guild_id=$1 AND user_id=$2',[guildId,userId])).rows[0]!;
+      return {deck:row.deck,hand:row.hand,score:String(row.score),gamesPlayed:String(row.gamesPlayed),gamesWon:String(row.gamesWon)};
+    });
+  }
+  async reshuffleCardGame(args:Actor):Promise<void> {
+    await this.operation(args,'reshuffle-card-game',{},async db=>{
+      await this.ensureCardGame(db,args.guildId,args.userId);
+      await db.query("UPDATE games.card_games SET deck=$3,hand='[]'::jsonb,updated_at=now() WHERE guild_id=$1 AND user_id=$2",[args.guildId,args.userId,JSON.stringify(shuffle(createDeck()))]);
+      return {status:'reshuffled'};
+    });
+  }
+  async playCardRound(args:Actor) {
+    return this.operation(args,'play-card-round',{},async db=>{
+      await this.ensureCardGame(db,args.guildId,args.userId);
+      const row=(await db.query('SELECT deck,score,games_played AS "gamesPlayed",games_won AS "gamesWon" FROM games.card_games WHERE guild_id=$1 AND user_id=$2 FOR UPDATE',[args.guildId,args.userId])).rows[0]!;
+      const reshuffled=row.deck.length<MIN_DECK;
+      const deck=reshuffled?shuffle(createDeck()):row.deck;
+      const deal=dealRound(deck); if(!deal)throw new Error('game-state-invalid');
+      const result=resolveRound(deal.player,deal.house);
+      const gamesPlayed=Number(row.gamesPlayed)+1,gamesWon=Number(row.gamesWon)+(result.outcome==='win'?1:0),score=BigInt(row.score)+BigInt(result.points);
+      await db.query('UPDATE games.card_games SET deck=$3,hand=$4,score=$5,games_played=$6,games_won=$7,updated_at=now() WHERE guild_id=$1 AND user_id=$2',[args.guildId,args.userId,JSON.stringify(deal.rest),JSON.stringify(deal.player),score.toString(),gamesPlayed,gamesWon]);
+      return {player:deal.player,house:deal.house,playerHand:result.player.name,houseHand:result.house.name,outcome:result.outcome,points:result.points,score:score.toString(),gamesPlayed,gamesWon,reshuffled,formattedPlayer:formatHand(deal.player),formattedHouse:formatHand(deal.house)};
+    });
   }
   private async adjust(db: SqlClient, actor: Actor, userId: string, delta: bigint): Promise<void> {
     await db.query('INSERT INTO games.balances(guild_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [actor.guildId, userId]);
@@ -76,6 +118,12 @@ export class EconomyService {
   async issueCard(args: Actor & { cardId: string }): Promise<{ instanceId: string; cardId: string; serialNumber: string }> {
     return this.operation(args, 'issue', args.cardId, db => this.mint(db, args, args.cardId));
   }
+  async revokeCard(args:Actor & {instanceId:string}):Promise<void> {
+    return this.operation(args,'revoke-card',args.instanceId,async db=>{
+      await changed(db,"UPDATE games.card_instances SET status='revoked' WHERE instance_id=$1 AND owner_guild_id=$2 AND status='active' AND locked=false",[args.instanceId,args.guildId],'card-unavailable');
+      return {status:'revoked'};
+    }).then(()=>undefined);
+  }
   async catalog(guildId: string, page = 1): Promise<Record<string, any>[]> {
     const offset = boundedPage(page);
     return this.read(guildId, async db => (await db.query(`SELECT card_id AS "cardId",name,rarity,artwork_ref AS "artworkRef",max_supply AS "maxSupply",issued_count AS "issuedCount" FROM games.card_definitions WHERE active=true ORDER BY card_id LIMIT 10 OFFSET $1`, [offset])).rows);
@@ -83,7 +131,7 @@ export class EconomyService {
   async inventory(guildId: string, userId: string, page = 1): Promise<Record<string, any>[]> {
     const offset = boundedPage(page);
     return this.read(guildId, async db => (await db.query(`SELECT i.instance_id AS "instanceId",i.card_id AS "cardId",i.serial_number AS "serialNumber", i.locked AS reserved,d.name,d.rarity,d.artwork_ref AS "artworkRef"
-      FROM games.card_instances i JOIN games.card_definitions d USING(card_id) WHERE owner_guild_id=$1 AND owner_user_id=$2 ORDER BY i.instance_id LIMIT 10 OFFSET $3`, [guildId, userId, offset])).rows);
+      FROM games.card_instances i JOIN games.card_definitions d USING(card_id) WHERE owner_guild_id=$1 AND owner_user_id=$2 AND i.status='active' ORDER BY i.instance_id LIMIT 10 OFFSET $3`, [guildId, userId, offset])).rows);
   }
   async definePack(args: { packId: string; name: string; price: Amount; size: number; adminOnly: boolean; items: { cardId: string; weight: number }[] }): Promise<void> {
     const price = amount(args.price);
@@ -118,7 +166,7 @@ export class EconomyService {
   }
   private async reserve(db: SqlClient, actor: Actor, instanceId: string, ref: string, kind: 'listing' | 'trade'): Promise<void> {
     await changed(db, `UPDATE games.card_instances SET locked=true,reservation_id=$4,reservation_type=$5
-      WHERE instance_id=$1 AND owner_guild_id=$2 AND owner_user_id=$3 AND locked=false`, [instanceId, actor.guildId, actor.userId, ref, kind], 'card-unavailable');
+      WHERE instance_id=$1 AND owner_guild_id=$2 AND owner_user_id=$3 AND status='active' AND locked=false`, [instanceId, actor.guildId, actor.userId, ref, kind], 'card-unavailable');
   }
   async createListing(args: Actor & { instanceId: string; price: Amount }): Promise<{ listingId: string }> {
     const price = amount(args.price); if (price < 1n) throw new Error('invalid-price');
@@ -132,7 +180,7 @@ export class EconomyService {
   async market(guildId: string, page = 1): Promise<Record<string, any>[]> {
     const offset = boundedPage(page);
     return this.read(guildId, async db => (await db.query(`SELECT l.listing_id AS "listingId",l.seller_id AS "sellerId",l.instance_id AS "instanceId",l.price_minor AS price,l.status,d.name
-      FROM games.listings l JOIN games.card_instances i USING(instance_id) JOIN games.card_definitions d USING(card_id) WHERE l.guild_id=$1 AND l.status='open' ORDER BY l.created_at,l.listing_id LIMIT 10 OFFSET $2`, [guildId, offset])).rows);
+      FROM games.listings l JOIN games.card_instances i USING(instance_id) JOIN games.card_definitions d USING(card_id) WHERE l.guild_id=$1 AND l.status='open' AND i.status='active' ORDER BY l.created_at,l.listing_id LIMIT 10 OFFSET $2`, [guildId, offset])).rows);
   }
   async buy(args: Actor & { listingId: string }): Promise<{ listingId: string; instanceId: string; price: string }> {
     return this.operation(args, 'buy', args.listingId, async db => {
@@ -140,7 +188,7 @@ export class EconomyService {
       if (!row) throw new Error('listing-unavailable');
       if (row.seller_id === args.userId) throw new Error('self-buy');
       await changed(db, `UPDATE games.card_instances SET owner_user_id=$4,locked=false,reservation_id=NULL,reservation_type=NULL
-        WHERE instance_id=$1 AND owner_guild_id=$2 AND owner_user_id=$3 AND reservation_id=$5 AND reservation_type='listing'`, [row.instance_id, args.guildId, row.seller_id, args.userId, args.listingId], 'card-unavailable');
+        WHERE instance_id=$1 AND owner_guild_id=$2 AND owner_user_id=$3 AND status='active' AND reservation_id=$5 AND reservation_type='listing'`, [row.instance_id, args.guildId, row.seller_id, args.userId, args.listingId], 'card-unavailable');
       await this.adjust(db, args, args.userId, -BigInt(row.price_minor));
       await this.adjust(db, args, row.seller_id, BigInt(row.price_minor));
       await changed(db, "UPDATE games.listings SET status='sold' WHERE listing_id=$1 AND status='open'", [args.listingId]);
@@ -163,7 +211,7 @@ export class EconomyService {
       if ((await db.query("SELECT count(*)::int AS count FROM games.trades WHERE guild_id=$1 AND sender_id=$2 AND status='pending'", [args.guildId, args.userId])).rows[0]!.count >= 20) throw new Error('trade-limit');
       for (const id of args.offered) await this.reserve(db, args, id, tradeId, 'trade');
       for (const id of args.requested) {
-        const r = await db.query('SELECT 1 FROM games.card_instances WHERE instance_id=$1 AND owner_guild_id=$2 AND owner_user_id=$3 AND locked=false', [id, args.guildId, args.recipientId]);
+        const r = await db.query("SELECT 1 FROM games.card_instances WHERE instance_id=$1 AND owner_guild_id=$2 AND owner_user_id=$3 AND status='active' AND locked=false", [id, args.guildId, args.recipientId]);
         if (!r.rowCount) throw new Error('card-unavailable');
       }
       await db.query(`INSERT INTO games.trades(trade_id,guild_id,idempotency_key,sender_id,recipient_id,offered_amount,requested_amount,expires_at)
@@ -186,7 +234,7 @@ export class EconomyService {
       for (const item of items) {
         const offered = item.side === 'offered';
         await changed(db, `UPDATE games.card_instances SET owner_user_id=$4,locked=false,reservation_id=NULL,reservation_type=NULL
-          WHERE instance_id=$1 AND owner_guild_id=$2 AND owner_user_id=$3 AND
+          WHERE instance_id=$1 AND owner_guild_id=$2 AND owner_user_id=$3 AND status='active' AND
           (($5::boolean AND reservation_id=$6 AND reservation_type='trade') OR (NOT $5::boolean AND locked=false))`, [item.instance_id, args.guildId, offered ? row.sender_id : row.recipient_id, offered ? row.recipient_id : row.sender_id, offered, args.tradeId], 'card-unavailable');
       }
       // Each side must afford its gross payment; no credit-before-debit overdraft trick.

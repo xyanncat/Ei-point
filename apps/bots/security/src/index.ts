@@ -1,3 +1,6 @@
+import { captureGuild, restoreGuild } from "./snapshot.js";
+import { applyLockdown } from "./lockdown.js";
+import { isControlEnabled } from "@ei-point/flow";
 import { createServer } from "node:http";
 import {
   AuditLogEvent,
@@ -13,7 +16,6 @@ import {
   detectRaid,
   evaluateAction,
   RECORD_INCIDENT_SQL,
-  SET_LOCKDOWN_SQL,
   WHITELIST_CHECK_SQL,
   type GuardedAction,
 } from "@ei-point/module-security";
@@ -105,7 +107,8 @@ client.on(Events.GuildMemberAdd, (member) => {
     recentJoins.set(guildId, []);
     guarded("raid-mitigation", async () => {
       console.warn(`[SECURITY] Raid detected in guild ${guildId} (${joinCount} joins in 60s)! Engaging lockdown.`);
-      await pool.query(SET_LOCKDOWN_SQL, [guildId, "Automated anti-raid lockdown triggered", client.user!.id]);
+      if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, guildId, botKey))) return;
+      await applyLockdown(pool, member.guild, true, client.user!.id, "Automated anti-raid lockdown triggered");
       await pool.query(RECORD_INCIDENT_SQL, [
         guildId,
         "raid_detected",
@@ -134,6 +137,7 @@ client.on(Events.GuildAuditLogEntryCreate, async (auditEntry, guild) => {
   if (!actorId || actorId === client.user?.id) return;
 
   guarded(`antinuke:${action}`, async () => {
+    if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, guild.id, botKey))) return;
     const count = recordActorAction(guild.id, actorId, action);
     // Check whitelist
     const isWhitelisted = (
@@ -150,9 +154,13 @@ client.on(Events.GuildAuditLogEntryCreate, async (auditEntry, guild) => {
         actorId,
         verdict === "quarantine" ? "critical" : "high",
         JSON.stringify({ action, count, verdict }),
-        `antinuke-${guild.id}-${actorId}-${action}-${Date.now()}`,
+        `antinuke-${guild.id}-${auditEntry.id}`,
       ]);
 
+      await pool.query(`INSERT INTO security.trust_state(guild_id,user_id,score,updated_at)
+        SELECT $1,$2,GREATEST(0,100-COALESCE(SUM(CASE severity WHEN 'critical' THEN 40 WHEN 'high' THEN 20 ELSE 10 END),0)::int),now()
+        FROM security.incidents WHERE guild_id=$1 AND actor_id=$2 AND created_at>now()-interval '7 days'
+        ON CONFLICT(guild_id,user_id) DO UPDATE SET score=EXCLUDED.score,updated_at=now()`, [guild.id, actorId]);
       if (verdict === "quarantine") {
         // Strip dangerous roles from the rogue actor if possible
         try {
@@ -194,6 +202,11 @@ client.on(Events.InteractionCreate, (interaction) => {
       }
 
       await interaction.deferReply({ ephemeral: true });
+      if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows,
+        interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) {
+        await interaction.editReply({ content: "This command is disabled, paused, or restricted by server controls." });
+        return;
+      }
 
       const options: Record<string, string | number | boolean> = {};
       const flatten = (values: typeof interaction.options.data): void => {
@@ -222,6 +235,9 @@ client.on(Events.InteractionCreate, (interaction) => {
           reply: async (text) => {
             await interaction.editReply({ content: text, allowedMentions: { parse: [] } });
           },
+          captureSnapshot: async () => captureGuild(interaction.guild),
+          restoreSnapshot: async (snapshot, snapshotId) => restoreGuild(pool, interaction.guild, snapshot, snapshotId, interaction.user.id, interaction.id),
+          setLockdown: async (active, reason) => applyLockdown(pool, interaction.guild, active, interaction.user.id, reason),
           getGuildChannels: async () =>
             interaction.guild.channels.cache.map((c) => ({ id: c.id, name: c.name })),
           getGuildRoles: async () =>
@@ -233,7 +249,7 @@ client.on(Events.InteractionCreate, (interaction) => {
       console.error("security command failed:", err instanceof Error ? err.message : String(err));
       if (interaction.deferred) {
         await interaction
-          .editReply({ content: "Security operation failed safely. Inspect system logs." })
+          .editReply({ content: "Security operation outcome is unconfirmed. Check moderation cases and system logs before retrying." })
           .catch(() => {});
       }
     } finally {
@@ -316,6 +332,12 @@ process.on("SIGTERM", () => void shutdown());
 
 client.once(Events.ClientReady, () => {
   guarded("startup", async () => {
+    const registered = (await pool.query("SELECT application_id FROM config.bots WHERE bot_key=$1", [botKey])).rows[0];
+    if (registered?.application_id !== client.user!.id) {
+      console.error("Token identity does not match the registered BOT_KEY");
+      await shutdown();
+      return;
+    }
     identityVerified = true;
     for (const guild of client.guilds.cache.values()) {
       try {

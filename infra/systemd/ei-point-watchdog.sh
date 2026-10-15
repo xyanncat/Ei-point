@@ -1,75 +1,68 @@
-#!/bin/bash
-# Host watchdog: startup grace + consecutive-failure threshold + bounded restarts + alerts (§8).
-# Restarts ONLY $ALLOWED_SERVICES. Never exposes docker socket to web app.
+#!/usr/bin/env bash
+# Canonical fleet only. Missing services and missing healthchecks are failures.
 set -euo pipefail
-ALLOWED_SERVICES="bot-security bot-moderation bot-community bot-ai bot-music bot-commerce api web workers postgres nginx"
-GRACE_SEC=120
-FAIL_THRESHOLD=3
-MAX_RESTARTS_PER_HOUR=3
-STATE_DIR=/var/lib/ei-point/watchdog
-NOW=$(date +%s)
+umask 077
+SERVICES="postgres nginx api web workers bot-kafka bot-himiko bot-community bot-ai bot-music bot-commerce"
+RELEASE_MANIFEST=${RELEASE_MANIFEST:-/srv/ei-point/.releases/current.json}
+PROJECT_ROOT=${PROJECT_ROOT:-/srv/ei-point}
+if [[ -f "$RELEASE_MANIFEST" ]]; then SERVICES=$(node "$PROJECT_ROOT/scripts/release-roster.mjs" "$RELEASE_MANIFEST" --services); fi
+GRACE_SEC=${WATCHDOG_GRACE_SECONDS:-120}
+FAIL_THRESHOLD=${WATCHDOG_FAIL_THRESHOLD:-3}
+MAX_RESTARTS=${WATCHDOG_MAX_RESTARTS:-3}
+STATE_DIR=${WATCHDOG_STATE_DIR:-/var/lib/ei-point/watchdog}
+RUN_SECONDS=${WATCHDOG_RUN_SECONDS:-120}
+for value in "$GRACE_SEC" "$FAIL_THRESHOLD" "$MAX_RESTARTS" "$RUN_SECONDS"; do [[ "$value" =~ ^[1-9][0-9]*$ ]] || exit 1; done
 mkdir -p "$STATE_DIR"
-
-for svc in $ALLOWED_SERVICES; do
-  # Compose-aware lookup: containers are <project>-<service>-<n>; match by compose service label.
-  cid=$(docker ps -aq --filter "label=com.docker.compose.service=$svc" | head -n 1)
-  if [ -z "$cid" ]; then continue; fi
-
-  # Check startup grace period
-  started_str=$(docker inspect --format='{{.State.StartedAt}}' "$cid" 2>/dev/null || true)
-  if [ -n "$started_str" ]; then
-    started_ts=$(date -d "$started_str" +%s 2>/dev/null || echo 0)
-    uptime=$((NOW - started_ts))
-    if [ "$uptime" -lt "$GRACE_SEC" ]; then
-      continue # Inside startup grace period
-    fi
-  fi
-
-  healthy=$(docker inspect --format='{{.State.Health.Status}}' "$cid" 2>/dev/null || echo "none")
-  running=$(docker inspect --format='{{.State.Running}}' "$cid" 2>/dev/null || echo "false")
-
-  if [ "$running" != "true" ] || [ "$healthy" = "unhealthy" ]; then
-    count=$(cat "$STATE_DIR/$svc.count" 2>/dev/null || echo 0)
-    count=$((count + 1))
-    echo "$count" > "$STATE_DIR/$svc.count"
-
-    if [ "$count" -ge "$FAIL_THRESHOLD" ]; then
-      # Bounded restarts: check hourly restart budget
-      restart_log="$STATE_DIR/$svc.restarts"
-      # Purge restarts older than 3600 seconds
-      if [ -f "$restart_log" ]; then
-        awk -v cutoff=$((NOW - 3600)) '$1 > cutoff' "$restart_log" > "$restart_log.tmp" || true
-        mv "$restart_log.tmp" "$restart_log"
-      fi
-      recent_restarts=$(wc -l < "$restart_log" 2>/dev/null || echo 0)
-
-      if [ "$recent_restarts" -ge "$MAX_RESTARTS_PER_HOUR" ]; then
-        logger -p user.crit -t ei-point-watchdog "CRITICAL: $svc ($cid) exceeded restart budget ($recent_restarts restarts in 1h). Manual operator intervention required!"
-      else
-        logger -p user.warn -t ei-point-watchdog "restarting $svc ($cid) after $count consecutive failures"
-        docker restart "$cid" >/dev/null
-        echo "$NOW" >> "$restart_log"
-        echo 0 > "$STATE_DIR/$svc.count"
-      fi
-    fi
-  else
-    echo 0 > "$STATE_DIR/$svc.count"
-  fi
+exec 9>"$STATE_DIR/watchdog.lock"
+flock -n 9 || exit 0
+NOW=$(date +%s)
+DEADLINE=$((NOW+RUN_SECONDS))
+failed=0
+log(){ logger -p "$1" -t ei-point-watchdog -- "$2" || printf '%s\n' "$2" >&2; }
+bounded(){ local left=$((DEADLINE-$(date +%s))); ((left>0)) || return 124; ((left>30)) && left=30; timeout "$left" "$@"; }
+for svc in $SERVICES; do
+  if (( $(date +%s)>=DEADLINE )); then log user.crit 'Watchdog deadline exceeded; fleet checks incomplete'; failed=1; break; fi
+  # The project label is mandatory: a matching service in another project must
+  # never be inspected or restarted.
+  if ! ids=$(bounded docker ps -aq --filter label=com.docker.compose.project=ei-point --filter "label=com.docker.compose.service=$svc"); then log user.crit "UNHEALTHY $svc: container lookup failed"; failed=1; continue; fi
+  mapfile -t containers < <(printf '%s\n' "$ids" | sed '/^$/d')
+  if [[ ${#containers[@]} != 1 ]]; then log user.crit "UNHEALTHY $svc: expected one project container, found ${#containers[@]}"; failed=1; continue; fi
+  cid=${containers[0]}
+  if ! state=$(bounded docker inspect --format '{{.State.Running}}|{{.State.StartedAt}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid"); then log user.crit "UNHEALTHY $svc: inspect failed"; failed=1; continue; fi
+  IFS='|' read -r running started health <<< "$state"
+  previous=$(cat "$STATE_DIR/$svc.cid" 2>/dev/null || true)
+  if [[ "$previous" != "$cid" ]]; then printf '0\n' > "$STATE_DIR/$svc.count"; printf '%s\n' "$cid" > "$STATE_DIR/$svc.cid"; fi
+  started_ts=$(date -d "$started" +%s 2>/dev/null || printf '0')
+  if [[ "$running" == true ]] && ((started_ts>0 && NOW>=started_ts && NOW-started_ts<GRACE_SEC)); then log user.notice "STARTING $svc: inside startup grace"; continue; fi
+  if [[ "$running" == true && "$health" == healthy ]]; then printf '0\n' > "$STATE_DIR/$svc.count"; continue; fi
+  failed=1
+  if [[ "$running" == true && "$health" == none ]]; then log user.crit "UNHEALTHY $svc: no Docker healthcheck configured; operator must configure readiness; restart withheld"; continue; fi
+  count=$(cat "$STATE_DIR/$svc.count" 2>/dev/null || printf '0')
+  [[ "$count" =~ ^[0-9]+$ ]] || count=0
+  ((count+=1))
+  printf '%s\n' "$count" > "$STATE_DIR/$svc.count"
+  log user.warn "UNHEALTHY $svc ($cid): running=$running health=$health failure=$count"
+  ((count>=FAIL_THRESHOLD)) || continue
+  restart_log="$STATE_DIR/$svc.restarts"
+  touch "$restart_log"
+  awk -v cutoff=$((NOW-3600)) '$1 ~ /^[0-9]+$/ && $1 > cutoff' "$restart_log" > "$restart_log.tmp"
+  mv -- "$restart_log.tmp" "$restart_log"
+  recent=$(wc -l < "$restart_log")
+  if ((recent>=MAX_RESTARTS)); then log user.crit "UNHEALTHY $svc: restart budget exhausted; operator intervention required"; continue; fi
+  # Failed restart attempts consume budget too, so failures cannot spin forever.
+  printf '%s\n' "$NOW" >> "$restart_log"
+  log user.warn "Restarting project service $svc ($cid)"
+  if bounded docker restart --time 15 "$cid" >/dev/null; then printf '0\n' > "$STATE_DIR/$svc.count"; else log user.crit "UNHEALTHY $svc: restart failed or timed out"; fi
 done
-
-# Disk guard: 70/80 alert, 90 stop optional downloads (§7)
-USE=$(df -P / | awk 'NR==2{print $5}' | tr -d '%')
-if [ "$USE" -ge 90 ]; then
-  logger -p user.emerg -t ei-point-watchdog "DISK CRITICAL ${USE}%: stopping optional downloads";
-  touch "$STATE_DIR/disk-hold";
+HOLD=${DISK_HOLD_FILE:-$STATE_DIR/disk-hold}
+USE=$(df -P "$STATE_DIR" | awk 'NR==2{gsub(/%/,"",$5);print $5}')
+if [[ ! "$USE" =~ ^[0-9]+$ ]]; then log user.crit 'Disk utilization could not be measured'; exit 1; fi
+if ((USE>=90)); then
+  touch "$HOLD"
+  log user.emerg "DISK CRITICAL ${USE}%: optional asset build/import writes held; database, financial operations and WAL remain active"
+  failed=1
 else
-  if [ -f "$STATE_DIR/disk-hold" ]; then
-    rm -f "$STATE_DIR/disk-hold"
-    logger -p user.notice -t ei-point-watchdog "disk hold cleared (usage: ${USE}%)";
-  fi
-  if [ "$USE" -ge 80 ]; then
-    logger -p user.warn -t ei-point-watchdog "disk warning ${USE}%";
-  elif [ "$USE" -ge 70 ]; then
-    logger -p user.notice -t ei-point-watchdog "disk notice ${USE}%";
-  fi
+  if [[ -f "$HOLD" ]]; then rm -f -- "$HOLD"; log user.notice "Optional asset write hold cleared: ${USE}%"; fi
+  if ((USE>=80)); then log user.warn "Disk warning ${USE}%"; elif ((USE>=70)); then log user.notice "Disk notice ${USE}%"; fi
 fi
+exit "$failed"

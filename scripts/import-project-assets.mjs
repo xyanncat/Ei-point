@@ -1,9 +1,11 @@
+import {assertOptionalAssetWritesAllowed} from "./lib/resource-guard.mjs";
 // Explicit operator import. Never runs automatically during website builds.
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 const assets=JSON.parse(await readFile(fileURLToPath(new URL('../apps/dashboard/lib/project-assets.json',import.meta.url)),'utf8'));
 if(!process.argv.includes('--apply')){console.log(`Dry run: ${assets.services.length} catalog rows and ${assets.cards.length} card definitions. Validate with build-project-assets.mjs first. --apply and DATABASE_URL are required to write.`);process.exit(0);}
+await assertOptionalAssetWritesAllowed(fileURLToPath(new URL('../apps/dashboard/public',import.meta.url)));
 if(!process.env.DATABASE_URL)throw new Error('DATABASE_URL is required.');
 const client=new pg.Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:5000});
 await client.connect();

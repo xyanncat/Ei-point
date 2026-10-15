@@ -1,0 +1,16 @@
+[Unit]
+Description=Ei Point weekly physical full backup and logical bundle
+After=docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/ei-point
+Environment=ENV_FILE=/srv/ei-point/.env
+Environment=PGBACKREST_BACKUP_TYPE=full
+ExecStart=/usr/bin/bash /srv/ei-point/infra/backup/local-backup.sh
+TimeoutStartSec=4h
+Restart=on-failure
+RestartSec=20min
+UMask=0077
+Nice=10

@@ -10,11 +10,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "discord.js": "14.16.3",
+    "discord.js": "14.27.0",
     "pg": "8.13.1",
     "@ei-point/flow": "workspace:*",
     "@ei-point/module-community": "workspace:*",
     "@ei-point/module-games": "workspace:*"
   },
-  "devDependencies": { "typescript": "5.6.3", "tsx": "4.19.2", "@types/node": "24.3.0", "@types/pg": "8.11.10" }
+  "devDependencies": {
+    "typescript": "5.6.3",
+    "tsx": "4.19.2",
+    "@types/node": "24.3.0",
+    "@types/pg": "8.11.10"
+  }
 }

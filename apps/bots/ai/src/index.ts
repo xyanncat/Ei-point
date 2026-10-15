@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { acquireVoiceLease } from "./voice-lease.js";
+import { isControlEnabled } from "@ei-point/flow";
 import { createServer } from "node:http";
 import {
   Client,
@@ -9,9 +12,7 @@ import {
 import pg from "pg";
 import {
   createRouter,
-  type ChatMessage,
-  type ProviderFn,
-  type ProviderResult,
+  makeHttpProvider,
 } from "@ei-point/module-ai";
 import { Readable } from "node:stream";
 import {
@@ -26,6 +27,7 @@ const TTS_NAMES = new Set(ttsCommandDefinitions.map((c) => c.name));
 
 // Cyrene voice sessions: guildId -> voice connection (lazy @discordjs/voice).
 const voiceSessions = new Map<string, { destroy: () => void }>();
+const pendingVoice = new Set<string>();
 
 async function playTtsAudio(
   guildId: string,
@@ -33,12 +35,17 @@ async function playTtsAudio(
   voiceAdapterCreator: unknown,
   audio: { mime: string; bytes: Uint8Array },
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (pendingVoice.has(guildId)) return { ok: false, reason: "voice-full" };
+  pendingVoice.add(guildId);
+  const owner = `tts:${guildId}:${randomUUID()}`;
+  let connection: { destroy(): void } | undefined;
   try {
+    if (!(await acquireVoiceLease(pool, owner))) return { ok: false, reason: "voice-full" };
     const voice = await import("@discordjs/voice");
     if (voiceSessions.size >= 2 && !voiceSessions.has(guildId)) {
       return { ok: false, reason: "voice-full" };
     }
-    const connection = voice.joinVoiceChannel({
+    connection = voice.joinVoiceChannel({
       channelId,
       guildId,
       adapterCreator: voiceAdapterCreator as never,
@@ -48,19 +55,9 @@ async function playTtsAudio(
       inputType: voice.StreamType.Arbitrary,
     });
     const player = voice.createAudioPlayer();
-    connection.subscribe(player);
+    (connection as import("@discordjs/voice").VoiceConnection).subscribe(player);
     player.play(resource);
-    try {
-      await voice.entersState(player, voice.AudioPlayerStatus.Idle, 30_000);
-    } catch (err) {
-      try {
-        connection.destroy();
-      } catch {
-        // Destroy is best-effort; entry removal below releases the slot.
-      }
-      voiceSessions.delete(guildId);
-      throw err;
-    }
+    await voice.entersState(player, voice.AudioPlayerStatus.Idle, 30_000);
     return { ok: true };
   } catch (err) {
     if (
@@ -70,6 +67,11 @@ async function playTtsAudio(
       return { ok: false, reason: "voice-unavailable" };
     }
     return { ok: false, reason: "play-failed" };
+  } finally {
+    try { connection?.destroy(); } catch { /* Already stopped by /tts-stop. */ }
+    voiceSessions.delete(guildId);
+    pendingVoice.delete(guildId);
+    await pool.query("DELETE FROM ai.voice_leases WHERE owner=$1", [owner]);
   }
 }
 
@@ -113,56 +115,19 @@ function fitDiscord(text: string, limit = 2000): string {
   return text.slice(0, limit - 1) + "…";
 }
 
-// Provider implementation: external API or standard fallback responder
-function makeProvider(apiUrl?: string, apiKey?: string, label = "provider"): ProviderFn {
-  return async (prompt: ChatMessage[], signal: AbortSignal): Promise<ProviderResult> => {
-    if (apiUrl && apiKey) {
-      try {
-        const res = await fetch(apiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            messages: prompt,
-            max_tokens: 1000,
-          }),
-          signal,
-        });
-        if (res.ok) {
-          const data = (await res.json()) as any;
-          const text =
-            data?.choices?.[0]?.message?.content ??
-            data?.candidates?.[0]?.content?.parts?.[0]?.text ??
-            "I processed your request.";
-          const tokensIn = Number(data?.usage?.prompt_tokens ?? prompt.reduce((acc, m) => acc + m.content.length / 4, 0));
-          const tokensOut = Number(data?.usage?.completion_tokens ?? text.length / 4);
-          return { text, tokensIn: Math.round(tokensIn), tokensOut: Math.round(tokensOut) };
-        }
-      } catch (err) {
-        if (signal.aborted) throw new Error("deadline-exceeded");
-      }
-    }
-
-    // Default graceful simulated response for local/offline test guilds
-    const lastUserMsg = prompt.filter((m) => m.role === "user").pop()?.content ?? "Hello";
-    const replyText = `[${label}] I received your message: "${lastUserMsg.slice(0, 80)}${lastUserMsg.length > 80 ? "..." : ""}". The Ei Point AI module is operational.`;
-    const tokensIn = Math.round(lastUserMsg.length / 4) + 10;
-    const tokensOut = Math.round(replyText.length / 4) + 10;
-    return { text: replyText, tokensIn, tokensOut };
-  };
-}
-
-const primaryProvider = makeProvider(
+if (!process.env.AI_PROVIDER_PRIMARY || !process.env.AI_PROVIDER_PRIMARY_KEY || !process.env.AI_PROVIDER_PRIMARY_MODEL?.trim()) throw new Error("AI_PROVIDER_PRIMARY, AI_PROVIDER_PRIMARY_KEY and AI_PROVIDER_PRIMARY_MODEL are required");
+if ([process.env.AI_PROVIDER_FALLBACK, process.env.AI_PROVIDER_FALLBACK_KEY, process.env.AI_PROVIDER_FALLBACK_MODEL].some(Boolean) && (!process.env.AI_PROVIDER_FALLBACK || !process.env.AI_PROVIDER_FALLBACK_KEY || !process.env.AI_PROVIDER_FALLBACK_MODEL?.trim())) throw new Error("Fallback provider URL, key and model must all be configured together");
+const primaryProvider = makeHttpProvider(
   process.env.AI_PROVIDER_PRIMARY,
   process.env.AI_PROVIDER_PRIMARY_KEY,
-  "Primary-AI",
+  fetch,
+  process.env.AI_PROVIDER_PRIMARY_MODEL,
 );
-const fallbackProvider = makeProvider(
+const fallbackProvider = makeHttpProvider(
   process.env.AI_PROVIDER_FALLBACK,
   process.env.AI_PROVIDER_FALLBACK_KEY,
-  "Fallback-AI",
+  fetch,
+  process.env.AI_PROVIDER_FALLBACK_MODEL,
 );
 
 const router = createRouter({
@@ -174,6 +139,7 @@ const router = createRouter({
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
   ],
@@ -206,6 +172,7 @@ client.on(Events.MessageCreate, (message) => {
     return;
 
   guarded("mention-reply", async () => {
+    if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, message.guildId!, botKey, "ask", message.member ? [...message.member.roles.cache.keys()] : []))) return;
     const last = userMentionCooldown.get(message.author.id) ?? 0;
     if (Date.now() - last < 5000) {
       await message.reply("⏳ Please wait a few seconds before asking another question.");
@@ -267,6 +234,10 @@ client.on(Events.InteractionCreate, (interaction) => {
       }
 
       await interaction.deferReply();
+      if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) {
+        await interaction.editReply("This bot, server, or command is disabled for your roles.");
+        return;
+      }
 
       const options: Record<string, string | number | boolean> = {};
       for (const opt of interaction.options.data) {
@@ -290,6 +261,7 @@ client.on(Events.InteractionCreate, (interaction) => {
               await interaction.editReply({ content: fitDiscord(text), allowedMentions: { parse: [] } });
             },
             playAudio: async (audio) => {
+              if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) return { ok: false as const, reason: "disabled" };
               if (!voiceChannelId) return { ok: false as const, reason: "voice-unavailable" };
               return playTtsAudio(
                 interaction.guildId,
@@ -327,7 +299,7 @@ client.on(Events.InteractionCreate, (interaction) => {
     } catch (err) {
       if (interaction.deferred) {
         await interaction
-          .editReply({ content: "AI query failed safely. Please retry." })
+          .editReply({ content: "AI request failed. Check usage and conversation status before retrying." })
           .catch(() => {});
       }
     } finally {
@@ -344,7 +316,7 @@ async function updateStatus(): Promise<void> {
   if (stopping || !identityVerified || !client.isReady()) return;
   try {
     const latency = Math.max(0, Math.round(client.ws.ping));
-    for (const service of ["bot-cyrene", "bot-ai"]) {
+    for (const service of [`bot-${botKey}`]) {
       await pool.query(
         `INSERT INTO ops.service_status(service, liveness, gateway, db_ready, latency_ms)
          VALUES($1, 'ok', 'ok', true, $2)
@@ -402,6 +374,8 @@ process.on("SIGTERM", () => void shutdown());
 
 client.once(Events.ClientReady, () => {
   guarded("startup", async () => {
+    const registry = await pool.query("SELECT application_id FROM config.bots WHERE bot_key=$1", [botKey]);
+    if (registry.rows[0]?.application_id !== client.user!.id) throw new Error("Registered application identity mismatch");
     identityVerified = true;
     for (const guild of client.guilds.cache.values()) {
       if (!allowed.includes(guild.id)) {

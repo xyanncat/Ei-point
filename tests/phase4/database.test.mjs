@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
 import pg from "pg";
-import EmbeddedPostgres from "embedded-postgres";
+import EmbeddedPostgres from "../helpers/embedded-postgres.mjs";
 import { createApp } from "../../apps/api/dist/app.js";
 
 let server, pool;

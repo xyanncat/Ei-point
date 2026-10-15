@@ -1,0 +1,13 @@
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {dirname,resolve} from 'node:path';
+import {validateRelease} from './lib/operations.mjs';
+const [source,output]=process.argv.slice(2);
+if(!source||!output)throw Error('Usage: node scripts/release-manifest.mjs release.json output.compose.json');
+const release=validateRelease(JSON.parse(await readFile(source,'utf8')));
+const services=Object.fromEntries(Object.entries(release.images).map(([name,image])=>[name,{image,build:null}]));
+services.migrate={image:release.images.api,build:null};
+await mkdir(dirname(resolve(output)),{recursive:true});
+await writeFile(output,JSON.stringify({services},null,2)+'\n',{mode:0o600});
+console.log(`Validated immutable release ${release.id}; ${Object.keys(release.images).length} services`);
+await writeFile(`${output}.bots`,release.bots.map(bot=>bot.service).join('\n')+'\n',{mode:0o600});
+await writeFile(`${output}.roster.json`,JSON.stringify(release),{mode:0o600});

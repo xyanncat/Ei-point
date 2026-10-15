@@ -64,6 +64,7 @@ export function createApp(options: AppOptions = {}) {
   const secure = env.COOKIE_SECURE !== "false" || env.NODE_ENV === "production";
   const cookieAttrs = `HttpOnly; ${secure ? "Secure; " : ""}SameSite=Lax; Path=/;`;
   const app = Fastify({
+    trustProxy: env.TRUSTED_PROXY_CIDRS?.split(',').map(value=>value.trim()).filter(Boolean) ?? false,
     logger: options.logger
       ? {
           redact: [

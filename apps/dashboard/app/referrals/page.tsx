@@ -1,8 +1,9 @@
+import { ReferralCapture } from "../../components/referral-capture";
 import { PageArt } from "../../components/page-art";
 export default function ReferralsPage() {
   return (
     <section className="ei-page-layout" aria-label="Referrals">
-      <div className="ei-page-body">
+      <div className="ei-page-body"><ReferralCapture />
         <p>A circle that grows with you</p>
         <h1>
           Follow

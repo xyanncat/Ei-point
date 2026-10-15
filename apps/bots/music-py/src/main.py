@@ -17,8 +17,9 @@ import signal
 import sys
 import threading
 import time
+import uuid
+from media_cache import AudioCache
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any
 
 import discord
 from discord import app_commands
@@ -53,14 +54,12 @@ RAW_ALLOWLIST = (
 )
 ALLOWED_GUILDS = set(x.strip() for x in RAW_ALLOWLIST.split(",") if x.strip())
 HEALTH_PORT = int(os.environ.get("MUSIC_HEALTH_PORT") or 3105)
-CACHE_DIR = os.environ.get("CACHE_DIR") or "/srv/music-cache"
 MAX_VOICE_SESSIONS = 2
-
-# Ensure cache directory exists
-try:
-    os.makedirs(CACHE_DIR, exist_ok=True)
-except Exception as exc:
-    log.warning("Could not create CACHE_DIR %s: %s", CACHE_DIR, exc)
+VOICE_OWNER_PREFIX = f"music:{uuid.uuid4()}:"
+MUSIC_CACHE = AudioCache(os.environ.get('CACHE_DIR', '/srv/music-cache'),
+    max_bytes=int(os.environ.get('CACHE_MAX_BYTES', 10*1024**3)),
+    max_item_bytes=int(os.environ.get('CACHE_ITEM_MAX_BYTES', 50*1024**2)),
+    ttl_seconds=int(os.environ.get('CACHE_TTL_SECONDS', 7*86400)))
 
 # In-memory guild queues: guild_id (str) -> QueueState
 guild_queues: dict[str, QueueState] = {}
@@ -75,26 +74,11 @@ db_conn = None
 db_ready = False
 db_lock = threading.Lock()
 is_stopping = False
+identity_verified = False
 
 
 # Concurrency limits (§5): max 2 concurrent metadata resolutions
 metadata_semaphore = asyncio.Semaphore(2)
-
-YTDL_OPTIONS: dict[str, Any] = {
-    "format": "bestaudio/best",
-    "extractaudio": True,
-    "audioformat": "mp3",
-    "outtmpl": os.path.join(CACHE_DIR, "%(id)s.%(ext)s"),
-    "restrictfilenames": True,
-    "noplaylist": True,
-    "ignoreerrors": False,
-    "logtostderr": False,
-    "quiet": True,
-    "no_warnings": True,
-    "default_search": "ytsearch",
-    "source_address": "0.0.0.0",
-    "allowed_extractors": ["youtube", "soundcloud"],
-}
 
 FFMPEG_OPTIONS: dict[str, str] = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -166,10 +150,11 @@ def flush_snapshots_sync(snapshots: list[tuple[str, dict]] | None = None):
                 for guild_id, snap in snapshots:
                     cur.execute(
                         """
-                        INSERT INTO music.queue_snapshots (guild_id, queue, position_ms, loop_mode, volume, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, now())
+                        INSERT INTO music.queue_snapshots (guild_id, queue, position, position_ms, loop_mode, volume, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, now())
                         ON CONFLICT (guild_id) DO UPDATE SET
                           queue = EXCLUDED.queue,
+                          position = EXCLUDED.position,
                           position_ms = EXCLUDED.position_ms,
                           loop_mode = EXCLUDED.loop_mode,
                           volume = EXCLUDED.volume,
@@ -178,6 +163,7 @@ def flush_snapshots_sync(snapshots: list[tuple[str, dict]] | None = None):
                         (
                             guild_id,
                             json.dumps(snap.get("queue", [])),
+                            int(snap.get("position", 0)),
                             int(snap.get("position_ms", 0)),
                             str(snap.get("loop_mode", "off")),
                             int(snap.get("volume", 100)),
@@ -198,7 +184,7 @@ def update_service_status_sync(ping_ms: float):
                 cur.execute(
                     """
                     INSERT INTO ops.service_status (service, liveness, gateway, db_ready, latency_ms, updated_at)
-                    VALUES ('bot-music', 'ok', 'ok', true, %s, now())
+                    VALUES (%s, 'ok', 'ok', true, %s, now())
                     ON CONFLICT (service) DO UPDATE SET
                       liveness = 'ok',
                       gateway = 'ok',
@@ -206,7 +192,7 @@ def update_service_status_sync(ping_ms: float):
                       latency_ms = EXCLUDED.latency_ms,
                       updated_at = now()
                     """,
-                    (max(0, round(ping_ms)),),
+                    (f'bot-{BOT_KEY}', max(0, round(ping_ms))),
                 )
         except Exception as exc:
             log.debug("Failed to record service status: %s", exc)
@@ -220,16 +206,17 @@ def restore_guild_queue(guild_id: str) -> QueueState:
         try:
             with db_conn.cursor() as cur:
                 cur.execute(
-                    "SELECT queue, position_ms, loop_mode, volume FROM music.queue_snapshots WHERE guild_id = %s",
+                    "SELECT queue, position, position_ms, loop_mode, volume FROM music.queue_snapshots WHERE guild_id = %s",
                     (guild_id,),
                 )
                 row = cur.fetchone()
                 if row:
-                    queue_data, pos_ms, loop_mode, volume = row
+                    queue_data, position, pos_ms, loop_mode, volume = row
                     if isinstance(queue_data, str):
                         queue_data = json.loads(queue_data)
                     q = QueueState.restore({
                         "queue": queue_data,
+                        "position": position,
                         "position_ms": pos_ms,
                         "loop_mode": loop_mode,
                         "volume": volume,
@@ -286,33 +273,55 @@ async def extract_tracks(query: str, max_results: int = 1) -> list[dict]:
         log.warning("yt_dlp is not installed; audio extraction unavailable.")
         return []
 
-    async with metadata_semaphore:
-        loop = asyncio.get_running_loop()
-
-        def _fetch():
-            if query.startswith(("http://", "https://")):
-                if not is_safe_url(query):
-                    log.warning("Blocked potentially unsafe/internal URL: %s", query)
-                    return None
-                target = query
-            else:
-                target = f"ytsearch{max_results}:{query}"
-            with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
-                return ydl.extract_info(target, download=False)
-
-        try:
-            data = await loop.run_in_executor(None, _fetch)
-            if not data:
-                return []
-            if "entries" in data:
-                return [e for e in data["entries"] if e]
-            return [data]
-        except Exception as exc:
-            log.error("yt-dlp extraction error for %s: %s", query, exc)
-            return []
+    # Streaming only: no downloaded media cache is claimed or populated.
+    if query.startswith(("http://", "https://")) and not is_safe_url(query):
+        return []
+    target = query if query.startswith(("http://", "https://")) else f"ytsearch{min(5,max_results)}:{query}"
+    try:
+        async with asyncio.timeout(30):
+            async with metadata_semaphore:
+                process = await asyncio.create_subprocess_exec(
+                    sys.executable, "-m", "yt_dlp", "--dump-single-json", "--skip-download",
+                    "--no-playlist", "--socket-timeout", "10", "--retries", "1",
+                    "--extractor-retries", "1", "--format", "bestaudio/best", "--", target,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+                )
+                try:
+                    output, _ = await asyncio.wait_for(process.communicate(), timeout=30)
+                    if process.returncode != 0 or len(output) > 4_000_000:
+                        return []
+                    data = json.loads(output)
+                    return [e for e in data.get("entries", [data]) if e][:max_results]
+                except (asyncio.TimeoutError, ValueError):
+                    return []
+                finally:
+                    if process.returncode is None:
+                        process.kill()
+                        await process.wait()
+    except asyncio.TimeoutError:
+        return []
 
 
 # --- Playback Engine ---
+async def download_media(url, destination):
+    """A bounded subprocess; no worker survives timeout or cancellation."""
+    code = '''import sys,yt_dlp
+limit=int(sys.argv[3])
+def progress(event):
+ if event.get("downloaded_bytes",0)>limit: raise yt_dlp.utils.DownloadError("cache item limit")
+with yt_dlp.YoutubeDL({"format":"bestaudio/best","outtmpl":sys.argv[2],"noplaylist":True,"quiet":True,"no_warnings":True,"nopart":True,"max_filesize":limit,"progress_hooks":[progress],"cachedir":False}) as ydl:
+ ydl.download([sys.argv[1]])
+'''
+    process = await asyncio.create_subprocess_exec(sys.executable, '-c', code, url, str(destination), str(MUSIC_CACHE.max_item_bytes), stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL, start_new_session=os.name != 'nt')
+    try:
+        await asyncio.wait_for(process.wait(), 30)
+        if process.returncode != 0: raise ValueError('Audio download failed')
+    finally:
+        if process.returncode is None:
+            if os.name != 'nt': os.killpg(process.pid, signal.SIGKILL)
+            else: process.kill()
+            await process.wait()
+
 def play_track(guild_id: str, start_sec: int = 0):
     """Play the current track in guild voice client via FFmpeg with volume control."""
     q = guild_queues.get(guild_id)
@@ -360,7 +369,11 @@ def play_track(guild_id: str, start_sec: int = 0):
         _fail_and_advance()
         return
 
-    before_opts = FFMPEG_OPTIONS["before_options"]
+    cached = MUSIC_CACHE.managed_path(stream_url)
+    if not cached and not stream_url.startswith(('http://', 'https://')):
+        _fail_and_advance()
+        return
+    before_opts = '-nostdin' if cached else FFMPEG_OPTIONS["before_options"]
     if start_sec > 0:
         before_opts = f"-ss {start_sec} " + before_opts
         q.position_ms = start_sec * 1000
@@ -380,6 +393,7 @@ def play_track(guild_id: str, start_sec: int = 0):
         return
 
     def after_playback(error):
+        if cached: MUSIC_CACHE.unpin(stream_url)
         if playback_generations.get(guild_id) != current_gen:
             log.debug("Stale playback callback for guild %s (gen %d vs %s); skipping.", guild_id, current_gen, playback_generations.get(guild_id))
             return
@@ -408,10 +422,12 @@ def play_track(guild_id: str, start_sec: int = 0):
         fut.add_done_callback(_on_done)
 
     try:
+        if cached: MUSIC_CACHE.pin(stream_url)
         vc.play(transformed, after=after_playback)
         track_started_at[guild_id] = time.time() - start_sec
         active_sessions.add(guild_id)
     except Exception as exc:
+        if cached: MUSIC_CACHE.unpin(stream_url)
         log.warning("VoiceClient.play failed: %s; scheduling next track.", exc)
         _fail_and_advance()
 
@@ -425,6 +441,12 @@ async def start_playback(guild_id: str, start_sec: int = 0):
         return
 
     current_track = q.tracks[q.position]
+    cache_key = current_track.webpage_url or current_track.track_id
+    cached = MUSIC_CACHE.lookup(cache_key)
+    if cached:
+        current_track.url = cached
+        play_track(guild_id, start_sec=start_sec)
+        return
     if current_track.webpage_url:
         resolved = await extract_tracks(current_track.webpage_url, max_results=1)
         if resolved:
@@ -438,11 +460,19 @@ async def start_playback(guild_id: str, start_sec: int = 0):
             if not current_track.title and resolved[0].get("title"):
                 current_track.title = resolved[0].get("title", "")
 
+    download_url = current_track.webpage_url or current_track.url
+    if download_url and is_safe_url(download_url):
+        try:
+            current_track.url = await MUSIC_CACHE.fetch(cache_key, lambda path: download_media(download_url, path))
+        except (OSError, ValueError, asyncio.TimeoutError):
+            log.info('Optional audio cache unavailable; using the resolved stream')
     play_track(guild_id, start_sec=start_sec)
 
 
 async def handle_track_finished(guild_id: str, force_next: bool = False):
     """Advance queue upon track completion honoring loop_mode and autoplay (§2, §8)."""
+    if not await asyncio.to_thread(guild_runtime_allowed_sync, guild_id):
+        return
     q = guild_queues.get(guild_id)
     if not q:
         active_sessions.discard(guild_id)
@@ -497,8 +527,8 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"service":"bot-music","status":"alive"}')
         elif self.path == "/health/ready":
-            db_ok = db_ready if DATABASE_URL else True
-            is_ready = bot.is_ready() and not bot.is_closed() and db_ok and not is_stopping
+            db_ok = db_ready and bool(DATABASE_URL)
+            is_ready = identity_verified and bot.is_ready() and not bot.is_closed() and db_ok and not is_stopping
             status = 200 if is_ready else 503
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
@@ -582,6 +612,73 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 
+def guild_runtime_allowed_sync(guild_id: str) -> bool:
+    with db_lock:
+        if not db_conn or not db_ready:
+            return False
+        with db_conn.cursor() as cur:
+            cur.execute("""SELECT g.approved AND NOT COALESCE(c.server_paused,false)
+                AND COALESCE(s.enabled,true) AND NOT COALESCE(s.paused,false)
+                AND b.application_id=%s
+                FROM access.guilds g JOIN config.bots b ON b.bot_key=%s AND g.guild_id=ANY(b.guild_ids)
+                LEFT JOIN config.guild_controls c ON c.guild_id=g.guild_id
+                LEFT JOIN config.bot_states s ON s.guild_id=g.guild_id AND s.bot_key=b.bot_key
+                WHERE g.guild_id=%s""", (str(bot.user.id), BOT_KEY, guild_id))
+            row = cur.fetchone()
+            return bool(row and row[0])
+
+
+def reserve_voice_sync(guild_id: str) -> bool:
+    with db_lock:
+        if not db_conn or not db_ready:
+            return False
+        with db_conn.transaction():
+            with db_conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(810208)")
+                cur.execute("DELETE FROM ai.voice_leases WHERE expires_at<=now()")
+                cur.execute("SELECT count(*) FROM ai.voice_leases WHERE owner<>%s", (VOICE_OWNER_PREFIX+guild_id,))
+                if cur.fetchone()[0] >= 2:
+                    return False
+                cur.execute("INSERT INTO ai.voice_leases VALUES(%s,now()+interval '60 seconds') ON CONFLICT(owner) DO UPDATE SET expires_at=EXCLUDED.expires_at", (VOICE_OWNER_PREFIX+guild_id,))
+                return True
+
+
+async def runtime_allowed(interaction: discord.Interaction) -> bool:
+    if str(interaction.guild_id) not in ALLOWED_GUILDS or not isinstance(interaction.user, discord.Member):
+        return False
+    def query():
+        with db_lock:
+            if not db_conn or not db_ready:
+                return False
+            with db_conn.cursor() as cur:
+                cur.execute("""SELECT g.approved, COALESCE(c.server_paused,false),
+                  COALESCE(s.enabled,true), COALESCE(s.paused,false), p.enabled, p.role_ids,
+                  b.application_id
+                  FROM access.guilds g JOIN config.bots b ON b.bot_key=%s AND g.guild_id=ANY(b.guild_ids)
+                  LEFT JOIN config.guild_controls c ON c.guild_id=g.guild_id
+                  LEFT JOIN config.bot_states s ON s.guild_id=g.guild_id AND s.bot_key=b.bot_key
+                  LEFT JOIN config.command_permissions p ON p.guild_id=g.guild_id AND p.bot_key=b.bot_key AND p.command=%s
+                  WHERE g.guild_id=%s""", (BOT_KEY, interaction.command.name if interaction.command else "play", str(interaction.guild_id)))
+                row = cur.fetchone()
+                return bool(row and row[0] and not row[1] and row[2] and not row[3] and row[4] is not False
+                    and (not row[5] or set(row[5]).intersection(str(r.id) for r in interaction.user.roles))
+                    and str(row[6]) == str(bot.user.id))
+    try:
+        return await asyncio.to_thread(query)
+    except Exception:
+        return False
+
+
+async def global_interaction_check(interaction: discord.Interaction) -> bool:
+    if await runtime_allowed(interaction):
+        return True
+    await respond(interaction, "This bot, server, or command is disabled for your roles.", ephemeral=True)
+    return False
+
+
+bot.tree.interaction_check = global_interaction_check
+
+
 async def ensure_voice_connection(interaction: discord.Interaction, member: discord.Member) -> discord.VoiceClient | None:
     """Connect to or relocate to member voice channel while enforcing MAX_VOICE_SESSIONS."""
     if not member.voice or not member.voice.channel:
@@ -592,6 +689,9 @@ async def ensure_voice_connection(interaction: discord.Interaction, member: disc
             await interaction.response.send_message(msg, ephemeral=True)
         return None
 
+    if not await runtime_allowed(interaction):
+        await respond(interaction, "Music is disabled for this server or your roles.", ephemeral=True)
+        return None
     voice_channel = member.voice.channel
     voice_client: discord.VoiceClient | None = interaction.guild.voice_client if interaction.guild else None
 
@@ -605,6 +705,9 @@ async def ensure_voice_connection(interaction: discord.Interaction, member: disc
         return None
 
     if not voice_client:
+        if not await asyncio.to_thread(reserve_voice_sync, str(interaction.guild_id)):
+            await respond(interaction, "Fleet voice capacity is full or unavailable.", ephemeral=True)
+            return None
         try:
             voice_client = await voice_channel.connect(timeout=10.0, reconnect=True)
         except Exception as exc:
@@ -623,6 +726,19 @@ async def ensure_voice_connection(interaction: discord.Interaction, member: disc
 
 @bot.event
 async def on_ready():
+    global identity_verified
+    def verify_identity():
+        with db_lock:
+            if not db_conn or not db_ready:
+                return False
+            with db_conn.cursor() as cur:
+                cur.execute("SELECT application_id FROM config.bots WHERE bot_key=%s", (BOT_KEY,))
+                row = cur.fetchone()
+                return bool(row and str(row[0]) == str(bot.user.id))
+    identity_verified = await asyncio.to_thread(verify_identity)
+    if not identity_verified:
+        log.error("Registered bot application identity is not approved")
+        return
     log.info("Music bot logged in as %s (ID: %s)", bot.user, bot.user.id)
     for guild in bot.guilds:
         if ALLOWED_GUILDS and str(guild.id) not in ALLOWED_GUILDS:
@@ -733,6 +849,8 @@ async def cmd_pause(interaction: discord.Interaction):
 
     vc = interaction.guild.voice_client if interaction.guild else None
     if vc and vc.is_playing():
+        build_queue_snapshots()
+        track_started_at.pop(str(interaction.guild_id), None)
         vc.pause()
         await respond(interaction, "⏸️ Playback paused.")
     else:
@@ -747,6 +865,8 @@ async def cmd_resume(interaction: discord.Interaction):
 
     vc = interaction.guild.voice_client if interaction.guild else None
     if vc and vc.is_paused():
+        q = get_or_create_queue(str(interaction.guild_id))
+        track_started_at[str(interaction.guild_id)] = time.time() - q.position_ms / 1000
         vc.resume()
         await respond(interaction, "▶️ Playback resumed.")
     else:
@@ -886,7 +1006,7 @@ async def cmd_nowplaying(interaction: discord.Interaction):
     curr = q.tracks[q.position]
     now = time.time()
     started = track_started_at.get(guild_id, now)
-    elapsed_sec = int(max(0, now - started))
+    elapsed_sec = int(max(0, now - started)) if guild_id in track_started_at else q.position_ms // 1000
     total_sec = max(1, curr.duration_ms // 1000)
 
     # Visual progress bar
@@ -1068,6 +1188,14 @@ async def periodic_tasks():
             # Reconnect if DATABASE_URL is set and connection is offline
             if DATABASE_URL and not db_ready:
                 await asyncio.to_thread(init_db)
+            for voice_client in list(bot.voice_clients):
+                guild_id = str(voice_client.guild.id)
+                try:
+                    authorized = await asyncio.to_thread(guild_runtime_allowed_sync, guild_id) and await asyncio.to_thread(reserve_voice_sync, guild_id)
+                except Exception:
+                    authorized = False
+                if not authorized:
+                    await voice_client.disconnect(force=True)
             # 1. Flush snapshots to PostgreSQL every 15s (build snapshots on event loop thread first)
             snapshots = build_queue_snapshots()
             await asyncio.to_thread(flush_snapshots_sync, snapshots)
@@ -1108,6 +1236,8 @@ def setup_signals(loop: asyncio.AbstractEventLoop):
 
 def main():
     global is_stopping
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL is required")
     if not BOT_TOKEN:
         log.error("BOT_TOKEN is required to run the music bot.")
         sys.exit(1)

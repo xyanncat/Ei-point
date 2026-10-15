@@ -68,7 +68,7 @@ describe("tts queue", () => {
   });
   it("rejects over queue capacity without hanging", async () => {
     const gate = () => new Promise<never>(() => {});
-    const q = createTtsQueue({ provider: "primary", synthesize: gate as never, deadlineMs: 60_000 });
+    const q = createTtsQueue({ provider: "primary", synthesize: gate as never, deadlineMs: 2 });
     const p1 = q.synthesize("a", "v");
     const p2 = q.synthesize("b", "v");
     const queued: Array<Promise<unknown>> = [];
@@ -76,9 +76,7 @@ describe("tts queue", () => {
     assert.deepEqual(await q.synthesize("overflow", "v"), { ok: false, reason: "queue-full" });
     assert.equal(q.inFlight(), 2);
     assert.equal(q.queued(), 10);
-    void p1;
-    void p2;
-    void queued;
+    await Promise.all([p1,p2,...queued]);
   });
 });
 
@@ -118,4 +116,11 @@ describe("extractVoiceChatText", () => {
     assert.deepEqual(extractVoiceChatText("<:wave:123> \u{1F600}"), { ok: false, reason: "nothing-speakable" });
     assert.deepEqual(extractVoiceChatText("   "), { ok: false, reason: "nothing-speakable" });
   });
+});
+
+
+it("enforces the TTS deadline for a provider that ignores AbortSignal", async () => {
+  const queue = createTtsQueue({provider:"test",synthesize:()=>new Promise(()=>{}),deadlineMs:5});
+  assert.deepEqual(await queue.synthesize("hello","default"),{ok:false,reason:"all-failed"});
+  assert.equal(queue.inFlight(),0);
 });

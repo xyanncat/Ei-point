@@ -1,3 +1,4 @@
+import { isControlEnabled } from "@ei-point/flow";
 import { createServer } from "node:http";
 import {
   ChannelType,
@@ -11,7 +12,7 @@ import {
 } from "discord.js";
 import pg from "pg";
 import { buildLogEvent } from "@ei-point/module-logging";
-import { DUE_EXPIRY_SQL } from "@ei-point/module-moderation";
+import { DUE_EXPIRY_SQL, reconcileExpiry } from "@ei-point/module-moderation";
 import { moderationCommandDefinitions, respondToModerationCommand } from "./commands.js";
 
 const botKey = process.env.BOT_KEY ?? "kafka";
@@ -74,6 +75,7 @@ async function recordAuditLog(
 ) {
   if (!identityVerified || !allowed.includes(guildId)) return;
   guarded(`log:${stream}:${type}`, async () => {
+    if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, guildId, botKey))) return;
     const correlationId = `log-${guildId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const event = buildLogEvent({
       guildId,
@@ -205,6 +207,11 @@ client.on(Events.InteractionCreate, (interaction) => {
       }
 
       await interaction.deferReply({ ephemeral: true });
+      if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows,
+        interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) {
+        await interaction.editReply({ content: "This command is disabled, paused, or restricted by server controls." });
+        return;
+      }
 
       const options: Record<string, string | number | boolean> = {};
       for (const opt of interaction.options.data) {
@@ -253,7 +260,7 @@ client.on(Events.InteractionCreate, (interaction) => {
     } catch (err) {
       if (interaction.deferred) {
         await interaction
-          .editReply({ content: "Moderation action failed safely. Check bot permissions." })
+          .editReply({ content: "Moderation outcome is unconfirmed. Check the durable case and Discord before retrying." })
           .catch(() => {});
       }
     } finally {
@@ -276,14 +283,14 @@ async function runMaintenance(): Promise<void> {
       [10],
     );
     for (const c of dueCases.rows) {
-      if (c.kind === "ban") {
+      if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, c.guild_id, botKey))) continue;
+      await reconcileExpiry(c.kind, async () => {
         const guild = client.guilds.cache.get(c.guild_id);
-        if (guild) {
-          await guild.bans.remove(c.user_id, "Automated ban expiration").catch(() => {});
-        }
-      }
-      // Clear expiry so it is not reprocessed
-      await pool.query("UPDATE moderation.cases SET expires_at = NULL WHERE case_id = $1", [c.case_id]);
+        if (!guild) throw new Error("Guild unavailable for expiry reconciliation");
+        await guild.bans.remove(c.user_id, "Automated ban expiration");
+      }, async () => {
+        await pool.query("UPDATE moderation.cases SET expires_at = NULL WHERE case_id = $1", [c.case_id]);
+      });
     }
 
     await pool.query(
@@ -342,6 +349,12 @@ process.on("SIGTERM", () => void shutdown());
 
 client.once(Events.ClientReady, () => {
   guarded("startup", async () => {
+    const registered = (await pool.query("SELECT application_id FROM config.bots WHERE bot_key=$1", [botKey])).rows[0];
+    if (registered?.application_id !== client.user!.id) {
+      console.error("Token identity does not match the registered BOT_KEY");
+      await shutdown();
+      return;
+    }
     identityVerified = true;
     for (const guild of client.guilds.cache.values()) {
       if (!allowed.includes(guild.id)) {

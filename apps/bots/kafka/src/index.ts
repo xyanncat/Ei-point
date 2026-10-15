@@ -1,3 +1,6 @@
+import { captureGuild, restoreGuild } from "@ei-point/bot-security/dist/snapshot.js";
+import { applyLockdown } from "@ei-point/bot-security/dist/lockdown.js";
+import { isControlEnabled } from "@ei-point/flow";
 // Kafka: merged security + moderation + logging gateway (identity `kafka`).
 // Single gateway connection serving both command trees. Replaces the
 // transitional bot-security + bot-moderation pair sharing one token.
@@ -18,12 +21,11 @@ import {
   detectRaid,
   evaluateAction,
   RECORD_INCIDENT_SQL,
-  SET_LOCKDOWN_SQL,
   WHITELIST_CHECK_SQL,
   type GuardedAction,
 } from "@ei-point/module-security";
 import { buildLogEvent } from "@ei-point/module-logging";
-import { DUE_EXPIRY_SQL } from "@ei-point/module-moderation";
+import { DUE_EXPIRY_SQL, reconcileExpiry } from "@ei-point/module-moderation";
 import { securityCommandDefinitions, respondToSecurityCommand } from "@ei-point/bot-security/dist/commands.js";
 import { moderationCommandDefinitions, respondToModerationCommand } from "@ei-point/bot-moderation/dist/commands.js";
 
@@ -113,7 +115,8 @@ client.on(Events.GuildMemberAdd, (member) => {
     const joinCount = history.length;
     recentJoins.set(guildId, []);
     guarded("raid-mitigation", async () => {
-      await pool.query(SET_LOCKDOWN_SQL, [guildId, "Automated anti-raid lockdown triggered", client.user!.id]);
+      if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, guildId, botKey))) return;
+      await applyLockdown(pool, member.guild, true, client.user!.id, "Automated anti-raid lockdown triggered");
       await pool.query(RECORD_INCIDENT_SQL, [
         guildId,
         "raid_detected",
@@ -145,6 +148,7 @@ client.on(Events.GuildAuditLogEntryCreate, async (auditEntry, guild) => {
   const actorId = auditEntry.executorId;
   if (!actorId || actorId === client.user?.id) return;
   guarded(`antinuke:${action}`, async () => {
+    if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, guild.id, botKey))) return;
     const count = recordActorAction(guild.id, actorId, action);
     const isWhitelisted = (
       await pool.query(WHITELIST_CHECK_SQL, [guild.id, actorId])
@@ -157,8 +161,12 @@ client.on(Events.GuildAuditLogEntryCreate, async (auditEntry, guild) => {
         actorId,
         verdict === "quarantine" ? "critical" : "high",
         JSON.stringify({ action, count, verdict }),
-        `antinuke-${guild.id}-${actorId}-${action}-${Date.now()}`,
+        `antinuke-${guild.id}-${auditEntry.id}`,
       ]);
+      await pool.query(`INSERT INTO security.trust_state(guild_id,user_id,score,updated_at)
+        SELECT $1,$2,GREATEST(0,100-COALESCE(SUM(CASE severity WHEN 'critical' THEN 40 WHEN 'high' THEN 20 ELSE 10 END),0)::int),now()
+        FROM security.incidents WHERE guild_id=$1 AND actor_id=$2 AND created_at>now()-interval '7 days'
+        ON CONFLICT(guild_id,user_id) DO UPDATE SET score=EXCLUDED.score,updated_at=now()`, [guild.id, actorId]);
       if (verdict === "quarantine") {
         try {
           const member = await guild.members.fetch(actorId);
@@ -183,6 +191,7 @@ async function recordAuditLog(
 ) {
   if (!identityVerified || !allowed.includes(guildId)) return;
   guarded(`log:${stream}:${type}`, async () => {
+    if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, guildId, botKey))) return;
     const correlationId = `log-${guildId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const event = buildLogEvent({ guildId, stream, type, actorId, detail, correlationId });
     await pool.query(
@@ -288,6 +297,11 @@ client.on(Events.InteractionCreate, (interaction) => {
         return;
       }
       await interaction.deferReply({ ephemeral: true });
+      if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows,
+        interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) {
+        await interaction.editReply({ content: "This command is disabled, paused, or restricted by server controls." });
+        return;
+      }
       const isSecurity = SECURITY_NAMES.has(interaction.commandName);
 
       if (isSecurity) {
@@ -316,6 +330,9 @@ client.on(Events.InteractionCreate, (interaction) => {
             reply: async (text) => {
               await interaction.editReply({ content: text, allowedMentions: { parse: [] } });
             },
+            captureSnapshot: async () => captureGuild(interaction.guild),
+            restoreSnapshot: async (snapshot, snapshotId) => restoreGuild(pool, interaction.guild, snapshot, snapshotId, interaction.user.id, interaction.id),
+            setLockdown: async (active, reason) => applyLockdown(pool, interaction.guild, active, interaction.user.id, reason),
             getGuildChannels: async () =>
               interaction.guild.channels.cache.map((c) => ({ id: c.id, name: c.name })),
             getGuildRoles: async () =>
@@ -373,7 +390,7 @@ client.on(Events.InteractionCreate, (interaction) => {
       console.error("kafka command failed:", err instanceof Error ? err.message : String(err));
       if (interaction.deferred) {
         await interaction
-          .editReply({ content: "Kafka operation failed safely. Inspect system logs." })
+          .editReply({ content: "Kafka operation outcome is unconfirmed. Check moderation cases and system logs before retrying." })
           .catch(() => {});
       }
     } finally {
@@ -405,14 +422,17 @@ async function runMaintenance(): Promise<void> {
       [10],
     );
     for (const c of dueCases.rows) {
-      if (c.kind === "ban") {
+      if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, c.guild_id, botKey))) continue;
+      await reconcileExpiry(c.kind, async () => {
         const guild = client.guilds.cache.get(c.guild_id);
-        if (guild) await guild.bans.remove(c.user_id, "Automated ban expiration").catch(() => {});
-      }
-      await pool.query("UPDATE moderation.cases SET expires_at = NULL WHERE case_id = $1", [c.case_id]);
+        if (!guild) throw new Error("Guild unavailable for expiry reconciliation");
+        await guild.bans.remove(c.user_id, "Automated ban expiration");
+      }, async () => {
+        await pool.query("UPDATE moderation.cases SET expires_at = NULL WHERE case_id = $1", [c.case_id]);
+      });
     }
     const latency = Math.max(0, Math.round(client.ws.ping));
-    for (const service of ["bot-kafka", "bot-security", "bot-moderation"]) {
+    for (const service of [`bot-${botKey}`]) {
       await pool.query(
         `INSERT INTO ops.service_status(service, liveness, gateway, db_ready, latency_ms)
          VALUES($1, 'ok', 'ok', true, $2)
@@ -469,6 +489,12 @@ process.on("SIGTERM", () => void shutdown());
 
 client.once(Events.ClientReady, () => {
   guarded("startup", async () => {
+    const registered = (await pool.query("SELECT application_id FROM config.bots WHERE bot_key=$1", [botKey])).rows[0];
+    if (registered?.application_id !== client.user!.id) {
+      console.error("Token identity does not match the registered BOT_KEY");
+      await shutdown();
+      return;
+    }
     identityVerified = true;
     for (const guild of client.guilds.cache.values()) {
       try {

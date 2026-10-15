@@ -101,6 +101,18 @@ export const commandDefinitions = [
     o.setName("user").setDescription("Member to inspect"),
   ),
   simple("leaderboard", "Show the top ten members"),
+  simple("cardinfo", "Inspect a card instance in this server").addStringOption((o) =>
+    o.setName("instance_id").setDescription("Card instance UUID").setMaxLength(36).setRequired(true),
+  ),
+  simple("cardstats", "Show your or another member's card collection").addUserOption((o) =>
+    o.setName("user").setDescription("Member to inspect").setRequired(false),
+  ),
+  simple("play", "Deal a five-card draw round against the house"),
+  simple("deck", "Show or reshuffle your five-card deck").addBooleanOption((o) =>
+    o.setName("reshuffle").setDescription("Build a fresh deck and clear the last hand"),
+  ),
+  simple("hand", "Show the five cards from your last round"),
+  simple("score", "Show your five-card game score and record"),
   page(simple("cards", "Browse the card catalog")),
   page(simple("inventory", "Show your card instances")),
   simple("packs", "Show available packs"),
@@ -236,6 +248,10 @@ export const commandDefinitions = [
         .addStringOption((o) =>
           o.setName("card").setDescription("Card ID").setRequired(true),
         ),
+    )
+    .addSubcommand((s) =>
+      s.setName("revoke").setDescription("Revoke an unreserved card instance")
+        .addStringOption((o) => o.setName("instance").setDescription("Card instance UUID").setRequired(true).setMaxLength(36)),
     )
     .addSubcommand((s) =>
       s
@@ -387,6 +403,48 @@ export async function respondToCommand(
           "No XP earned yet.",
         );
         break;
+      case "cardinfo": {
+        const card = await g.cardInfo(r.guildId, text(r, "instance_id"));
+        response = card
+          ? `${card.name} (${card.rarity}) · ${card.status} · serial ${card.serialNumber ?? "unassigned"} · ${card.issuedCount}/${card.maxSupply ?? "unlimited"} issued · owner <@${card.ownerUserId}>`
+          : "Card not found in this server.";
+        break;
+      }
+      case "cardstats": {
+        const target = text(r, "user") || r.userId;
+        const stats = await g.cardStats(r.guildId, target);
+        const rarity = Object.entries(stats.byRarity).sort(([a], [b]) => a.localeCompare(b)).map(([name, count]) => `${name}: ${count}`).join(" · ") || "No active cards";
+        const balance = target === r.userId ? ` · Berries: ${await g.balance(r.guildId, r.userId)}` : "";
+        response = `Cards: ${stats.total} · Unique: ${stats.unique} · ${rarity}${balance}`;
+        break;
+      }
+      case "play": {
+        const round = await g.playCardRound(actor);
+        response = `${round.outcome === "win" ? "You win" : round.outcome === "push" ? "Push" : "House wins"} · You: ${round.formattedPlayer} (${round.playerHand}) · House: ${round.formattedHouse} (${round.houseHand}) · +${round.points} points · score ${round.score} · record ${round.gamesWon}W/${round.gamesPlayed-round.gamesWon}L${round.reshuffled ? " · fresh deck" : ""}`;
+        break;
+      }
+      case "deck": {
+        if (r.options.reshuffle === true) {
+          await g.reshuffleCardGame(actor);
+          response = "Deck reshuffled. A fresh 52-card deck is ready and your last hand was cleared.";
+        } else {
+          const game = await g.cardGame(r.guildId, r.userId);
+          response = `Cards left: ${game.deck.length} · last hand: ${game.hand.join(" ") || "—"} · rounds before reshuffle: ${Math.floor(game.deck.length / 10)}`;
+        }
+        break;
+      }
+      case "hand": {
+        const game = await g.cardGame(r.guildId, r.userId);
+        response = game.hand.length ? `Last hand: ${game.hand.join(" ")} · cards left: ${game.deck.length}` : "No hand yet. Use /play to deal your first round.";
+        break;
+      }
+      case "score": {
+        const game = await g.cardGame(r.guildId, r.userId);
+        const played = Number(game.gamesPlayed), won = Number(game.gamesWon), score = BigInt(game.score);
+        const tier = score >= 500n ? "High Roller" : score >= 200n ? "Card Sharp" : score >= 75n ? "Regular" : score >= 15n ? "Beginner" : "Newcomer";
+        response = `Score: ${score} · ${tier} · Rounds: ${played} · Won: ${won} · Lost: ${played-won} · Win rate: ${played ? Math.round(won*100/played) : 0}%`;
+        break;
+      }
       case "balance":
         response = `Berries: ${await g.balance(r.guildId, r.userId)}`;
         break;
@@ -452,6 +510,10 @@ export async function respondToCommand(
           response = "Berries granted.";
         } else if (r.subcommand === "issue")
           response = `Card issued: ${JSON.stringify(await g.issueCard({ ...actor, userId: text(r, "user"), cardId: text(r, "card") }))}`;
+        else if (r.subcommand === "revoke") {
+          await g.revokeCard({ ...actor, instanceId: text(r, "instance") });
+          response = "Card revoked.";
+        }
         else if (r.subcommand === "define") {
           await g.defineCard(JSON.parse(text(r, "json")));
           response = "Card definition saved.";

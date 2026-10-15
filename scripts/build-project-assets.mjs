@@ -1,3 +1,4 @@
+import {assertOptionalAssetWritesAllowed} from "./lib/resource-guard.mjs";
 import {
   readdir,
   readFile,
@@ -12,6 +13,7 @@ import { resolve, relative, isAbsolute, extname } from "node:path";
 import { createHash } from "node:crypto";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const publicDir = resolve(root, "apps/dashboard/public");
+await assertOptionalAssetWritesAllowed(publicDir);
 const services = [],
   cards = [],
   ids = new Set();

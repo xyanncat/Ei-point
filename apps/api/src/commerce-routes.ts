@@ -1,3 +1,4 @@
+import { fulfillOrder } from "@ei-point/module-commerce";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 export type CommerceQuery = (sql:string, params?:unknown[])=>Promise<Record<string,any>[]>;
@@ -51,11 +52,12 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
   const idem=key(req),ref=b.referralCode??null;
   if(ref!==null&&(typeof ref!=="string"||!/^[A-Z0-9-]{6,24}$/.test(ref)))fail(400,"invalid-referral","Referral code is invalid.");
   const requestHash=hash(JSON.stringify([guild,buyer,sku,method,ref]));
-  const token=randomBytes(32).toString("base64url"),id="RP-"+randomBytes(3).toString("hex").toUpperCase();
+  if(b.recoveryToken!==undefined&&(typeof b.recoveryToken!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(b.recoveryToken)))fail(400,"invalid-recovery-token","Supply a random 32-byte checkout secret.");
+  const token=typeof b.recoveryToken==="string"?b.recoveryToken:randomBytes(32).toString("base64url"),id="RP-"+randomBytes(3).toString("hex").toUpperCase();
   const order=await transaction(async(q)=>{
    await q("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[idem]);
    const old=(await q("SELECT * FROM commerce.orders WHERE idempotency_key=$1",[idem]))[0];
-   if(old){if(old.request_hash!==requestHash)fail(409,"idempotency-conflict","This key belongs to another checkout.");fail(409,"checkout-already-created","Checkout already exists. Use the original order and token.");}
+   if(old){if(old.request_hash!==requestHash)fail(409,"idempotency-conflict","This key belongs to another checkout.");if(typeof b.recoveryToken!=="string"||old.order_token_hash!==hash(token))fail(409,"checkout-already-created","Checkout already exists. Use the original order and token.");return old;}
    const item=(await q("SELECT * FROM commerce.catalog WHERE sku=$1 AND active FOR SHARE",[sku]))[0];
    if(!item||item.currency!=="INR")fail(400,"invalid-service","Service is unavailable.");
    if(ref){const r=(await q("SELECT * FROM commerce.referrals WHERE code=$1 AND guild_id=$2 AND cycle=$3 FOR UPDATE",[ref,guild,cycle()]))[0];if(!r||r.referrer_id===buyer)fail(400,"invalid-referral","Referral is expired, unknown or belongs to you.");}
@@ -64,7 +66,7 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
    const rows=await q(`INSERT INTO commerce.orders(guild_id,buyer_id,sku,amount_minor,order_token_hash,idempotency_key,public_id,method,referral_code,request_hash,service_name,membership_days)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,[guild,buyer,sku,minor,hash(token),idem,id,method,ref,requestHash,item!.name,item!.membership_days]);return rows[0]!;
   });
-  const note=`${id} Discord ${buyer}`,upiUri=`upi://pay?${new URLSearchParams({pa:vpa??"",pn:name??"",am:amount(order.amount_minor),cu:"INR",tn:note})}`;
+  const note=`${order.public_id} Discord ${buyer}`,upiUri=`upi://pay?${new URLSearchParams({pa:vpa??"",pn:name??"",am:amount(order.amount_minor),cu:"INR",tn:note})}`;
   return {...view(order),token,orderToken:token,amountMinor:Number(order.amount_minor),currency:method==="upi"?"INR":"USDT",paymentMethod:method,paymentUri:method==="upi"?upiUri:wallet,destination:method==="upi"?vpa:wallet,expiresAt:order.expires_at,referralApplied:!!ref,qrPayload:method==="upi"?upiUri:wallet,
    ...(method==="upi"?{upiUri,payeeVpa:vpa,payeeName:name,note}:{walletAddress:wallet,network:"TRC-20 (Tron)",usdAmount:amount(order.amount_minor)}),notificationStatus:"not-configured"};
  }));
@@ -95,10 +97,7 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
    if(action==="settle"?o!.status!=="claimed":!['pending','claimed'].includes(o!.status))fail(409,"invalid-order-state","Order cannot transition to that state.");
    if(action==="settle"){
     await q("INSERT INTO commerce.settlements(order_id,settled_by,idempotency_key) VALUES($1,$2,$3)",[o!.order_id,s.userId,idem]);
-    if(Number(o!.membership_days)>0)await q(`INSERT INTO commerce.memberships(guild_id,user_id,expires_at) VALUES($1,$2,now()+$3*interval '1 day') ON CONFLICT(guild_id,user_id) DO UPDATE SET expires_at=greatest(commerce.memberships.expires_at,now())+$3*interval '1 day',updated_at=now()`,[p.guildId,o!.buyer_id,o!.membership_days]);
-    await q("UPDATE commerce.rewards SET status='expired' WHERE guild_id=$1 AND status='reserved' AND cycle<$2",[p.guildId,cycle()]);
-    if(o!.referral_code){const r=(await q("UPDATE commerce.referrals SET uses=uses+1 WHERE code=$1 AND guild_id=$2 AND cycle=$3 RETURNING referrer_id",[o!.referral_code,p.guildId,cycle()]))[0];
-     const reward=Number(env.COMMERCE_REFERRAL_REWARD_MINOR??0);if(r&&Number.isSafeInteger(reward)&&reward>0)await q("INSERT INTO commerce.rewards(guild_id,user_id,cycle,amount_minor,idempotency_key) VALUES($1,$2,$3,$4,$5)",[p.guildId,r.referrer_id,cycle(),reward,`checkout:${o!.order_id}`]);}
+    await fulfillOrder(q,o!,Number(env.COMMERCE_REFERRAL_REWARD_MINOR??0));
    }
    await q("UPDATE commerce.orders SET status=$2 WHERE order_id=$1",[o!.order_id,target]);
    await q("UPDATE commerce.claims SET status=$2 WHERE order_id=$1",[o!.order_id,action==="settle"?"confirmed":"rejected"]);
