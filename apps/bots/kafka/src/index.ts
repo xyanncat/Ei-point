@@ -1,6 +1,6 @@
 import { captureGuild, restoreGuild } from "@ei-point/bot-security/dist/snapshot.js";
 import { applyLockdown } from "@ei-point/bot-security/dist/lockdown.js";
-import { isControlEnabled, createInteractionClaims, createWorkGate, dispatchGuildCommand } from "@ei-point/flow";
+import { isControlEnabled, createInteractionClaims, createWorkGate, dispatchGuildCommand, responsePolicy } from "@ei-point/flow";
 // Kafka: merged security + moderation + logging gateway (identity `kafka`).
 // Single gateway connection serving both command trees. Replaces the
 // transitional bot-security + bot-moderation pair sharing one token.
@@ -285,8 +285,8 @@ const SECURITY_NAMES = new Set(securityCommandDefinitions.map((c) => c.name));
 
 // --- Merged interaction router ---
 client.on(Events.InteractionCreate, (rawInteraction) => {
-  const interaction = withEiEmbedReplies(rawInteraction);
-  if (!interaction.isChatInputCommand()) return;
+  if (!rawInteraction.isChatInputCommand()) return;
+  const interaction = withEiEmbedReplies(rawInteraction, responsePolicy(botKey, rawInteraction.commandName).imageKey);
   if (!identityVerified) {
     guarded("not-ready", () =>
       interaction.reply({ content: "Kafka is initializing. Please retry in a moment.", ephemeral: true }),
@@ -304,6 +304,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
       allowlist: allowed,
       interaction,
       operationId: interaction.id,
+      operation: interaction.commandName,
       gate: commandGate,
       claims: interactionClaims,
       authorize: async () => {

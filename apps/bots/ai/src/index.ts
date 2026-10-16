@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { acquireVoiceLease } from "./voice-lease.js";
-import { isControlEnabled } from "@ei-point/flow";
+import { isControlEnabled, responsePolicy } from "@ei-point/flow";
 import { createServer } from "node:http";
 import {
   Client,
@@ -405,8 +405,8 @@ client.on(Events.MessageCreate, (message) => {
 
 // --- Slash Command Interaction Handler ---
 client.on(Events.InteractionCreate, (rawInteraction) => {
-  const interaction = withEiEmbedReplies(rawInteraction);
-  if (!interaction.isChatInputCommand()) return;
+  if (!rawInteraction.isChatInputCommand()) return;
+  const interaction = withEiEmbedReplies(rawInteraction, responsePolicy(botKey, rawInteraction.commandName).imageKey);
   if (!identityVerified) {
     guarded("not-ready", () =>
       interaction.reply({ content: "AI bot is initializing. Please retry in a moment.", ephemeral: true }),

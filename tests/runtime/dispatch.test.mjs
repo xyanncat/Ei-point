@@ -11,7 +11,8 @@ function fixture(guildId='guild') {
     deferred:false,
     replied:false,
     lastReply:undefined,
-    async deferReply(){events.push('defer');this.deferred=true;},
+    deferOptions:undefined,
+    async deferReply(options){events.push('defer');this.deferred=true;this.deferOptions=options;},
     async reply(message){events.push('reply');this.replied=true;this.lastReply=message;assert.equal(message.ephemeral,true);},
     async editReply(message){events.push('edit');this.lastReply=message;assert.ok(message.content);},
   };
@@ -59,6 +60,48 @@ test('community settings and card administration require their command permissio
   assert.equal(communityCommandPermissionDenial('cardadmin',true,false),'Only the guild owner can administer cards and berries.');
   assert.equal(communityCommandPermissionDenial('cardadmin',false,true),null);
   assert.equal(communityCommandPermissionDenial('rank',false,false),null);
+});
+
+test('identity and operation select reply visibility for the whole lifecycle', async () => {
+  const cases = [
+    { botKey: 'himiko', operation: 'leaderboard', ephemeral: false },
+    { botKey: 'himiko', operation: 'embed', ephemeral: false },
+    { botKey: 'himiko', operation: 'setwelcome', ephemeral: true },
+    { botKey: 'silverwolf', operation: 'rank', ephemeral: false },
+    { botKey: 'silverwolf', operation: 'market', ephemeral: false },
+    { botKey: 'silverwolf', operation: 'cardadmin', ephemeral: true },
+    { botKey: 'cipher', operation: 'payment', ephemeral: true },
+    { botKey: 'cyrene', operation: 'speak', ephemeral: false },
+    { botKey: 'kafka', operation: 'ban', ephemeral: true },
+  ];
+  for (const c of cases) {
+    const { interaction } = fixture();
+    await dispatchGuildCommand({
+      botKey: c.botKey, allowlist: ['guild'], interaction, operation: c.operation,
+      authorize: async () => undefined,
+      run: async () => ({ content: 'ok' }),
+      failureReply: (category) => ({ content: `failed:${category}` }), onTelemetry: () => {},
+    });
+    assert.equal(interaction.deferOptions?.ephemeral, c.ephemeral, `${c.botKey} /${c.operation}`);
+    assert.equal(interaction.lastReply.content, 'ok');
+  }
+});
+
+test('failed_acknowledgement_answers_once_in_private_and_releases_capacity', async () => {
+  const gate = createWorkGate(1);
+  const { interaction } = fixture();
+  interaction.deferReply = async () => { throw new Error('acknowledgement rejected'); };
+  let ran = false;
+  await dispatchGuildCommand({
+    botKey: 'himiko', allowlist: ['guild'], interaction, gate, operation: 'rank',
+    authorize: async () => undefined,
+    run: async () => { ran = true; return { content: 'no' }; },
+    failureReply: (category) => ({ content: `failed:${category}` }), onTelemetry: () => {}, ackTimeoutMs: 50,
+  });
+  assert.equal(ran, false, 'failed acknowledgement must not start work');
+  assert.match(interaction.lastReply.content, /failed:timeout/);
+  assert.equal(interaction.lastReply.ephemeral, true, 'system failures stay private');
+  assert.equal(gate.inFlight(), 0, 'capacity released when work never starts');
 });
 
 test('timed_out_work_keeps_capacity_until_settled', async () => {

@@ -1,5 +1,5 @@
 import { deliverAnnouncement } from "./delivery.js";
-import { applyCommunityConfiguration, createInteractionClaims, createWorkGate, deliverCommunityMessages, dispatchGuildCommand, isControlEnabled } from "@ei-point/flow";
+import { applyCommunityConfiguration, createInteractionClaims, createWorkGate, deliverCommunityMessages, dispatchGuildCommand, isControlEnabled, responsePolicy } from "@ei-point/flow";
 // Himiko owns announcements, welcome/leave events, and community XP/levels.
 
 import { createServer } from "node:http";
@@ -81,8 +81,8 @@ async function loadStaffScopes(guildId: string, roleIds: string[]): Promise<stri
 }
 
 client.on(Events.InteractionCreate, (rawInteraction) => {
-  const interaction = withEiEmbedReplies(rawInteraction);
-  if (!interaction.isChatInputCommand()) return;
+  if (!rawInteraction.isChatInputCommand()) return;
+  const interaction = withEiEmbedReplies(rawInteraction, responsePolicy(botKey, rawInteraction.commandName).imageKey);
   if (!identityVerified) {
     guarded("not-ready", () =>
       interaction.reply({ content: "Himiko is initializing. Please retry in a moment.", ephemeral: true }),
@@ -98,6 +98,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         allowlist: allowed,
         interaction,
         operationId: interaction.id,
+        operation: interaction.commandName,
         gate: commandGate,
         claims: interactionClaims,
         authorize: async () => {

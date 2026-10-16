@@ -1,4 +1,4 @@
-import { createInteractionClaims, createWorkGate, dispatchGuildCommand, isControlEnabled } from "@ei-point/flow";
+import { createInteractionClaims, createWorkGate, dispatchGuildCommand, isControlEnabled, responsePolicy } from "@ei-point/flow";
 import { createServer } from "node:http";
 import {
   Client,
@@ -69,8 +69,8 @@ async function loadStaffScopes(guildId: string, roleIds: string[]): Promise<stri
 
 // --- Interaction Handler ---
 client.on(Events.InteractionCreate, (rawInteraction) => {
-  const interaction = withEiEmbedReplies(rawInteraction);
-  if (!interaction.isChatInputCommand()) return;
+  if (!rawInteraction.isChatInputCommand()) return;
+  const interaction = withEiEmbedReplies(rawInteraction, responsePolicy(botKey, rawInteraction.commandName).imageKey);
   if (!identityVerified) {
     guarded("not-ready", () =>
       interaction.reply({ content: "Commerce bot is initializing. Please retry in a moment.", ephemeral: true }),
@@ -89,6 +89,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         allowlist: allowed,
         interaction,
         operationId: interaction.id,
+        operation: interaction.commandName,
         gate: commandGate,
         claims: interactionClaims,
         authorize: async () => {

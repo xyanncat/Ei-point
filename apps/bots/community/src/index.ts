@@ -17,6 +17,7 @@ import {
   createWorkGate,
   dispatchGuildCommand,
   isControlEnabled,
+  responsePolicy,
 } from "@ei-point/flow";
 const botKey = process.env.BOT_KEY ?? "silverwolf";
 
@@ -74,8 +75,8 @@ const guarded = (label: string, run: () => Promise<unknown>) => {
 };
 
 client.on(Events.InteractionCreate, (rawInteraction) => {
-  const interaction = withEiEmbedReplies(rawInteraction);
-  if (!interaction.isChatInputCommand()) return;
+  if (!rawInteraction.isChatInputCommand()) return;
+  const interaction = withEiEmbedReplies(rawInteraction, responsePolicy(botKey, rawInteraction.commandName).imageKey);
   if (!identityVerified) {
     guarded("identity-not-ready", () =>
       interaction.reply({
@@ -94,6 +95,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         allowlist: allowed,
         interaction,
         operationId: interaction.id,
+        operation: interaction.commandName,
         gate: commandGate,
         claims: interactionClaims,
         authorize: async () => {

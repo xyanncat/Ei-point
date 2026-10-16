@@ -1,6 +1,7 @@
 import { handleInteraction, type WorkContext } from "./lifecycle.js";
 import { newCorrelationId } from "./jobs.js";
 import type { InteractionClaims, WorkGate } from "./capacity.js";
+import { responsePolicy } from "./response-policy.js";
 import type { FailureCategory, TelemetryFields } from "./index.js";
 
 export interface InteractionPort<TReply> {
@@ -27,10 +28,15 @@ export async function dispatchGuildCommand<TReply>(deps: {
   claims?: InteractionClaims;
   /** Stable id for this interaction (Discord interaction id). */
   operationId?: string;
+  /** Slash command name; selects the identity/operation reply visibility policy. */
+  operation?: string;
   ephemeral?: boolean;
   deadlineMs?: number;
 }): Promise<void> {
-  const ephemeral = deps.ephemeral ?? true;
+  // A08: visibility comes from the identity/operation policy unless a caller
+  // overrides it explicitly. Unknown identities default to private.
+  const policy = responsePolicy(deps.botKey, deps.operation);
+  const ephemeral = deps.ephemeral ?? policy.visibility === "private";
   const started = Date.now();
   const report = (failureCategory: FailureCategory): void => {
     try {
@@ -49,7 +55,8 @@ export async function dispatchGuildCommand<TReply>(deps: {
       if (deps.interaction.deferred || deps.interaction.replied) {
         await deps.interaction.editReply(deps.failureReply(category));
       } else {
-        await deps.interaction.reply({ ...deps.failureReply(category), ephemeral });
+        // Pre-acknowledgement refusals are system state, not command replies: always private.
+        await deps.interaction.reply({ ...deps.failureReply(category), ephemeral: true });
       }
     } finally {
       report(category);
@@ -87,7 +94,8 @@ export async function dispatchGuildCommand<TReply>(deps: {
       if (deps.interaction.deferred || deps.interaction.replied) {
         await deps.interaction.editReply(response);
       } else {
-        await deps.interaction.reply({ ...response, ephemeral });
+        // Failures before any acknowledgement (guild rejection, failed ack) stay private.
+        await deps.interaction.reply({ ...response, ephemeral: true });
       }
     },
     failureReply: deps.failureReply,
