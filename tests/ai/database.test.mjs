@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createServer } from "node:net";
 import pg from "pg";
 import EmbeddedPostgres from "../helpers/embedded-postgres.mjs";
-import { processConversation } from "../../apps/bots/ai/dist/commands.js";
+import { processConversation, answerCyreneSearch } from "../../apps/bots/ai/dist/commands.js";
 import { acquireVoiceLease } from "../../apps/bots/ai/dist/voice-lease.js";
 let server, pool;
 const guild = "100000000000000001",
@@ -110,4 +110,20 @@ test("post-provider persistence failure rolls memory back and retains conservati
    await pool.query("DROP TRIGGER reject_message ON ai.messages");
    await pool.query("DROP FUNCTION ai.reject_message()");
  }
+});
+test("Cyrene /search answers through the AI conversation contract, not a stub",async()=>{
+ let prompt;
+ const answer=await answerCyreneSearch(pool,"guild","searcher","who runs the server?",async messages=>{prompt=messages;return success();},20000);
+ assert.equal(answer,"provider reply");
+ assert.match(prompt.at(-1).content,/who runs the server\?/);
+ const usage=(await pool.query("SELECT count(*)::int count FROM ai.usage_ledger")).rows[0].count;
+ const messages=(await pool.query("SELECT count(*)::int count FROM ai.messages")).rows[0].count;
+ assert.equal(usage,1);
+ assert.equal(messages,2);
+});
+test("Cyrene /search reports an honest unavailable state and records nothing",async()=>{
+ const answer=await answerCyreneSearch(pool,"guild","searcher","hello",async()=>({ok:false,reason:"all-failed"}),20000);
+ assert.match(answer,/unreachable/);
+ for(const table of ["usage_ledger","messages","budget_reservations"])
+   assert.equal((await pool.query(`SELECT count(*)::int count FROM ai.${table}`)).rows[0].count,0);
 });

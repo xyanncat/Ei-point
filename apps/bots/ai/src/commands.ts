@@ -177,6 +177,21 @@ export async function processConversation(
 
 }
 
+/** `/search` (owner decision 2026-10-16): the AI model answers the question — no external/web search provider.
+ * Reuses the mention conversation contract: Cyrene persona, bounded prompt window, daily token budget and
+ * honest budget/queue/unavailable messages from `processConversation`. */
+export async function answerCyreneSearch(
+  pool: Pool,
+  guildId: string,
+  userId: string,
+  query: string,
+  askRouter: AiCommandRequest["askRouter"],
+  dailyBudgetCap: number,
+  systemPrompt?: string,
+): Promise<string> {
+  return processConversation(pool, guildId, userId, "default", query, askRouter, dailyBudgetCap, systemPrompt);
+}
+
 export async function respondToAiCommand(
   req: AiCommandRequest,
   pool: Pool,

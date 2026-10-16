@@ -32,7 +32,7 @@ export const ttsCommandDefinitions = [
     .setDMPermission(false),
   new SlashCommandBuilder()
     .setName("search")
-    .setDescription("Search the configured Cyrene search source")
+    .setDescription("Ask Cyrene a question (AI answer, no web search)")
     .setDMPermission(false)
     .addStringOption((opt) => opt.setName("query").setDescription("Search query").setRequired(true).setMaxLength(300)),
 ];
@@ -140,7 +140,12 @@ export async function respondToTtsCommand(
   }
 
   if (name === "search") {
-    await ctx.reply(await ctx.search(ctx.query ?? ""));
+    const query = ctx.query ?? "";
+    if (!query.trim()) {
+      await ctx.reply("Give me a question to answer.");
+      return true;
+    }
+    await ctx.reply(await ctx.search(query));
     return true;
   }
 

@@ -19,6 +19,7 @@ import {
 import { Readable } from "node:stream";
 import {
   aiCommandDefinitions,
+  answerCyreneSearch,
   respondToAiCommand,
   processConversation,
 } from "./commands.js";
@@ -495,7 +496,16 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
               voiceSessions.get(interaction.guildId)?.destroy();
               voiceSessions.delete(interaction.guildId);
             },
-            search: async (_query) => "Search is not configured yet. Configure an approved search source before using this command.",
+            search: (query) =>
+              answerCyreneSearch(
+                pool,
+                interaction.guildId,
+                interaction.user.id,
+                query,
+                (p) => router.ask(p),
+                DAILY_BUDGET_CAP,
+                cyrenePersona,
+              ),
           },
           pool,
         );

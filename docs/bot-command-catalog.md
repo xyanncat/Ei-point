@@ -72,7 +72,7 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 | `/speak <text>` | Generate and attach an audio file, with text limited to 500 characters. |
 | `/tts` | Join the caller's voice channel and read new text-chat messages aloud; bounded queue and idle-human departure are implemented. |
 | `/leave` | End Cyrene's active voice session. |
-| `/search <query>` | Registered but currently returns an explicit not-configured response until a search source is selected. |
+| `/search <query>` | Asks Cyrene's AI model to answer the question (no external/web search source; owner decision 2026-10-16). Shares the mention conversation memory, daily token budget and provider router; unavailable/budget states are answered honestly. |
 | `/translate <text> <target_language> [source_language]` | Translate up to 500 characters through the private local Hy-MT2 service. Source language is optional and auto-detected when omitted. |
 
 ### Other functions

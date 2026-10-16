@@ -150,11 +150,14 @@ configuration maps every supported field and preserves unsupported settings as p
 Rows: `EI-point.zip :: EI-point/bots/niko-robin/src/commands/search.ts :: search@5`
 
 The legacy AI search assistant (provider-backed answers) is retired. The approved surface keeps a Cyrene
-`/search` command that returns a bounded not-configured reply until the owner approves a search source
-(spec status: partial). No unapproved provider is wired.
+`/search` command; per the owner decision of 2026-10-16 the AI model answers the question directly (no
+external/web search source is wired), sharing the mention conversation memory, daily token budget and
+provider router.
 
-Evidence: `apps/bots/ai/src/response-policy.test.ts` "every registered Cyrene command replies publicly";
-`apps/bots/ai/src/index.ts` (bounded `search` context implementation).
+Evidence: `apps/bots/ai/src/tts.test.ts` "replies with the search answer and passes the query through
+unchanged" and "asks for a question instead of calling the AI for an empty query";
+`tests/ai/database.test.mjs` "Cyrene /search answers through the AI conversation contract, not a stub" and
+"Cyrene /search reports an honest unavailable state and records nothing".
 
 ## D. EI-point — SilverWolf game surface
 
