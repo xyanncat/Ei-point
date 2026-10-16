@@ -15,6 +15,7 @@ test("the gate plan keeps required and recorded gates distinct", () => {
     "pnpm-toolchain",
     "python-music",
     "feature-coverage",
+    "openapi-sync",
     "root-suites",
     "typecheck",
     "browser",

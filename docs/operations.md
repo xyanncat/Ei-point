@@ -14,6 +14,8 @@ Allocation: runtime 7.45 CPU / 32.5 GiB; concurrent maximum 7.95 CPU / 33.75 GiB
 
 Migrations are forward-only and serialized by a database advisory lock. `infra/postgres/run-migrations.mjs` exports `runMigrations(url, { dir, upTo })`; `tests/operations/migrations.test.mjs` proves a fresh database, an upgrade from a prior snapshot, a rolled-back failure that is not recorded and retried cleanly, and concurrent runners that never double-apply.
 
+`scripts/check-openapi-sync.mjs` (the verifier's `openapi-sync` gate) regenerates `packages/contracts/src/dashboard-api.ts` from `apps/api/src/openapi.json` and fails on content drift, ignoring line-ending-only differences. `scripts/evidence-bundle.mjs` runs the verifier with `--json` and retains the §10A evidence bundle under `docs/audits/releases/<release-id>/` (revision, dirty state, toolchain versions, per-gate commands, timestamps, exits/counts and sanitized log hashes); a blocked mandatory gate is recorded as BLOCKED and blocks release.
+
 ## Storage envelope (§7) — dedicated host, uncapped (owner decision 2026-10-16)
 
 The table below remains the working allocation target for planning, not a hard cap:

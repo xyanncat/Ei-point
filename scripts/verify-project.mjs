@@ -27,6 +27,7 @@ export function gatePlan(pinned) {
     { id: "pnpm-toolchain", label: "pnpm toolchain", command: "pnpm", args: ["--version"], mandatory: true, expectStdout: /^9\./ },
     { id: "python-music", label: "music bot unit tests", command: "python", args: ["-m", "unittest", "discover", "-s", "apps/bots/music-py/tests", "-p", "test_*.py"], mandatory: true, tool: "python" },
     { id: "feature-coverage", label: "legacy feature coverage (structural)", command: "node", args: ["scripts/check-feature-coverage.mjs", "--mode", "structural"], mandatory: true },
+    { id: "openapi-sync", label: "dashboard API contract sync", command: "node", args: ["scripts/check-openapi-sync.mjs"], mandatory: true },
     { id: "root-suites", label: "root suites + phase gates + resource budget", command: "pnpm", args: ["test"], mandatory: true, timeoutMs: 1_500_000 },
     { id: "typecheck", label: "workspace typecheck", command: "pnpm", args: ["typecheck"], mandatory: true, timeoutMs: 1_500_000 },
     { id: "browser", label: "browser acceptance", command: "pnpm", args: ["test:browser"], mandatory: true, timeoutMs: 1_800_000 },
