@@ -32,7 +32,8 @@ export function loadConfig(botKey: string): AppConfig {
 export const INTERACTION_DEADLINE_MS = 2500; // initial ack must beat Discord's 3 s limit
 export type FailureCategory =
   | "auth" | "permissions" | "rate-limit" | "timeout" | "provider"
-  | "db-unavailable" | "queue-full" | "stale-component" | "unknown";
+  | "db-unavailable" | "queue-full" | "stale-component" | "duplicate"
+  | "shutting-down" | "unknown";
 
 export interface TelemetryFields {
   correlationId: string;
@@ -44,6 +45,7 @@ export interface TelemetryFields {
 export * from "./auth.js";
 export * from "./jobs.js";
 export * from "./lifecycle.js";
+export * from "./capacity.js";
 export * from "./discord-dispatch.js";
 export * from "./outbox.js";
 export * from "./shutdown.js";

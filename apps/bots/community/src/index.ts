@@ -13,6 +13,8 @@ import { commandDefinitions, respondToCommand } from "./commands.js";
 import { communityCommandPermissionDenial } from "./authorization.js";
 import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 import {
+  createInteractionClaims,
+  createWorkGate,
   dispatchGuildCommand,
   isControlEnabled,
 } from "@ei-point/flow";
@@ -62,7 +64,9 @@ let stopping = false,
   lastMaintenance = 0,
   lastDbReady = false;
 let identityVerified = false;
-let activeCommands = 0;
+// Bounded real-work admission: a slot is held until the command's work settles.
+const commandGate = createWorkGate(20);
+const interactionClaims = createInteractionClaims();
 const guarded = (label: string, run: () => Promise<unknown>) => {
   void run().catch(() =>
     console.error(`community ${label} failed; inspect service diagnostics`),
@@ -82,16 +86,6 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
     );
     return;
   }
-  if (activeCommands >= 20) {
-    guarded("busy-reply", () =>
-      interaction.reply({
-        content: "The community bot is busy. Please retry shortly.",
-        ephemeral: true,
-      }),
-    );
-    return;
-  }
-  activeCommands++;
   guarded("command", async () => {
     try {
       if (interaction.inCachedGuild() && await respondToCommonCommand(interaction, "SilverWolf", "Card games, collectibles, berries, trading, and rank profiles.")) return;
@@ -99,6 +93,9 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         botKey,
         allowlist: allowed,
         interaction,
+        operationId: interaction.id,
+        gate: commandGate,
+        claims: interactionClaims,
         authorize: async () => {
           if (!interaction.inCachedGuild()) return { content: "This server is not approved." };
           if (!(await isControlEnabled(controlQuery, interaction.guildId, botKey,
@@ -113,9 +110,9 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
           if (commandDenial) return { content: commandDenial };
           return undefined;
         },
-        run: async (signal) => {
+        run: async (ctx) => {
           if (!interaction.inCachedGuild()) throw new Error("guild context unavailable");
-          signal.throwIfAborted();
+          ctx.signal.throwIfAborted();
           const options: Record<string, string | number | boolean> = {};
           const flatten = (values: typeof interaction.options.data): void => {
             for (const option of values) {
@@ -146,16 +143,17 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         failureReply: (category) => ({
           content: category === "auth" ? "This server is not approved."
             : category === "permissions" ? "This bot, server, or command is disabled for your roles."
-              : category === "timeout" ? "The outcome is unconfirmed. Check the operation before retrying."
-                : "Server controls are temporarily unavailable. Check the operation before retrying.",
+              : category === "duplicate" ? "This interaction is already being processed. Check its result before retrying."
+                : category === "shutting-down" ? "The community bot is shutting down. Please retry in a moment."
+                  : category === "queue-full" ? "The community bot is busy. Please retry shortly."
+                    : category === "timeout" ? "The outcome is unconfirmed. Check the operation before retrying."
+                      : "Server controls are temporarily unavailable. Check the operation before retrying.",
           allowedMentions: { parse: [] as string[] },
         }),
         onTelemetry: (event) => console.info("community interaction lifecycle", event),
       });
     } catch {
       console.error("community command dispatch failed; inspect service diagnostics");
-    } finally {
-      activeCommands--;
     }
   });
 });
@@ -228,6 +226,8 @@ async function shutdown(): Promise<void> {
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();
   try {
+    commandGate.close();
+    await commandGate.drain(10000);
     await pumping?.catch(() => {});
     client.destroy();
     health.close();

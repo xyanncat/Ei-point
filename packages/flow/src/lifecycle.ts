@@ -1,7 +1,18 @@
 // Shared interaction lifecycle (§5): ack → authorize → deadline → exactly-once reply → telemetry.
+// A04: the run context carries a stable operation id, an absolute deadline and the abort
+// signal; admission is released only when the real work settles — even past the deadline.
 import { INTERACTION_DEADLINE_MS, type FailureCategory, type TelemetryFields } from "./index.js";
 import { isGuildApproved } from "./auth.js";
 import { newCorrelationId } from "./jobs.js";
+
+export interface WorkContext {
+  /** Aborted at the deadline; callers check it at mutation boundaries. */
+  signal: AbortSignal;
+  /** Stable across duplicate deliveries of the same interaction. */
+  operationId: string;
+  /** Absolute deadline (epoch ms); the signal aborts at this time. */
+  deadlineAt: number;
+}
 
 export interface LifecycleDeps<TReply = string> {
   botKey: string;
@@ -11,21 +22,33 @@ export interface LifecycleDeps<TReply = string> {
   defer: () => Promise<void>;
   /** Runs after the optional authorizer. A denial value is replied without starting work. */
   authorize?: () => Promise<TReply | undefined>;
-  /** The real work. Rejects on failure. Receives an abort signal at deadline. */
-  run: (signal: AbortSignal) => Promise<TReply>;
+  /** The real work. Rejects on failure. An undefined result means the work already replied itself. */
+  run: (ctx: WorkContext) => Promise<TReply | undefined>;
   /** Exactly-once sink (reply or follow-up). Second call is blocked by this lifecycle. */
   reply: (message: TReply) => Promise<void>;
   /** Response payload used for authorization, acknowledgement, timeout and work failures. */
   failureReply: (category: FailureCategory) => TReply;
   onTelemetry: (t: TelemetryFields) => void;
+  /** Stable operation id; defaults to a fresh correlation id. */
+  operationId?: string;
+  /** Ends admission exactly once: when the real work settles, or when it never starts. */
+  releaseCapacity?: () => void;
   ackTimeoutMs?: number;
   deadlineMs?: number;
 }
 
 export async function handleInteraction<TReply = string>(deps: LifecycleDeps<TReply>): Promise<void> {
-  const correlationId = newCorrelationId();
+  const operationId = deps.operationId ?? newCorrelationId();
   const started = Date.now();
   let replied = false;
+  let workStarted = false;
+  const settle = (): void => {
+    try {
+      deps.releaseCapacity?.();
+    } catch {
+      // Admission cleanup must not mask the operation outcome.
+    }
+  };
   const replyOnce = async (message: TReply): Promise<void> => {
     if (replied) throw new Error("double-reply blocked");
     replied = true;
@@ -34,7 +57,7 @@ export async function handleInteraction<TReply = string>(deps: LifecycleDeps<TRe
   const done = (failureCategory?: FailureCategory): void => {
     try {
       deps.onTelemetry({
-        correlationId,
+        correlationId: operationId,
         botKey: deps.botKey,
         latencyMs: Date.now() - started,
         ...(failureCategory !== undefined ? { failureCategory } : {}),
@@ -44,56 +67,71 @@ export async function handleInteraction<TReply = string>(deps: LifecycleDeps<TRe
     }
   };
 
-  // Step 2 first: never side-effect for unauthorized guilds.
-  if (!isGuildApproved(deps.guildId, deps.allowlist)) {
-    await replyOnce(deps.failureReply("auth"));
-    done("auth");
-    return;
-  }
-
-  // Step 1: acknowledge fast or fail clearly (Discord requires ≤3 s).
-  const ackTimeout = deps.ackTimeoutMs ?? INTERACTION_DEADLINE_MS;
   try {
-    await withTimeout(deps.defer(), ackTimeout);
-  } catch {
-    try {
-      await replyOnce(deps.failureReply("timeout"));
-    } catch {
-      // interaction already expired or dead; surface via telemetry
-    }
-    done("timeout");
-    return;
-  }
-
-  // Steps 3–4: deadline + cancellation, exactly one result.
-  const controller = new AbortController();
-  let deadline: NodeJS.Timeout | undefined;
-  const expired = new Promise<never>((_, reject) => {
-    deadline = setTimeout(() => { controller.abort(); reject(new Error("work-deadline")); }, deps.deadlineMs ?? 60000);
-  });
-  try {
-    const denied = await Promise.race([
-      Promise.resolve().then(() => deps.authorize?.()),
-      expired,
-    ]);
-    if (denied !== undefined) {
-      await replyOnce(denied);
-      done("permissions");
+    // Step 2 first: never side-effect for unauthorized guilds.
+    if (!isGuildApproved(deps.guildId, deps.allowlist)) {
+      await replyOnce(deps.failureReply("auth"));
+      done("auth");
       return;
     }
-    const result = await Promise.race([Promise.resolve().then(() => deps.run(controller.signal)), expired]);
-    await replyOnce(result);
-    done();
-  } catch (err) {
-    const aborted = controller.signal.aborted;
+
+    // Step 1: acknowledge fast or fail clearly (Discord requires ≤3 s).
+    const ackTimeout = deps.ackTimeoutMs ?? INTERACTION_DEADLINE_MS;
     try {
-      await replyOnce(deps.failureReply(aborted ? "timeout" : classifyFailure(err)));
+      await withTimeout(deps.defer(), ackTimeout);
     } catch {
-      // replyOnce throwing means a double-reply bug; surface via telemetry only.
+      try {
+        await replyOnce(deps.failureReply("timeout"));
+      } catch {
+        // interaction already expired or dead; surface via telemetry
+      }
+      done("timeout");
+      return;
     }
-    done(aborted ? "timeout" : classifyFailure(err));
+
+    // Steps 3–4: deadline + cancellation, exactly one result.
+    const deadlineMs = deps.deadlineMs ?? 60000;
+    const controller = new AbortController();
+    const ctx: WorkContext = { signal: controller.signal, operationId, deadlineAt: started + deadlineMs };
+    let deadline: NodeJS.Timeout | undefined;
+    const expired = new Promise<never>((_, reject) => {
+      deadline = setTimeout(() => {
+        controller.abort();
+        reject(new Error("work-deadline"));
+      }, deadlineMs);
+    });
+    try {
+      const denied = await Promise.race([
+        Promise.resolve().then(() => deps.authorize?.()),
+        expired,
+      ]);
+      if (denied !== undefined) {
+        await replyOnce(denied);
+        done("permissions");
+        return;
+      }
+      workStarted = true;
+      const work = Promise.resolve().then(() => deps.run(ctx));
+      // Capacity lasts until the real work settles, not until its deadline (A04):
+      // work that ignores cancellation keeps holding its slot.
+      void work.then(settle, settle);
+      const result = await Promise.race([work, expired]);
+      if (result !== undefined) await replyOnce(result);
+      done();
+    } catch (err) {
+      const aborted = controller.signal.aborted;
+      try {
+        await replyOnce(deps.failureReply(aborted ? "timeout" : classifyFailure(err)));
+      } catch {
+        // replyOnce throwing means a double-reply bug; surface via telemetry only.
+      }
+      done(aborted ? "timeout" : classifyFailure(err));
+    } finally {
+      clearTimeout(deadline);
+    }
   } finally {
-    clearTimeout(deadline);
+    // Work that never started (auth, ack, denial) must not strand its admission slot.
+    if (!workStarted) settle();
   }
 }
 

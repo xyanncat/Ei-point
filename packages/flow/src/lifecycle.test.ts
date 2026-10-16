@@ -51,8 +51,8 @@ describe("lifecycle", () => {
       guildId: "123",
       allowlist: ["123"],
       defer: async () => {},
-      run: async (signal) => {
-        await new Promise((_, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
+      run: async (ctx) => {
+        await new Promise((_, reject) => ctx.signal.addEventListener("abort", () => reject(new Error("aborted"))));
         return "never";
       },
       reply: async (m) => {
@@ -139,4 +139,44 @@ it("bounds a non-cooperative authorizer and never starts command work", async ()
   assert.equal(mutation, false);
   assert.match(reply, /timed out/i);
   finish();
+});
+
+it("releases admission when work never starts after a denial", async () => {
+  let released = 0;
+  await handleInteraction({ botKey: "test", guildId: "1", allowlist: ["1"], defer: async () => {},
+    authorize: async () => "server paused",
+    run: async () => { throw new Error("must not run"); },
+    reply: async () => {}, failureReply: () => "failed", onTelemetry: () => {},
+    releaseCapacity: () => { released += 1; } });
+  assert.equal(released, 1);
+});
+
+it("holds admission until non-cancellable work settles", async () => {
+  let released = 0;
+  let finish!: (value: string) => void;
+  await handleInteraction({ botKey: "test", guildId: "1", allowlist: ["1"], defer: async () => {},
+    run: async () => new Promise<string>(resolve => { finish = resolve; }),
+    reply: async () => {}, failureReply: () => "timed out", onTelemetry: () => {},
+    releaseCapacity: () => { released += 1; }, deadlineMs: 5 });
+  assert.equal(released, 0, "timed-out work still holds its slot");
+  finish("late");
+  await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(released, 1);
+});
+
+it("skips the reply when the work already responded and exposes a stable operation context", async () => {
+  const replies: string[] = [];
+  let released = 0;
+  await handleInteraction({ botKey: "test", guildId: "1", allowlist: ["1"], defer: async () => {},
+    operationId: "interaction-1",
+    run: async (ctx) => {
+      assert.equal(ctx.operationId, "interaction-1");
+      assert.ok(ctx.deadlineAt > Date.now() - 60_000);
+      assert.equal(ctx.signal.aborted, false);
+      return undefined;
+    },
+    reply: async (m) => { replies.push(m); }, failureReply: () => "failed", onTelemetry: () => {},
+    releaseCapacity: () => { released += 1; } });
+  assert.equal(replies.length, 0);
+  assert.equal(released, 1);
 });

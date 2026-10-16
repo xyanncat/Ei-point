@@ -1,6 +1,6 @@
 import { captureGuild, restoreGuild } from "@ei-point/bot-security/dist/snapshot.js";
 import { applyLockdown } from "@ei-point/bot-security/dist/lockdown.js";
-import { isControlEnabled } from "@ei-point/flow";
+import { isControlEnabled, createInteractionClaims, createWorkGate, dispatchGuildCommand } from "@ei-point/flow";
 // Kafka: merged security + moderation + logging gateway (identity `kafka`).
 // Single gateway connection serving both command trees. Replaces the
 // transitional bot-security + bot-moderation pair sharing one token.
@@ -77,7 +77,9 @@ const client = new Client({
 let stopping = false;
 let identityVerified = false;
 let lastDbReady = false;
-let activeCommands = 0;
+// Bounded real-work admission: a slot is held until the command's work settles.
+const commandGate = createWorkGate(20);
+const interactionClaims = createInteractionClaims();
 
 const recentJoins = new Map<string, number[]>();
 const recentActorActions = new Map<string, number[]>();
@@ -291,158 +293,166 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
     );
     return;
   }
-  if (activeCommands >= 20) {
-    guarded("busy", () =>
-      interaction.reply({ content: "Kafka service is busy. Please retry shortly.", ephemeral: true }),
-    );
-    return;
-  }
-  activeCommands++;
   guarded("command", async () => {
-    try {
-      if (!interaction.inCachedGuild() || !allowed.includes(interaction.guildId)) {
-        await interaction.reply({ content: "This server is not approved for Kafka.", ephemeral: true });
-        return;
-      }
-      if (await respondToCommonCommand(interaction, "Kafka", "Guild security, moderation, and audit controls.")) return;
-      const isOwner = interaction.guild.ownerId === interaction.user.id;
-      const isAdministrator = interaction.memberPermissions.has(PermissionFlagsBits.Administrator);
-      if (!isOwner && !isAdministrator) {
-        await interaction.reply({ content: "Kafka security and moderation commands require the guild owner or an Administrator.", ephemeral: true });
-        return;
-      }
-      await interaction.deferReply({ ephemeral: true });
-      if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows,
-        interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) {
-        await interaction.editReply({ content: "This command is disabled, paused, or restricted by server controls." });
-        return;
-      }
-      const isSecurity = SECURITY_NAMES.has(interaction.commandName);
+    if (!interaction.inCachedGuild() || !allowed.includes(interaction.guildId)) {
+      await interaction.reply({ content: "This server is not approved for Kafka.", ephemeral: true });
+      return;
+    }
+    if (await respondToCommonCommand(interaction, "Kafka", "Guild security, moderation, and audit controls.")) return;
+    await dispatchGuildCommand({
+      botKey,
+      allowlist: allowed,
+      interaction,
+      operationId: interaction.id,
+      gate: commandGate,
+      claims: interactionClaims,
+      authorize: async () => {
+        if (!interaction.inCachedGuild()) {
+          return { content: "Kafka security and moderation commands require the guild owner or an Administrator." };
+        }
+        const isOwner = interaction.guild.ownerId === interaction.user.id;
+        const isAdministrator = interaction.memberPermissions.has(PermissionFlagsBits.Administrator);
+        if (!isOwner && !isAdministrator) {
+          return { content: "Kafka security and moderation commands require the guild owner or an Administrator." };
+        }
+        if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows,
+          interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) {
+          return { content: "This command is disabled, paused, or restricted by server controls." };
+        }
+        return undefined;
+      },
+      run: async (ctx) => {
+        ctx.signal.throwIfAborted();
+        if (!interaction.inCachedGuild()) throw new Error("guild context unavailable");
+        const isSecurity = SECURITY_NAMES.has(interaction.commandName);
 
-      if (isSecurity) {
+        if (isSecurity) {
+          const options: Record<string, string | number | boolean> = {};
+          const flatten = (values: typeof interaction.options.data): void => {
+            for (const option of values) {
+              if (option.value !== undefined) options[option.name] = option.value;
+              if (option.options) flatten(option.options);
+            }
+          };
+          flatten(interaction.options.data);
+          const subGroup = interaction.options.getSubcommandGroup(false) ?? undefined;
+          const sub = interaction.options.getSubcommand(false) ?? undefined;
+          await respondToSecurityCommand(
+            {
+              name: interaction.commandName,
+              subcommandGroup: subGroup,
+              subcommand: sub,
+              options,
+              guildId: interaction.guildId,
+              userId: interaction.user.id,
+              key: interaction.id,
+              isOwner: interaction.guild.ownerId === interaction.user.id,
+              canManage: interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild),
+              defer: async () => {},
+              reply: async (text) => {
+                await interaction.editReply({ content: text, allowedMentions: { parse: [] } });
+              },
+              captureSnapshot: async () => captureGuild(interaction.guild),
+              restoreSnapshot: async (snapshot, snapshotId) => restoreGuild(pool, interaction.guild, snapshot, snapshotId, interaction.user.id, interaction.id),
+              setLockdown: async (active, reason) => applyLockdown(pool, interaction.guild, active, interaction.user.id, reason),
+              getGuildChannels: async () =>
+                interaction.guild.channels.cache.map((c) => ({ id: c.id, name: c.name })),
+              getGuildRoles: async () =>
+                interaction.guild.roles.cache.map((r) => ({ id: r.id, name: r.name })),
+            },
+            pool,
+          );
+          return undefined;
+        }
+
         const options: Record<string, string | number | boolean> = {};
-        const flatten = (values: typeof interaction.options.data): void => {
-          for (const option of values) {
-            if (option.value !== undefined) options[option.name] = option.value;
-            if (option.options) flatten(option.options);
+        const collectOptions = (items: Array<{ name: string; value?: unknown; options?: Array<{ name: string; value?: unknown; options?: unknown[] }> }>) => {
+          for (const opt of items) {
+            if (opt.options) collectOptions(opt.options as typeof items);
+            else if (typeof opt.value === "string" || typeof opt.value === "number" || typeof opt.value === "boolean") options[opt.name] = opt.value;
           }
         };
-        flatten(interaction.options.data);
-        const subGroup = interaction.options.getSubcommandGroup(false) ?? undefined;
-        const sub = interaction.options.getSubcommand(false) ?? undefined;
-        await respondToSecurityCommand(
+        collectOptions(interaction.options.data as unknown as Parameters<typeof collectOptions>[0]);
+        const memberRoleIds = [...interaction.member.roles.cache.keys()];
+        const userScopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
+        const targetMember = options.user
+          ? await interaction.guild.members.fetch(String(options.user)).catch(() => null)
+          : null;
+        const targetRole = options.role ? interaction.guild.roles.cache.get(String(options.role)) ?? null : null;
+        const channelId = options.channel ? String(options.channel) : undefined;
+        await respondToModerationCommand(
           {
             name: interaction.commandName,
-            subcommandGroup: subGroup,
-            subcommand: sub,
+            subcommand: interaction.options.getSubcommand(false) ?? undefined,
             options,
             guildId: interaction.guildId,
             userId: interaction.user.id,
             key: interaction.id,
             isOwner: interaction.guild.ownerId === interaction.user.id,
             canManage: interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild),
+            userScopes,
+            targetMember,
+            targetRole,
+            channelId,
             defer: async () => {},
             reply: async (text) => {
               await interaction.editReply({ content: text, allowedMentions: { parse: [] } });
             },
-            captureSnapshot: async () => captureGuild(interaction.guild),
-            restoreSnapshot: async (snapshot, snapshotId) => restoreGuild(pool, interaction.guild, snapshot, snapshotId, interaction.user.id, interaction.id),
-            setLockdown: async (active, reason) => applyLockdown(pool, interaction.guild, active, interaction.user.id, reason),
-            getGuildChannels: async () =>
-              interaction.guild.channels.cache.map((c) => ({ id: c.id, name: c.name })),
-            getGuildRoles: async () =>
-              interaction.guild.roles.cache.map((r) => ({ id: r.id, name: r.name })),
+            banUser: async (targetId, deleteSeconds, reason) => {
+              await interaction.guild.bans.create(targetId, { deleteMessageSeconds: deleteSeconds, reason });
+            },
+            unbanUser: async (targetId, reason) => {
+              await interaction.guild.bans.remove(targetId, reason);
+            },
+            timeoutMember: async (member, durationMs, reason) => {
+              await member.timeout(durationMs, reason);
+            },
+            kickMember: async (member, reason) => { await member.kick(reason); },
+            addMemberRole: async (member, role, reason) => { await member.roles.add(role, reason); },
+            removeMemberRole: async (guildId, userId, roleId, reason) => {
+              const guild = client.guilds.cache.get(guildId);
+              const role = guild?.roles.cache.get(roleId);
+              const member = guild ? await guild.members.fetch(userId).catch(() => null) : null;
+              if (role && member?.roles.cache.has(roleId)) await member.roles.remove(role, reason);
+            },
+            clearTimeout: async (member, reason) => {
+              await member.timeout(0, reason);
+            },
+            getRestrictionState: async (targetChannelId, targetUserId) => {
+              const channel = interaction.guild.channels.cache.get(targetChannelId);
+              if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) throw new Error("Unsupported restriction channel");
+              const overwrite = channel.permissionOverwrites.cache.get(targetUserId);
+              const state = (flag: bigint): boolean | null => overwrite?.deny.has(flag) ? false : overwrite?.allow.has(flag) ? true : null;
+              return { sendMessages: state(PermissionFlagsBits.SendMessages), sendMessagesInThreads: state(PermissionFlagsBits.SendMessagesInThreads) };
+            },
+            setRestrictionState: async (targetChannelId, targetUserId, state, reason) => {
+              const channel = interaction.guild.channels.cache.get(targetChannelId);
+              if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) throw new Error("Unsupported restriction channel");
+              await channel.permissionOverwrites.edit(targetUserId, { SendMessages: state.sendMessages, SendMessagesInThreads: state.sendMessagesInThreads }, { reason });
+            },
+            bulkDeleteMessages: async (count) => {
+              if (interaction.channel && "bulkDelete" in interaction.channel) {
+                const res = await interaction.channel.bulkDelete(count, true);
+                return res.size;
+              }
+              return 0;
+            },
           },
           pool,
         );
-        return;
-      }
-
-      const options: Record<string, string | number | boolean> = {};
-      const collectOptions = (items: Array<{ name: string; value?: unknown; options?: Array<{ name: string; value?: unknown; options?: unknown[] }> }>) => {
-        for (const opt of items) {
-          if (opt.options) collectOptions(opt.options as typeof items);
-          else if (typeof opt.value === "string" || typeof opt.value === "number" || typeof opt.value === "boolean") options[opt.name] = opt.value;
-        }
-      };
-      collectOptions(interaction.options.data as unknown as Parameters<typeof collectOptions>[0]);
-      const memberRoleIds = [...interaction.member.roles.cache.keys()];
-      const userScopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
-      const targetMember = options.user
-        ? await interaction.guild.members.fetch(String(options.user)).catch(() => null)
-        : null;
-      const targetRole = options.role ? interaction.guild.roles.cache.get(String(options.role)) ?? null : null;
-      const channelId = options.channel ? String(options.channel) : undefined;
-      await respondToModerationCommand(
-        {
-          name: interaction.commandName,
-          subcommand: interaction.options.getSubcommand(false) ?? undefined,
-          options,
-          guildId: interaction.guildId,
-          userId: interaction.user.id,
-          key: interaction.id,
-          isOwner: interaction.guild.ownerId === interaction.user.id,
-          canManage: interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild),
-          userScopes,
-          targetMember,
-          targetRole,
-          channelId,
-          defer: async () => {},
-          reply: async (text) => {
-            await interaction.editReply({ content: text, allowedMentions: { parse: [] } });
-          },
-          banUser: async (targetId, deleteSeconds, reason) => {
-            await interaction.guild.bans.create(targetId, { deleteMessageSeconds: deleteSeconds, reason });
-          },
-          unbanUser: async (targetId, reason) => {
-            await interaction.guild.bans.remove(targetId, reason);
-          },
-          timeoutMember: async (member, durationMs, reason) => {
-            await member.timeout(durationMs, reason);
-          },
-          kickMember: async (member, reason) => { await member.kick(reason); },
-          addMemberRole: async (member, role, reason) => { await member.roles.add(role, reason); },
-          removeMemberRole: async (guildId, userId, roleId, reason) => {
-            const guild = client.guilds.cache.get(guildId);
-            const role = guild?.roles.cache.get(roleId);
-            const member = guild ? await guild.members.fetch(userId).catch(() => null) : null;
-            if (role && member?.roles.cache.has(roleId)) await member.roles.remove(role, reason);
-          },
-          clearTimeout: async (member, reason) => {
-            await member.timeout(0, reason);
-          },
-          getRestrictionState: async (targetChannelId, targetUserId) => {
-            const channel = interaction.guild.channels.cache.get(targetChannelId);
-            if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) throw new Error("Unsupported restriction channel");
-            const overwrite = channel.permissionOverwrites.cache.get(targetUserId);
-            const state = (flag: bigint): boolean | null => overwrite?.deny.has(flag) ? false : overwrite?.allow.has(flag) ? true : null;
-            return { sendMessages: state(PermissionFlagsBits.SendMessages), sendMessagesInThreads: state(PermissionFlagsBits.SendMessagesInThreads) };
-          },
-          setRestrictionState: async (targetChannelId, targetUserId, state, reason) => {
-            const channel = interaction.guild.channels.cache.get(targetChannelId);
-            if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) throw new Error("Unsupported restriction channel");
-            await channel.permissionOverwrites.edit(targetUserId, { SendMessages: state.sendMessages, SendMessagesInThreads: state.sendMessagesInThreads }, { reason });
-          },
-          bulkDeleteMessages: async (count) => {
-            if (interaction.channel && "bulkDelete" in interaction.channel) {
-              const res = await interaction.channel.bulkDelete(count, true);
-              return res.size;
-            }
-            return 0;
-          },
-        },
-        pool,
-      );
-    } catch (err) {
-      console.error("kafka command failed:", err instanceof Error ? err.message : String(err));
-      if (interaction.deferred) {
-        await interaction
-          .editReply({ content: "Kafka operation outcome is unconfirmed. Check moderation cases and system logs before retrying." })
-          .catch(() => {});
-      }
-    } finally {
-      activeCommands--;
-    }
+        return undefined;
+      },
+      failureReply: (category): { content: string } => ({
+        content: category === "auth" ? "This server is not approved for Kafka."
+          : category === "permissions" ? "Kafka security and moderation commands require the guild owner or an Administrator."
+            : category === "duplicate" ? "Kafka is already processing this interaction. Check the result before retrying."
+              : category === "shutting-down" ? "Kafka is shutting down. Please retry in a moment."
+                : category === "queue-full" ? "Kafka service is busy. Please retry shortly."
+                  : category === "timeout" ? "Kafka operation outcome is unconfirmed. Check moderation cases and system logs before retrying."
+                    : "Kafka operation outcome is unconfirmed. Check moderation cases and system logs before retrying.",
+      }),
+      onTelemetry: (event) => console.info("kafka interaction lifecycle", event),
+    });
   });
 });
 
@@ -602,6 +612,8 @@ async function shutdown(): Promise<void> {
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();
   try {
+    commandGate.close();
+    await commandGate.drain(10000);
     client.destroy();
     health.close();
     await pool.end();

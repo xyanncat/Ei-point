@@ -1,4 +1,4 @@
-import { dispatchGuildCommand, isControlEnabled } from "@ei-point/flow";
+import { createInteractionClaims, createWorkGate, dispatchGuildCommand, isControlEnabled } from "@ei-point/flow";
 import { createServer } from "node:http";
 import {
   Client,
@@ -48,7 +48,9 @@ const client = new Client({
 let stopping = false;
 let identityVerified = false;
 let lastDbReady = false;
-let activeCommands = 0;
+// Bounded real-work admission: a slot is held until the command's work settles.
+const commandGate = createWorkGate(20);
+const interactionClaims = createInteractionClaims();
 
 const guarded = (label: string, run: () => Promise<unknown>) => {
   void run().catch((err) =>
@@ -76,14 +78,6 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
     return;
   }
 
-  if (activeCommands >= 20) {
-    guarded("busy", () =>
-      interaction.reply({ content: "Commerce service is busy. Please retry shortly.", ephemeral: true }),
-    );
-    return;
-  }
-
-  activeCommands++;
   guarded("command", async () => {
     try {
       if (interaction.inCachedGuild() && await respondToCommonCommand(interaction, "Cipher", "Orders, referrals, and payment setup.")) return;
@@ -94,6 +88,9 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         botKey,
         allowlist: allowed,
         interaction,
+        operationId: interaction.id,
+        gate: commandGate,
+        claims: interactionClaims,
         authorize: async () => {
           if (!interaction.inCachedGuild()) return { content: "Commerce commands are only available in an approved server." };
           const memberRoleIds = [...interaction.member.roles.cache.keys()];
@@ -109,9 +106,9 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
           }
           return undefined;
         },
-        run: async (signal) => {
+        run: async (ctx) => {
           if (!interaction.inCachedGuild()) throw new Error("guild context unavailable");
-          signal.throwIfAborted();
+          ctx.signal.throwIfAborted();
           const options: Record<string, string | number | boolean> = {};
           for (const opt of interaction.options.data) {
             if (opt.value !== undefined) options[opt.name] = opt.value;
@@ -142,16 +139,17 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         failureReply: (category) => ({
           content: category === "auth" ? "This server is not approved for commerce bot."
             : category === "permissions" ? "This bot, server, or command is disabled for your roles."
-              : category === "timeout" ? "Commerce outcome is unconfirmed. Check your order status before retrying."
-                : "Commerce outcome is unconfirmed. Check your order status before retrying.",
+              : category === "duplicate" ? "This interaction is already being processed. Check your order status before retrying."
+                : category === "shutting-down" ? "The commerce bot is shutting down. Please retry in a moment."
+                  : category === "queue-full" ? "Commerce service is busy. Please retry shortly."
+                    : category === "timeout" ? "Commerce outcome is unconfirmed. Check your order status before retrying."
+                      : "Commerce outcome is unconfirmed. Check your order status before retrying.",
           allowedMentions: { parse: [] as string[] },
         }),
         onTelemetry: (event) => console.info("commerce interaction lifecycle", event),
       });
     } catch {
       console.error("commerce command dispatch failed; inspect service diagnostics");
-    } finally {
-      activeCommands--;
     }
   });
 });
@@ -202,6 +200,8 @@ async function shutdown(): Promise<void> {
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();
   try {
+    commandGate.close();
+    await commandGate.drain(10000);
     client.destroy();
     health.close();
     await pool.end();

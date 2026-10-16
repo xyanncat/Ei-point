@@ -1,5 +1,5 @@
 import { deliverAnnouncement } from "./delivery.js";
-import { applyCommunityConfiguration, deliverCommunityMessages, dispatchGuildCommand, isControlEnabled } from "@ei-point/flow";
+import { applyCommunityConfiguration, createInteractionClaims, createWorkGate, deliverCommunityMessages, dispatchGuildCommand, isControlEnabled } from "@ei-point/flow";
 // Himiko owns announcements, welcome/leave events, and community XP/levels.
 
 import { createServer } from "node:http";
@@ -56,7 +56,9 @@ const client = new Client({
 let stopping = false;
 let identityVerified = false;
 let lastDbReady = false;
-let activeCommands = 0;
+// Bounded real-work admission: a slot is held until the command's work settles.
+const commandGate = createWorkGate(20);
+const interactionClaims = createInteractionClaims();
 let activeXp = 0;
 let pumping = false;
 let lastXpCleanup = 0;
@@ -87,13 +89,6 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
     );
     return;
   }
-  if (activeCommands >= 20) {
-    guarded("busy", () =>
-      interaction.reply({ content: "Himiko service is busy. Please retry shortly.", ephemeral: true }),
-    );
-    return;
-  }
-  activeCommands++;
   guarded("command", async () => {
     try {
       if (interaction.inCachedGuild() && await respondToCommonCommand(interaction, "Himiko", "Announcements, embed publishing, welcome and leave messages, and text and voice XP.")) return;
@@ -102,6 +97,9 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         botKey,
         allowlist: allowed,
         interaction,
+        operationId: interaction.id,
+        gate: commandGate,
+        claims: interactionClaims,
         authorize: async () => {
           if (!interaction.inCachedGuild()) return { content: "Himiko commands are only available in an approved server." };
           const memberRoleIds = [...interaction.member.roles.cache.keys()];
@@ -123,8 +121,8 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
             ? undefined
             : { content: "Permission denied: Manage Messages or announce staff scope required." };
         },
-        run: async (signal) => {
-          signal.throwIfAborted();
+        run: async (ctx) => {
+          ctx.signal.throwIfAborted();
           if (!interaction.inCachedGuild()) throw new Error("guild context unavailable");
           const commandOptions: Record<string, string | number | boolean> = {};
           const flatten = (values: typeof interaction.options.data): void => {
@@ -188,7 +186,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
           if (checked.value.pingRoleId && callerPerms?.has(PermissionFlagsBits.MentionEveryone) !== true && pingRole?.mentionable !== true) {
             return { content: "That role is not mentionable and you lack Mention Everyone there." };
           }
-          signal.throwIfAborted();
+          ctx.signal.throwIfAborted();
           await deliverAnnouncement(async(sql,args)=>(await pool.query(sql,args)).rows, interaction.id,
             { ...payload, by: interaction.user.id, guild_id: interaction.guildId }, async nonce => {
               await target.send({
@@ -205,16 +203,20 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
             ? "This server is not approved for Himiko."
             : category === "permissions"
               ? "Permission denied."
-              : category === "timeout"
-                ? "Himiko operation outcome is unconfirmed. Check its status before retrying."
-                : "Himiko operation outcome is unconfirmed. Inspect system logs before retrying.",
+              : category === "duplicate"
+                ? "Himiko is already processing this interaction. Check its result before retrying."
+                : category === "shutting-down"
+                  ? "Himiko is shutting down. Please retry in a moment."
+                  : category === "queue-full"
+                    ? "Himiko service is busy. Please retry shortly."
+                    : category === "timeout"
+                      ? "Himiko operation outcome is unconfirmed. Check its status before retrying."
+                      : "Himiko operation outcome is unconfirmed. Inspect system logs before retrying.",
         }),
         onTelemetry: (event) => console.info("himiko interaction lifecycle", event),
       });
     } catch {
       // The lifecycle owns result/error replies; this guard only protects the event loop.
-    } finally {
-      activeCommands--;
     }
   });
 });
@@ -428,6 +430,8 @@ async function shutdown(): Promise<void> {
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();
   try {
+    commandGate.close();
+    await commandGate.drain(10000);
     client.destroy();
     health.close();
     await pool.end();
