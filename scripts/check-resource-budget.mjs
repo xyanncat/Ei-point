@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-// Enforce the project resource envelope (8 CPU / 40 GiB) for a selected release (A02).
+// Enforce the project resource envelope for a selected release (A02).
+// Owner decision 2026-10-16: 9 CPU cores of 10; RAM and disk uncapped because
+// Ei Point is the only project on the host. Per-service limits remain required
+// and validated; the aggregate memory ceiling is retired (null = uncapped).
 // Usage: node scripts/check-resource-budget.mjs [rendered-compose.json]
 // Without an argument the approved in-repo allocation is validated.
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const CPU_CEILING = 8;
-export const MEMORY_CEILING_GIB = 40;
+export const CPU_CEILING = 9;
+export const MEMORY_CEILING_GIB = null;
 
 /** Approved runtime allocation (plan §2A). Keep in sync with infra/docker/compose.yml. */
 export const APPROVED_RUNTIME = {
@@ -90,7 +93,7 @@ export function validateResourceBudget(services, { cpu = CPU_CEILING, memoryGiB 
   const maintenance = sum(maintenanceNames);
   const concurrent = { cpu: runtime.cpu + maintenance.cpu, memoryGiB: runtime.memoryGiB + maintenance.memoryGiB };
   if (concurrent.cpu > cpu) violations.push(`concurrent cpu ${concurrent.cpu.toFixed(2)} exceeds ceiling ${cpu}`);
-  if (concurrent.memoryGiB > memoryGiB) violations.push(`concurrent memory ${concurrent.memoryGiB.toFixed(2)} GiB exceeds ceiling ${memoryGiB}`);
+  if (memoryGiB != null && concurrent.memoryGiB > memoryGiB) violations.push(`concurrent memory ${concurrent.memoryGiB.toFixed(2)} GiB exceeds ceiling ${memoryGiB}`);
   return { ok: violations.length === 0, violations, runtime, maintenance, concurrent };
 }
 

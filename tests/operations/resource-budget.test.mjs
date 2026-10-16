@@ -4,13 +4,25 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { validateResourceBudget, serviceResourcesFromCompose, APPROVED_RUNTIME, APPROVED_MAINTENANCE } from '../../scripts/check-resource-budget.mjs';
 
-test('the approved allocation fits the 8 CPU / 40 GiB envelope including concurrent maintenance', () => {
+test('the approved allocation fits the 9 CPU envelope including concurrent maintenance', () => {
   const result = validateResourceBudget({ ...APPROVED_RUNTIME, ...APPROVED_MAINTENANCE });
   assert.equal(result.ok, true, JSON.stringify(result.violations));
   assert.equal(Math.round(result.runtime.cpu * 100) / 100, 7.45);
   assert.equal(result.runtime.memoryGiB, 32.5);
   assert.equal(Math.round(result.concurrent.cpu * 100) / 100, 7.95);
   assert.equal(result.concurrent.memoryGiB, 33.75);
+});
+test('memory is uncapped: totals above the retired budget pass and are still reported', () => {
+  const heavy = { ...APPROVED_RUNTIME, 'tts-qwen': { cpus: 0.75, memoryGiB: 100 }, workers: { cpus: 0.5, memoryGiB: 12 } };
+  const result = validateResourceBudget(heavy);
+  assert.equal(result.ok, true, JSON.stringify(result.violations));
+  assert.ok(result.concurrent.memoryGiB > 40);
+});
+test('an explicit memory ceiling is still enforced when provided', () => {
+  const heavy = { ...APPROVED_RUNTIME, 'tts-qwen': { cpus: 0.75, memoryGiB: 100 } };
+  const result = validateResourceBudget(heavy, { memoryGiB: 40 });
+  assert.equal(result.ok, false);
+  assert.ok(result.violations.some(v => v.includes('memory')));
 });
 test('rejects an over-budget selection with named violations', () => {
   const result = validateResourceBudget({ ...APPROVED_RUNTIME, ...APPROVED_MAINTENANCE, 'tts-qwen': { cpus: 3, memoryGiB: 8 } });
@@ -26,9 +38,8 @@ test('rejects missing limits and invalid units', () => {
   assert.ok(invalid.violations.some(v => v.includes('api')));
 });
 test('rejects overlapping maintenance that exceeds the ceiling', () => {
-  const overlapping = { ...APPROVED_RUNTIME, ...APPROVED_MAINTENANCE, 'backup-second': { cpus: 0.25, memoryGiB: 1 } };
-  const railCpu = { ...overlapping, 'tts-qwen': { cpus: 1.25, memoryGiB: 8 } };
-  const result = validateResourceBudget(railCpu);
+  const overlapping = { ...APPROVED_RUNTIME, ...APPROVED_MAINTENANCE, 'backup-second': { cpus: 1.25, memoryGiB: 1 } };
+  const result = validateResourceBudget(overlapping);
   assert.equal(result.ok, false);
   assert.ok(result.violations.some(v => v.includes('cpu')));
 });

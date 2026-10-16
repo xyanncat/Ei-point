@@ -106,6 +106,8 @@ Backup coverage                       ██████████░░░░
 | Disk | 492 GB | 36 GB (8 %) | **400 GB** | ~90 GB |
 | WAN | 40 Mbps measured | idle | fine for bots + API | — |
 
+> **Envelope update — owner decision 2026-10-16:** Ei Point is the only project on this host; the project runs at **9 CPU cores of 10 with RAM and disk uncapped**. The 8-core / 40 GiB / 400 GB columns above are the historical budget.
+
 **Constraints learned here:** CPU is the weak axis (no AVX/AES-NI) — keep
 builds off the hot path and take the provider's host-passthrough fix when
 offered; RAM and disk are effectively unlimited for this workload; bake the

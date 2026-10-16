@@ -83,7 +83,7 @@ Functions: deliver welcome/leave messages; award experience from text participat
 
 ## VPS and local model capacity
 
-The checked-in benchmark describes a 10-vCPU, approximately 63-GiB RAM VPS, with no AVX/AVX2/AES-NI/SSE4.2, and records a previous aggregate Ei Point allocation of 5 CPU cores and 24 GiB. The newer project envelope is 8 CPU cores and 40 GiB, leaving host reserve. Re-measure the current VPS before deployment; do not treat old measurements as live state.
+The checked-in benchmark describes a 10-vCPU, approximately 63-GiB RAM VPS, with no AVX/AVX2/AES-NI/SSE4.2, and records a previous aggregate Ei Point allocation of 5 CPU cores and 24 GiB. The current project envelope (owner decision 2026-10-16) is 9 CPU cores of 10; RAM and disk are uncapped because Ei Point is the only project on the host. Re-measure the current VPS before deployment; do not treat old measurements as live state.
 
 The project owner proposes keeping the VPS running except for a planned monthly restart. Model services should start at boot and preload pinned local weights, so ordinary requests use a warm process. A cold service restart includes model load time; no reliable duration is promised until measured on this CPU-only target with the actual model files and selected runtime. Compare boot/load time, time-to-first-audio, real-time factor for 500 characters, translation latency, peak RSS, and concurrent bot latency. Reject a model/runtime combination that violates the service budgets or starves Discord/API workloads.
 

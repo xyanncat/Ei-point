@@ -3,7 +3,7 @@ Description=Ei Point project slice
 Before=slices.target
 
 [Slice]
-CPUQuota=800%
-MemoryHigh=32G
-MemoryMax=40G
+# Owner decision 2026-10-16: Ei Point is the only project on this host.
+# 9 CPU cores of 10; RAM and disk uncapped. Swap stays emergency-only.
+CPUQuota=900%
 MemorySwapMax=2G

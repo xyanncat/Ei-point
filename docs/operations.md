@@ -2,11 +2,13 @@
 
 ## Resource budget (§7) — enforced in compose + systemd slice
 
-Slice `ei-point.slice`: `CPUQuota=800% MemoryHigh=32G MemoryMax=40G MemorySwapMax=2G`.
+Slice `ei-point.slice`: `CPUQuota=900% MemorySwapMax=2G` (RAM uncapped — Ei Point is the only project on this host; owner decision 2026-10-16).
 Per-service CPU/RAM caps live in `infra/docker/compose.yml` (`deploy.resources.limits` + `mem_limit`).
-Total: 8.00 CPU / 30 GiB; hard cap 40 GiB; swap is emergency headroom only.
+Allocation: runtime 7.45 CPU / 32.5 GiB; concurrent maximum 7.95 CPU / 33.75 GiB; project ceiling 9 CPU of 10, memory uncapped; swap is emergency headroom only.
 
-## Storage envelope (§7) — 400 GB project envelope
+## Storage envelope (§7) — dedicated host, uncapped (owner decision 2026-10-16)
+
+The table below remains the working allocation target for planning, not a hard cap:
 
 | Purpose | Cap | Volume |
 |---|---|---|
