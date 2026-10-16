@@ -55,7 +55,8 @@ const server = http.createServer((req, res) => {
     });
   }
   if (url.pathname === "/api/orders/verify") {
-    if (url.searchParams.get("token") === "demo" || url.searchParams.get("token")?.length >= 16) {
+    // Preview success token: /verify?token=demo-verification-token (any other token answers 404 like production).
+    if (["demo", "demo-verification-token"].includes(url.searchParams.get("token") ?? "")) {
       return json(res, 200, { skuName: "Demo Membership", amountMinor: 49900, status: "settled" });
     }
     return json(res, 404, { error: "No order matches this link.", code: "order-unknown", correlationId: "demo", retryable: false });
