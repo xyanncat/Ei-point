@@ -142,6 +142,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
             payeeVpa: process.env.UPI_PAYEE_VPA ?? "",
             payeeName: process.env.UPI_PAYEE_NAME ?? "",
             usdtAddress: process.env.USDT_TRC20_ADDRESS ?? "",
+            razorpayPage: process.env.RAZORPAY_PAYMENT_PAGE ?? "",
             defer: async () => {},
             reply: async (text) => { response = text; },
           }, pool);

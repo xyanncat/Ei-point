@@ -10,7 +10,7 @@ export interface CommerceDeps {
  session: (req:FastifyRequest)=>Promise<{discordUserId:string}|null>;
 }
 class PaymentError extends Error {constructor(readonly status:number,readonly code:string,message:string){super(message);}}
-const fail=(status:number,code:string,message:string):never=>{throw new PaymentError(status,code,message)};
+const fail:(status:number,code:string,message:string)=>never=(status,code,message)=>{throw new PaymentError(status,code,message)};
 const hash=(s:string)=>createHash("sha256").update(s).digest("hex");
 const snowflake=(s:unknown):s is string=>typeof s==="string"&&/^\d{17,20}$/.test(s);
 const publicId=(s:unknown):s is string=>typeof s==="string"&&/^RP-[A-Z0-9]{6}$/.test(s);
@@ -25,7 +25,9 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
  const origin=env.PAYMENT_ORIGIN??env.DASHBOARD_ORIGIN;
  const guild=env.COMMERCE_GUILD_ID;
  const usdtRate=Number(env.INR_PER_USDT),usdtFee=Number(env.USDT_REFERENCE_FEE??1);
- const methods=()=>({upi:!!env.UPI_PAYEE_NAME&&/^[-\w.]{2,}@[A-Za-z]{2,}$/.test(env.UPI_PAYEE_VPA??""),usdt:/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(env.USDT_TRC20_ADDRESS??"")&&Number.isFinite(usdtRate)&&usdtRate>0&&Number.isFinite(usdtFee)&&usdtFee>=0});
+ // Razorpay settles on the owner's hosted payment page (no API keys or webhooks); only an https razorpay.me page enables the method.
+ const pageUrl=()=>{const v=(env.RAZORPAY_PAYMENT_PAGE??"").trim().replace(/\/+$/,"");return /^https:\/\/razorpay\.me\/[A-Za-z0-9@._-]{2,64}$/.test(v)?v:"";};
+ const methods=()=>({upi:!!env.UPI_PAYEE_NAME&&/^[-\w.]{2,}@[A-Za-z]{2,}$/.test(env.UPI_PAYEE_VPA??""),usdt:/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(env.USDT_TRC20_ADDRESS??"")&&Number.isFinite(usdtRate)&&usdtRate>0&&Number.isFinite(usdtFee)&&usdtFee>=0,razorpay:!!pageUrl()});
  const guard=()=>{if(!snowflake(guild)||!origin)fail(503,"payments-not-configured","Payments are not configured for this deployment.");};
  const run=(handler:(req:FastifyRequest,reply:any)=>Promise<unknown>)=>async(req:FastifyRequest,reply:any)=>{
   try{return await handler(req,reply);}catch(e){if(e instanceof PaymentError)return reply.code(e.status).send({code:e.code,error:e.message});
@@ -55,23 +57,25 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
   try{const [serviceId,orderId,token]=decodeURIComponent(match.slice("ei_checkout=".length)).split("|");if(!serviceId||!publicId(orderId)||!token)return null;return [serviceId,orderId,token];}catch{return null;}
  };
  const orderResponse=(order:Record<string,any>,token:string)=>{
-  const vpa=env.UPI_PAYEE_VPA,name=env.UPI_PAYEE_NAME,wallet=env.USDT_TRC20_ADDRESS,method=order.method==="usdt"?"usdt":"upi";
+  const vpa=env.UPI_PAYEE_VPA,name=env.UPI_PAYEE_NAME,wallet=env.USDT_TRC20_ADDRESS,method=order.method==="usdt"?"usdt":order.method==="razorpay"?"razorpay":"upi";
+  if(method==="razorpay")return {...view(order),token,orderToken:token,amountMinor:Number(order.amount_minor),currency:"INR",paymentMethod:"razorpay",paymentUri:pageUrl(),destination:pageUrl(),qrPayload:pageUrl(),expiresAt:order.expires_at,referralApplied:!!order.referral_code,notificationStatus:"not-configured"};
   const note=`${order.public_id} Discord ${order.buyer_id}`,upiUri=`upi://pay?${new URLSearchParams({pa:vpa??"",pn:name??"",am:amount(order.amount_minor),cu:"INR",tn:note})}`;
   return {...view(order),token,orderToken:token,amountMinor:Number(order.amount_minor),currency:method==="upi"?"INR":"USDT",paymentMethod:method,paymentUri:method==="upi"?upiUri:wallet,destination:method==="upi"?vpa:wallet,expiresAt:order.expires_at,referralApplied:!!order.referral_code,qrPayload:method==="upi"?upiUri:wallet,
    ...(method==="upi"?{upiUri,payeeVpa:vpa,payeeName:name,note}:{walletAddress:wallet,network:"TRC-20 (Tron)",usdAmount:amount(order.amount_minor)}),notificationStatus:"not-configured"};
  };
  const key=(req:FastifyRequest)=>{const v=req.headers["idempotency-key"]??body(req).idempotencyKey;if(typeof v!=="string"||!/^[A-Za-z0-9:_-]{8,128}$/.test(v))fail(400,"invalid-idempotency-key","Supply an 8–128 character Idempotency-Key.");return v as string;};
- const view=(o:Record<string,any>)=>({orderId:o.public_id,status:o.status==="settled"?"confirmed":o.status==="pending"&&new Date(o.expires_at).getTime()<Date.now()?"expired":o.status,amount:amount(o.amount_minor),method:o.method,paymentMethod:o.method,currency:o.method==="upi"?"INR":"USDT",serviceName:o.service_name??o.name,name:o.service_name??o.name,expiresAt:o.expires_at});
- app.get("/api/payments/options",run(async()=>{const configured=snowflake(guild)&&!!origin&&(methods().upi||methods().usdt);const approved=configured&&(await query("SELECT guild_id FROM access.guilds WHERE guild_id=$1 AND approved",[guild])).length>0;return {enabled:!!approved,methods:methods(),notificationStatus:"not-configured"};}));
+ const view=(o:Record<string,any>)=>({orderId:o.public_id,status:o.status==="settled"?"confirmed":o.status==="pending"&&new Date(o.expires_at).getTime()<Date.now()?"expired":o.status,amount:amount(o.amount_minor),method:o.method,paymentMethod:o.method,currency:o.method==="usdt"?"USDT":"INR",serviceName:o.service_name??o.name,name:o.service_name??o.name,expiresAt:o.expires_at});
+ app.get("/api/payments/options",run(async()=>{const configured=snowflake(guild)&&!!origin&&(methods().upi||methods().usdt||methods().razorpay);const approved=configured&&(await query("SELECT guild_id FROM access.guilds WHERE guild_id=$1 AND approved",[guild])).length>0;return {enabled:!!approved,methods:methods(),notificationStatus:"not-configured"};}));
  app.get("/api/payments/catalog",run(async()=>{guard();return {services:await query("SELECT sku AS id,name,price_minor AS \"priceMinor\",currency,membership_days AS \"membershipDays\" FROM commerce.catalog WHERE active ORDER BY sku"),methods:methods()};}));
  app.post("/api/payments/upi-qr",run(async(req,reply)=>{
   await publicWrite(req);const buyer=await identity(req),b=body(req),method=b.paymentMethod??b.method??"upi",sku=b.serviceId,typed=b.discordId??b.discordUserId;
   if(typed!==undefined&&String(typed).trim()!==buyer)fail(400,"invalid-checkout","Checkout is bound to your signed-in Discord account.");
-  if(typeof sku!=="string"||sku.length>100||!['upi','usdt'].includes(String(method)))fail(400,"invalid-checkout","Provide a valid service and payment method.");
+  if(typeof sku!=="string"||sku.length>100||!['upi','usdt','razorpay'].includes(String(method)))fail(400,"invalid-checkout","Provide a valid service and payment method.");
   if(b.amount!==undefined||b.price!==undefined)fail(400,"invalid-checkout","Prices are selected by the server.");
   const vpa=env.UPI_PAYEE_VPA,name=env.UPI_PAYEE_NAME,wallet=env.USDT_TRC20_ADDRESS;
   if(method==="upi"&&(!vpa||!name||!/^[-\w.]{2,}@[A-Za-z]{2,}$/.test(vpa)))fail(503,"payments-not-configured","UPI payments are not configured.");
   if(method==="usdt"&&!methods().usdt)fail(503,"payments-not-configured","TRC-20 payments require a configured wallet and INR_PER_USDT quote.");
+  if(method==="razorpay"&&!methods().razorpay)fail(503,"payments-not-configured","The Razorpay payment page is not configured.");
   const idem=key(req),ref=b.referralCode??null;
   if(ref!==null&&(typeof ref!=="string"||!/^[A-Z0-9-]{6,24}$/.test(ref)))fail(400,"invalid-referral","Referral code is invalid.");
   const requestHash=hash(JSON.stringify([guild,buyer,sku,method,ref]));
@@ -102,6 +106,7 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
    const [,orderId,token]=cookie;
    const o=(await query("SELECT * FROM commerce.orders WHERE public_id=$1 AND guild_id=$2",[orderId,guild]))[0];
    if(!o||o.order_token_hash!==hash(token)||String(o.buyer_id)!==buyer)return {resumed:false};
+   if(o.method==="razorpay"&&!methods().razorpay)return {resumed:false};
    return {...orderResponse(o,token),resumed:true};
   }));
   app.get<{Params:{orderId:string}}>("/api/payments/status/:orderId",run(async(req)=>{guard();await limit(req);const id=(req.params as any).orderId;if(!publicId(id))fail(400,"invalid-order","Order IDs look like RP-XXXXXX.");const o=(await query("SELECT o.*,c.name FROM commerce.orders o JOIN commerce.catalog c USING(sku) WHERE public_id=$1 AND guild_id=$2",[id,guild]))[0];if(!o)fail(404,"order-not-found","Order was not found.");return view(o!);}));
@@ -116,7 +121,7 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
   await limit(req,forwardedClient(req));
   const o=(id?await query("SELECT o.status,o.amount_minor,o.method,o.expires_at,c.name AS sku_name FROM commerce.orders o JOIN commerce.catalog c USING(sku) WHERE o.public_id=$1 AND o.guild_id=$2",[id,guild]):await query("SELECT o.status,o.amount_minor,o.method,o.expires_at,c.name AS sku_name FROM commerce.orders o JOIN commerce.catalog c ON c.sku=o.sku WHERE o.order_token_hash=$1",[hash(token)]))[0];
   if(!o)fail(404,"order-unknown","No order matches this link.");
-  return {skuName:o!.sku_name,amountMinor:Number(o!.amount_minor),status:o!.status==="settled"?"confirmed":o!.status==="pending"&&new Date(o!.expires_at).getTime()<Date.now()?"expired":o!.status,currency:o!.method==="upi"?"INR":"USDT"};
+  return {skuName:o!.sku_name,amountMinor:Number(o!.amount_minor),status:o!.status==="settled"?"confirmed":o!.status==="pending"&&new Date(o!.expires_at).getTime()<Date.now()?"expired":o!.status,currency:o!.method==="usdt"?"USDT":"INR"};
  }));
  app.post("/api/payments/claim",run(async(req)=>{
   await publicWrite(req);const buyer=await identity(req),b=body(req),id=b.orderId,token=b.token??b.orderToken;
@@ -126,9 +131,9 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
    const expBuf=Buffer.from(hash(token as string)),actBuf=Buffer.from(String(o?.order_token_hash??""));
    if(!o||expBuf.length!==actBuf.length||!timingSafeEqual(expBuf,actBuf))fail(403,"invalid-order-token","Order token is invalid.");
    if(String(o!.buyer_id)!==buyer)fail(403,"invalid-order-owner","This order belongs to another Discord account.");
-   const proof=o!.method==="usdt"?b.txid:b.utr;
-   if(typeof proof!=="string"||!(o!.method==="usdt"?/^[a-fA-F0-9]{64}$/:/^\d{12}$/).test(proof))fail(400,"invalid-proof","Supply a 12-digit UTR or 64-character TRON transaction hash for this method.");
-   const proofRef=`${o!.method}:${String(proof).toLowerCase()}`;
+   const proof=o!.method==="usdt"?b.txid:o!.method==="razorpay"?b.reference:b.utr;
+   if(typeof proof!=="string"||!(o!.method==="usdt"?/^[a-fA-F0-9]{64}$/:o!.method==="razorpay"?/^[A-Za-z0-9_-]{6,64}$/:/^\d{12}$/).test(proof))fail(400,"invalid-proof",o!.method==="usdt"?"Supply the 64-character TRON transaction hash for this order.":o!.method==="razorpay"?"Supply the Razorpay payment ID or the 12-digit UTR from your receipt.":"Supply the 12-digit UPI UTR for this order.");
+   const proofRef=`${o!.method}:${o!.method==="razorpay"?proof:String(proof).toLowerCase()}`;
    if(o!.status==="claimed"){const c=(await q("SELECT * FROM commerce.claims WHERE order_id=$1",[o!.order_id]))[0];if(c?.proof_ref===proofRef)return {orderId:id,status:"claimed",notificationStatus:"not-configured"};}
    if(o!.status!=="pending")fail(409,"order-not-pending","Order cannot accept a claim.");
    if(new Date(o!.expires_at).getTime()<Date.now())fail(409,"order-expired","Order expired. Create a fresh checkout.");
@@ -154,4 +159,3 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
   });
  }));
 }
-

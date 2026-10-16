@@ -145,3 +145,67 @@ test('web checkout ownership: sessions own orders, strangers cannot claim, Disco
  assert.doesNotMatch(await staffCommand('review'),new RegExp(order.public_id));
  sessionUser=buyer;
 });
+
+// --- Razorpay hosted payment page: server-priced orders, reference claims, staff settlement (A12/7B; owner decision 2026-10-16, no API keys) ---
+const buyer2='200000000000000002',buyer3='200000000000000003';
+const pageUrl='https://razorpay.me/@subrodluffy';
+const queryP=async(sql,p)=>(await pool.query(sql,p)).rows;
+const txP=async(work)=>{const c=await pool.connect();try{await c.query('BEGIN');const v=await work(async(sql,p)=>(await c.query(sql,p)).rows);await c.query('COMMIT');return v;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}};
+function pageApp(){const a=Fastify();registerCommerceRoutes(a,{env:{COMMERCE_GUILD_ID:guild,PAYMENT_ORIGIN:origin,UPI_PAYEE_VPA:'merchant@bank',UPI_PAYEE_NAME:'Studio',RAZORPAY_PAYMENT_PAGE:pageUrl,COMMERCE_REFERRAL_REWARD_MINOR:'5000'},query:queryP,transaction:txP,session:async()=>(sessionUser?{discordUserId:sessionUser}:null),authorize:async()=>({userId:buyer,isAdmin:true})});return a;}
+const pageOrder=(app,token,key)=>app.inject({method:'POST',url:'/api/payments/upi-qr',headers:{origin},payload:{serviceId:'account-management-membership',paymentMethod:'razorpay',idempotencyKey:key,recoveryToken:token}});
+const pageClaim=(app,order,ref,key)=>app.inject({method:'POST',url:'/api/payments/claim',headers:{origin},payload:{orderId:order.orderId,token:order.token,reference:ref,idempotencyKey:key}});
+
+test('razorpay page: options offered, one server-priced order per checkout, page URL is the only destination',async()=>{
+ sessionUser=buyer2;const app2=pageApp();
+ await pool.query('DELETE FROM commerce.checkout_rate_limits');
+ const opts=(await app2.inject({url:'/api/payments/options'})).json();
+ assert.equal(opts.enabled,true);assert.equal(opts.methods.razorpay,true);
+ const created=await pageOrder(app2,'f'.repeat(43),'phase4-page-key-1');assert.equal(created.statusCode,200,created.body);const o=created.json();
+ assert.equal(o.paymentMethod,'razorpay');assert.equal(o.currency,'INR');assert.equal(o.amountMinor,70000);
+ assert.equal(o.paymentUri,pageUrl);assert.equal(o.destination,pageUrl);assert.equal(o.qrPayload,pageUrl);
+ assert.equal(o.keyId,undefined);assert.equal(o.providerOrderId,undefined,'no provider order exists without API keys');
+ const stored=(await pool.query('SELECT method,amount_minor,status FROM commerce.orders WHERE public_id=$1',[o.orderId])).rows[0];
+ assert.equal(stored.method,'razorpay');assert.equal(stored.amount_minor,'70000');assert.equal(stored.status,'pending');
+ const retry=await pageOrder(app2,'f'.repeat(43),'phase4-page-key-1');assert.equal(retry.statusCode,200,retry.body);assert.equal(retry.json().orderId,o.orderId);
+ assert.equal((await pool.query('SELECT count(*)::int AS n FROM commerce.orders WHERE idempotency_key=$1',['phase4-page-key-1'])).rows[0].n,1);
+ await app2.close();
+});
+
+test('razorpay page: a reference claim is staff-verified and settles exactly once',async()=>{
+ sessionUser=buyer2;const app2=pageApp();
+ await pool.query('DELETE FROM commerce.checkout_rate_limits');
+ const created=await pageOrder(app2,'g'.repeat(43),'phase4-page-key-2');assert.equal(created.statusCode,200,created.body);const o=created.json();
+ assert.equal((await pageClaim(app2,o,'ab','phase4-claim-short')).statusCode,400,'a too-short reference must not be claimable');
+ const first=await pageClaim(app2,o,'pay_PHASE4REF1','phase4-claim-1');assert.equal(first.statusCode,200,first.body);assert.equal(first.json().status,'claimed');
+ const claimRow=(await pool.query('SELECT c.proof_ref FROM commerce.claims c JOIN commerce.orders ord USING(order_id) WHERE ord.public_id=$1',[o.orderId])).rows[0];
+ assert.equal(claimRow.proof_ref,'razorpay:pay_PHASE4REF1');
+ const replay=await pageClaim(app2,o,'pay_PHASE4REF1','phase4-claim-replay');assert.equal(replay.statusCode,200,replay.body);
+ assert.equal((await pageClaim(app2,o,'pay_PHASE4REF2','phase4-claim-2')).statusCode,409,'a different reference cannot claim a claimed order');
+ assert.equal((await pool.query('SELECT count(*)::int AS n FROM commerce.claims c JOIN commerce.orders ord USING(order_id) WHERE ord.public_id=$1',[o.orderId])).rows[0].n,1);
+ const settle=await app2.inject({method:'POST',url:`/api/guilds/${guild}/commerce/orders/${o.orderId}/settle`,payload:{idempotencyKey:'phase4-page-settle-1'}});
+ assert.equal(settle.statusCode,200,settle.body);assert.equal(settle.json().status,'settled');
+ assert.equal((await pool.query('SELECT count(*)::int AS n FROM commerce.memberships WHERE guild_id=$1 AND user_id=$2',[guild,buyer2])).rows[0].n,1);
+ const again=await app2.inject({method:'POST',url:`/api/guilds/${guild}/commerce/orders/${o.orderId}/settle`,payload:{idempotencyKey:'phase4-page-settle-2'}});
+ assert.equal(again.statusCode,200,again.body);
+ assert.equal((await pool.query('SELECT count(*)::int AS n FROM commerce.memberships WHERE guild_id=$1 AND user_id=$2',[guild,buyer2])).rows[0].n,1,'a re-settle must never stack memberships');
+ await app2.close();
+});
+
+test('razorpay page: resume hands back the same page and a deployment without one fails closed',async()=>{
+ sessionUser=buyer3;const app2=pageApp();
+ await pool.query('DELETE FROM commerce.checkout_rate_limits');
+ const created=await pageOrder(app2,'h'.repeat(43),'phase4-page-key-3');assert.equal(created.statusCode,200,created.body);const o=created.json();
+ const cookie=created.headers['set-cookie'];
+ const resumed=await app2.inject({url:'/api/payments/resume?serviceId=account-management-membership',headers:{cookie}});
+ assert.equal(resumed.statusCode,200,resumed.body);const r=resumed.json();
+ assert.equal(r.resumed,true);assert.equal(r.orderId,o.orderId);assert.equal(r.paymentMethod,'razorpay');assert.equal(r.paymentUri,pageUrl);
+ await app2.close();
+ const off=Fastify();
+ registerCommerceRoutes(off,{env:{COMMERCE_GUILD_ID:guild,PAYMENT_ORIGIN:origin,UPI_PAYEE_VPA:'merchant@bank',UPI_PAYEE_NAME:'Studio'},query:queryP,transaction:txP,session:async()=>({discordUserId:buyer3}),authorize:async()=>({userId:buyer,isAdmin:true})});
+ const denied=await off.inject({method:'POST',url:'/api/payments/upi-qr',headers:{origin},payload:{serviceId:'account-management-membership',paymentMethod:'razorpay',idempotencyKey:'phase4-page-key-4',recoveryToken:'j'.repeat(43)}});
+ assert.equal(denied.statusCode,503,denied.body);assert.equal(denied.json().code,'payments-not-configured');
+ const closed=await off.inject({url:'/api/payments/resume?serviceId=account-management-membership',headers:{cookie}});
+ assert.equal(closed.statusCode,200);assert.equal(closed.json().resumed,false,'a deployment without the page must not resume a dead payment link');
+ assert.equal(closed.json().paymentUri,undefined);
+ await off.close();
+});

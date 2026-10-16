@@ -157,3 +157,77 @@ test("a duplicate payment reference maps to a conflict instead of a second claim
  const res=await app.inject({method:"POST",url:"/api/payments/claim",headers:{origin:env.PAYMENT_ORIGIN},payload:{orderId:"RP-ABC123",token,utr:"123456789012",idempotencyKey:"dup-proof-claim"}});
  assert.equal(res.statusCode,409);assert.equal(res.json().code,"payment-conflict");await app.close();
 });
+
+// --- Razorpay hosted payment page (owner decision 2026-10-16: no API keys; buyers pay the exact amount on the page and submit the payment reference for staff verification) ---
+const rpEnv={...env,RAZORPAY_PAYMENT_PAGE:"https://razorpay.me/@subrodluffy"};
+const rpOrderRow=(over:Record<string,unknown>={})=>({order_id:"11111111-2222-4333-8444-555555555555",public_id:"RP-RZP001",buyer_id:guild,sku:"membership",service_name:"Membership",amount_minor:70000,method:"razorpay",status:"pending",order_token_hash:"h",request_hash:"r",expires_at:new Date(Date.now()+600000),referral_code:null,...over});
+
+test("razorpay page is offered only with a valid hosted page URL",async()=>{
+ const on=await fixture(rpEnv,async(sql)=>sql.includes("access.guilds")?[{guild_id:guild}]:[]).inject({url:"/api/payments/options"});
+ assert.equal(on.json().methods.razorpay,true);assert.equal(on.json().enabled,true);
+ const off=await fixture(env,async(sql)=>sql.includes("access.guilds")?[{guild_id:guild}]:[]).inject({url:"/api/payments/options"});
+ assert.equal(off.json().methods.razorpay,false);
+ for(const page of ["http://razorpay.me/@handle","https://evil.example/@handle","https://razorpay.me/","not-a-url"]){
+  const bad=await fixture({...env,RAZORPAY_PAYMENT_PAGE:page},async(sql)=>sql.includes("access.guilds")?[{guild_id:guild}]:[]).inject({url:"/api/payments/options"});
+  assert.equal(bad.json().methods.razorpay,false,page);
+ }
+});
+
+test("razorpay checkout points at the hosted page with the server-priced amount",async()=>{
+ const token="r".repeat(43);let inserted:unknown[]|null=null;
+ const app=fixture(rpEnv,async(sql,p)=>{
+  if(sql.includes("checkout_rate_limits"))return [{requests:1}];
+  if(sql.includes("access.guilds"))return [{guild_id:guild}];
+  if(sql.includes("SELECT * FROM commerce.orders"))return [];
+  if(sql.includes("commerce.catalog"))return [{sku:"membership",name:"Membership",price_minor:70000,currency:"INR",membership_days:30}];
+  if(sql.includes("INSERT INTO commerce.orders")){inserted=p!;return [rpOrderRow({order_token_hash:String(p![4]),request_hash:String(p![9])})];}
+  return [];
+ });
+ const res=await app.inject({method:"POST",url:"/api/payments/upi-qr",headers:{origin:env.PAYMENT_ORIGIN},payload:{serviceId:"membership",paymentMethod:"razorpay",idempotencyKey:"page-key-1234",recoveryToken:token}});
+ assert.equal(res.statusCode,200,res.body);const j=res.json();
+ assert.equal(j.paymentMethod,"razorpay");assert.equal(j.currency,"INR");assert.equal(j.amountMinor,70000);
+ assert.equal(j.paymentUri,rpEnv.RAZORPAY_PAYMENT_PAGE);assert.equal(j.destination,rpEnv.RAZORPAY_PAYMENT_PAGE);assert.equal(j.qrPayload,rpEnv.RAZORPAY_PAYMENT_PAGE);
+ assert.equal(j.keyId,undefined);assert.equal(j.providerOrderId,undefined);
+ assert.equal(inserted![3],70000,"the order is priced by the server");
+ assert.equal(inserted![7],"razorpay");
+ const offApp=fixture(env,async(sql)=>sql.includes("access.guilds")?[{guild_id:guild}]:[]);
+ const denied=await offApp.inject({method:"POST",url:"/api/payments/upi-qr",headers:{origin:env.PAYMENT_ORIGIN},payload:{serviceId:"membership",paymentMethod:"razorpay",idempotencyKey:"page-key-1235",recoveryToken:"s".repeat(43)}});
+ assert.equal(denied.statusCode,503);assert.equal(denied.json().code,"payments-not-configured");
+ await offApp.close();await app.close();
+});
+
+test("razorpay claim records the payment reference for staff review",async()=>{
+ const token="t".repeat(43);const writes:unknown[][]=[];
+ const row=rpOrderRow({order_token_hash:createHash("sha256").update(token).digest("hex")});
+ const app=fixture(rpEnv,async(sql,p)=>{
+  if(sql.includes("checkout_rate_limits"))return [{requests:1}];
+  if(sql.includes("access.guilds"))return [{guild_id:guild}];
+  if(sql.includes("INSERT INTO commerce.claims")||sql.includes("UPDATE commerce.orders")){writes.push(p!);return [];}
+  if(sql.includes("commerce.orders"))return [row];
+  return [];
+ });
+ const claim=(payload:Record<string,unknown>)=>app.inject({method:"POST",url:"/api/payments/claim",headers:{origin:env.PAYMENT_ORIGIN},payload:{orderId:"RP-RZP001",token,...payload}});
+ assert.equal((await claim({utr:"123456789012",idempotencyKey:"rzp-claim-utr"})).statusCode,400,"a razorpay order cannot be claimed with the UPI field");
+ assert.equal((await claim({reference:"abc",idempotencyKey:"rzp-claim-short"})).statusCode,400);
+ const ok=await claim({reference:"pay_QAZFRESH1ABC",idempotencyKey:"rzp-claim-ref"});
+ assert.equal(ok.statusCode,200,ok.body);assert.equal(ok.json().status,"claimed");
+ assert.equal(writes[0]![1],"razorpay:pay_QAZFRESH1ABC","the reference is stored with its method for staff matching");
+ assert.equal(writes[0]![2],"rzp-claim-ref");
+ await app.close();
+});
+
+test("razorpay order resumes the hosted page and fails closed without one",async()=>{
+ const token="t".repeat(43);const order=rpOrderRow({order_token_hash:createHash("sha256").update(token).digest("hex")});
+ const queries:CommerceDeps["query"]=async(sql)=>{if(sql.includes("checkout_rate_limits"))return [{requests:1}];if(sql.includes("commerce.orders"))return [order];return [];};
+ const recovery=`ei_checkout=${encodeURIComponent(["membership","RP-RZP001",token].join("|"))}`;
+ const on=fixture(rpEnv,queries,async()=>({discordUserId:guild}));
+ const resumed=await on.inject({url:"/api/payments/resume?serviceId=membership",headers:{cookie:recovery}});
+ assert.equal(resumed.statusCode,200,resumed.body);
+ assert.equal(resumed.json().resumed,true);assert.equal(resumed.json().paymentMethod,"razorpay");
+ assert.equal(resumed.json().paymentUri,rpEnv.RAZORPAY_PAYMENT_PAGE);
+ await on.close();
+ const off=fixture(env,queries,async()=>({discordUserId:guild}));
+ const closed=await off.inject({url:"/api/payments/resume?serviceId=membership",headers:{cookie:recovery}});
+ assert.equal(closed.statusCode,200);assert.equal(closed.json().resumed,false,"a deployment without the page must not hand out a dead payment link");
+ await off.close();
+});

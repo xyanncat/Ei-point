@@ -61,7 +61,7 @@ Required commands:
 Payment methods:
 
 - UPI: generate a QR for the server-authoritative amount and payee. A QR or submitted proof is not payment confirmation.
-- Razorpay: support card and wallet checkout using Razorpay's hosted/official checkout flow, server-side order creation, signature verification, webhook verification, idempotent settlement, and reconciliation. Start in sandbox/test mode; never make a real charge during development or verification.
+- Razorpay: buyers pay through the owner's hosted payment page (configured with `RAZORPAY_PAYMENT_PAGE`, e.g. `https://razorpay.me/@subrodluffy`). Checkout shows the page link and QR, and the buyer submits the Razorpay payment ID (or UTR) as the reference for staff verification. No API keys, webhooks or automated capture are used (owner decision, 2026-10-16); a client callback or redirect is never payment confirmation.
 
 Order and referral reads/writes must be scoped to the requesting buyer and guild, with staff-only settlement and one authoritative transactional fulfillment service.
 
@@ -103,7 +103,7 @@ The supplied `EI_POINT_COMPLETION_BUILD_PLAN.md` names **zero specific third-par
 | Cyrene TTS | Target-VPS CPU-only benchmark, 500-character cap, model preloaded at service start, warm/cold timings, error handling, channel attachment, and idle-member departure. |
 | Translation | Hy-MT2 1.8B target-VPS CPU-only benchmark and language/quality acceptance for the actual supported use cases. |
 | Kafka | Real disposable-guild tests for each sanction, temporary expiry, permission denial, partial Discord failure, retry, and audit record. |
-| Payments | Razorpay sandbox card/wallet checkout plus signature/webhook/idempotency tests; UPI QR amount/payee validation; never claim a payment from a client redirect alone. |
+| Payments | Razorpay hosted payment page (no API keys): server-priced order returns the page link/QR, reference claim plus staff verification uphold the never-confirm-from-a-client rule; UPI QR amount/payee validation; USDT quote/address validation. |
 | Levels | Text and voice XP cooldown/farming tests, empty/AFK/deaf exclusions, level-up delivery, and leaderboard consistency. |
 | Release | Build and startup with pinned local models on the benchmark VPS, with CPU/RAM budgets recalculated against the 8-core/40-GiB project cap. |
 
@@ -122,7 +122,7 @@ Legacy-behavior traceability (section 1A, 2026-10-16): all 179 declarations dete
 | Cyrene `/speak` and `/search` | Partial | `/speak` now uses the local Qwen service and attaches WAV output. Model provisioning and live Discord acceptance remain open; `/search` still needs an approved source. |
 | Cyrene `/translate` | Partial | Registered `/translate` uses the local Hy-MT2 OpenAI-compatible endpoint with optional source-language detection, a 500-character limit, one inference slot, bounded queue and timeout. Pinned weight provisioning, target-VPS CPU/memory/latency and language-quality acceptance remain open. |
 | Robin | Partial | Requested common commands are added and disallowed slash commands are removed from sync; several older direct responses still bypass embed formatting. |
-| Cipher | Partial | `/orders` (buyer `list`/`create`/`status`/`claim` plus staff `review`/`settle`/`reject`), `/payment`, and one-time transactional referral redemption are implemented; Discord staff approval and the dashboard queue settle or reject the same orders through one transactional module. `/orders list` pages the caller's guild-scoped history and `create` autocompletes active SKUs. Razorpay card/wallet checkout, webhook verification, and sandbox acceptance remain open. |
+| Cipher | Partial | `/orders` (buyer `list`/`create`/`status`/`claim` plus staff `review`/`settle`/`reject`), `/payment`, and one-time transactional referral redemption are implemented; Discord staff approval and the dashboard queue settle or reject the same orders through one transactional module. `/orders list` pages the caller's guild-scoped history and `create` autocompletes active SKUs. Razorpay now settles through the owner's hosted payment page with a staff-verified payment reference (API-key checkout was superseded by the owner decision of 2026-10-16); live acceptance on the deployment (real payment + staff verification) remains open. |
 | Web commerce access | Partial | Guild order review splits read from settlement: the commerce reader scope lists orders with buyer ID and payment proof omitted, settlement scope or owners see the proof fields and can settle/reject, and anonymous or wrong-scope requests fail closed before database work (reader/staff/admin/anonymous matrix through the real session wiring). Web checkout requires a signed-in Discord session: typed buyer IDs are refused, order resume and claim are owner-bound, and payment writes carry the CSRF gate; OAuth sign-in returns to the validated local page it started from. Order verification renders through the token-authenticated internal lookup (externally blocked at the edge), forwards the edge visitor address so throttling stays per client, applies a five-second deadline, and shows a distinct recoverable unavailable state. Open: live multi-client throttling evidence on the deployed edge — local browser acceptance now runs through `pnpm test:browser` (`tests/browser/`). |
 | Browser acceptance suite | Complete (local) | `pnpm test:browser` builds the dashboard, starts the demo API on the baked default port and drives Edge (channel msedge) through three Playwright specs: public routes desktop/mobile with brand/artwork loading plus pause controls and reduced motion; commerce checkout (options, QR, referral transfer/clear, UTR/TXID validation, claim, awaiting/confirmed, Escape/focus) and the guild-switch race; workspace configuration/admin controls with CSRF, version and desktop/mobile overflow; and API-backed dashboard states (search, modal, guild switch, stale notice, sign-in gate, empty access, workspace unavailable) and verification empty/short/unknown/valid states. Live staging OAuth return and multi-client throttling remain Phase 10. |
 | SilverWolf | Partial | Requested game/economy commands are now the registered allowlist; integration tests and common reply/event formatting remain open. |
@@ -195,7 +195,7 @@ All Kafka rows above are owner-or-Administrator only. Temporary actions need ret
 | `/referral link` | Create or display the caller's referral link. |
 | `/referral redeem` | Redeem a valid referral code with one-time transactional rules. |
 | `/referral status` | Show the caller's referral progress and rewards. |
-| `/payment` | Display UPI QR/payment instructions or start/status-check Razorpay hosted checkout. |
+| `/payment` | Display the configured payment methods (UPI quote, Razorpay hosted page, USDT wallet) and checkout guidance. |
 
 ### SilverWolf
 

@@ -132,10 +132,10 @@ export async function executeClaim(
     return { ok: false, reason: "not-pending" };
   }
   const order=found.rows[0]!;
-  const method=order.method === "usdt" ? "usdt" : "upi";
+  const method=order.method === "usdt" ? "usdt" : order.method === "razorpay" ? "razorpay" : "upi";
   const raw=args.proofRef.replace(new RegExp(`^${method}:`),"");
-  if(!(method==="usdt"?/^[a-fA-F0-9]{64}$/:/^\d{12}$/).test(raw))return {ok:false,reason:"invalid-proof"};
-  const proofRef=`${method}:${raw.toLowerCase()}`;
+  if(!(method==="usdt"?/^[a-fA-F0-9]{64}$/:method==="razorpay"?/^[A-Za-z0-9_-]{6,64}$/:/^\d{12}$/).test(raw))return {ok:false,reason:"invalid-proof"};
+  const proofRef=`${method}:${method==="razorpay"?raw:raw.toLowerCase()}`;
   if (status === "claimed") {
     const claim=(await db.query("SELECT proof_ref FROM commerce.claims WHERE order_id=$1",[args.orderId])).rows[0];
     return claim?.proof_ref===proofRef?{ok:true}:{ok:false,reason:"already-claimed"};

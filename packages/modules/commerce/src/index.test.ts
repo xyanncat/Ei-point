@@ -152,3 +152,36 @@ describe("claim validation boundary",()=>{
   for(const [proof,expires,reason] of [["wrong",new Date(Date.now()+10000),"invalid-proof"],["123456789012",new Date(0),"expired"]] as const){let calls=0;const db={query:async()=>{calls++;return {rows:[{status:"pending",method:"upi",expires_at:expires}],rowCount:1};}};assert.deepEqual(await executeClaim(db,{orderId:"o",guildId:"g",buyerId:"b",proofRef:proof,idempotencyKey:"key"}),{ok:false,reason});assert.equal(calls,1);}
  });
 });
+
+describe("razorpay hosted-page claims", () => {
+  const pending = { status: "pending", method: "razorpay", expires_at: new Date(Date.now() + 10_000) };
+
+  it("accepts a payment id or a 12-digit UTR and stores the reference for staff review", async () => {
+    const claims: string[] = [];
+    const db = {
+      query: async (sql: string, p: unknown[]): Promise<{ rows: Array<Record<string, unknown>>; rowCount: number }> => {
+        if (sql.includes("FOR UPDATE")) return { rows: [pending], rowCount: 1 };
+        if (sql.includes("INSERT INTO commerce.claims")) {
+          claims.push(String(p[1]));
+          return { rows: [], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+    };
+    assert.deepEqual(await executeClaim(db, { orderId: "o", guildId: "g", buyerId: "b", proofRef: "pay_QAZFRESH1ABC", idempotencyKey: "rzp-1" }), { ok: true });
+    assert.deepEqual(await executeClaim(db, { orderId: "o", guildId: "g", buyerId: "b", proofRef: "123456789012", idempotencyKey: "rzp-2" }), { ok: true });
+    assert.deepEqual(claims, ["razorpay:pay_QAZFRESH1ABC", "razorpay:123456789012"]);
+  });
+
+  it("rejects a too-short reference before any write", async () => {
+    let calls = 0;
+    const db = {
+      query: async (): Promise<{ rows: Array<Record<string, unknown>>; rowCount: number }> => {
+        calls++;
+        return { rows: [pending], rowCount: 1 };
+      },
+    };
+    assert.deepEqual(await executeClaim(db, { orderId: "o", guildId: "g", buyerId: "b", proofRef: "abc", idempotencyKey: "rzp-3" }), { ok: false, reason: "invalid-proof" });
+    assert.equal(calls, 1);
+  });
+});

@@ -241,7 +241,7 @@ test("checkout validates inputs, shows the QR, submits proof and reflects status
   ).toBe("/verify?id=RP-ABC123");
   status = "confirmed";
   await page.getByRole("button", { name: "Refresh status", exact: true }).click();
-  await expect(page.getByText("Order status: confirmed.")).toBeVisible();
+  await expect(page.getByText("Payment received and verified.")).toBeVisible();
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 844 });
     expect(await fitsViewport(page)).toBe(true);
@@ -266,5 +266,118 @@ test("checkout validates inputs, shows the QR, submits proof and reflects status
   await page.getByRole("button", { name: "I’ve paid · submit proof" }).click();
   await expect(page.getByText(/Awaiting manual staff verification/)).toBeVisible();
   expect(claims.length).toBe(2);
+  expect(errors).toEqual([]);
+});
+
+test("razorpay checkout pays on the hosted page and claims with a staff-verifiable reference", async ({
+  page,
+}) => {
+  const errors = trackPageErrors(page);
+  const orderPosts: Array<Record<string, unknown>> = [];
+  const orderCsrf: string[] = [];
+  const claimPosts: Array<Record<string, unknown>> = [];
+  const claimCsrf: string[] = [];
+  const pageUrl = "https://razorpay.me/@subrodluffy";
+  const resumedToken = "r".repeat(43);
+  let resumePayload: Record<string, unknown> | { resumed: false } = { resumed: false };
+  await page.route("**/api/auth/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user: { id: "123456789012345678", name: "QA buyer" },
+        isAdmin: false,
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+    });
+  });
+  await page.route("**/api/auth/csrf", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ csrfToken: "qa-csrf" }),
+    });
+  });
+  await page.route("**/api/payments/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    let result: Record<string, unknown>;
+    if (path.endsWith("/resume")) {
+      result = resumePayload as Record<string, unknown>;
+    } else if (path.endsWith("/options")) {
+      result = { enabled: true, methods: { upi: true, usdt: true, razorpay: true } };
+    } else if (path.endsWith("/upi-qr")) {
+      const body = request.postDataJSON() as Record<string, unknown>;
+      orderPosts.push(body);
+      orderCsrf.push(request.headers()["x-csrf-token"] ?? "");
+      expect(body.amount).toBeUndefined();
+      expect(body.paymentMethod).toBe("razorpay");
+      expect(String(body.recoveryToken)).toHaveLength(43);
+      result = {
+        orderId: "RP-RZP111",
+        token: String(body.recoveryToken),
+        amountMinor: 70000,
+        currency: "INR",
+        paymentMethod: "razorpay",
+        paymentUri: pageUrl,
+        destination: pageUrl,
+        expiresAt: new Date(Date.now() + 86400000).toISOString(),
+        referralApplied: false,
+      };
+    } else if (path.endsWith("/claim")) {
+      const body = request.postDataJSON() as Record<string, unknown>;
+      claimPosts.push(body);
+      claimCsrf.push(request.headers()["x-csrf-token"] ?? "");
+      result = { orderId: "RP-RZP111", status: "claimed" };
+    } else {
+      throw new Error(`Unexpected API ${path}`);
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(result),
+    });
+  });
+  await page.goto("/services");
+  await page.getByRole("button", { name: "Checkout" }).first().click();
+  await page.getByText("Ordering as QA buyer").waitFor();
+  await page.getByLabel("Payment method").selectOption("razorpay");
+  await page.getByRole("button", { name: "Show payment instructions" }).click();
+  await expect(page.locator(".ei-checkout-qr")).toBeVisible();
+  const pageLink = page.getByRole("link", { name: /Open Razorpay page/ });
+  await expect(pageLink).toHaveAttribute("href", pageUrl);
+  await expect(page.getByText("Payment page", { exact: true })).toBeVisible();
+  expect(orderPosts.length).toBe(1);
+  expect(orderCsrf[0]).toBe("qa-csrf");
+  const qrSrc = await page.locator(".ei-checkout-qr").getAttribute("src");
+  expect(String(qrSrc).startsWith("data:image/png")).toBe(true);
+  const reference = page.getByLabel("Razorpay payment ID or UTR");
+  await reference.fill("pay_QAZFRESH1");
+  await page.getByRole("button", { name: "I’ve paid · submit proof" }).click();
+  await expect(page.getByText(/Awaiting manual staff verification/)).toBeVisible();
+  expect(claimPosts).toEqual([
+    expect.objectContaining({ orderId: "RP-RZP111", reference: "pay_QAZFRESH1" }),
+  ]);
+  expect(claimCsrf[0]).toBe("qa-csrf");
+  expect(claimPosts[0]?.utr).toBeUndefined();
+  await page.keyboard.press("Escape");
+  resumePayload = {
+    resumed: true,
+    orderId: "RP-RZP222",
+    token: resumedToken,
+    amountMinor: 70000,
+    currency: "INR",
+    paymentMethod: "razorpay",
+    paymentUri: pageUrl,
+    destination: pageUrl,
+    status: "pending",
+    expiresAt: new Date(Date.now() + 86400000).toISOString(),
+    referralApplied: true,
+  };
+  await page.goto("/services");
+  await page.getByRole("button", { name: "Checkout" }).first().click();
+  await expect(page.getByRole("link", { name: /Open Razorpay page/ })).toBeVisible();
+  await expect(page.locator(".ei-checkout-qr")).toBeVisible();
+  expect(orderPosts.length).toBe(1, "resuming must not create a second order");
   expect(errors).toEqual([]);
 });

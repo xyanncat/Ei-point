@@ -30,6 +30,7 @@ export interface CommerceCommandRequest {
   payeeVpa: string;
   payeeName: string;
   usdtAddress: string;
+  razorpayPage?: string;
 }
 
 export const commerceCommandDefinitions = [
@@ -467,7 +468,9 @@ export async function respondToCommerceCommand(
 
   if (name === "payment") {
     const upiReady = Boolean(buildUpiPayload({ payeeVpa: req.payeeVpa, payeeName: req.payeeName?.trim() ?? "", amountMinor: 1, note: "configuration check" }));
-    await req.reply(`Configured payment methods: ${upiReady ? "UPI (server-quoted amount)" : "none"}. Orders show their exact payment instructions after creation. Card and wallet checkout are not enabled in this deployment.`);
+    const pageReady = /^https:\/\/razorpay\.me\/[A-Za-z0-9@._-]{2,64}$/.test((req.razorpayPage ?? "").trim().replace(/\/+$/, ""));
+    const methods = [upiReady ? "UPI (server-quoted amount)" : null, pageReady ? "Razorpay hosted payment page (card, UPI or wallet; staff-verified)" : null].filter(Boolean).join(", ") || "none";
+    await req.reply(`Configured payment methods: ${methods}. Orders show their exact payment instructions after creation. Staff verify every payment before fulfilment — never pay outside the instructions shown with your order.`);
     return;
   }
 
