@@ -111,6 +111,8 @@ The supplied `EI_POINT_COMPLETION_BUILD_PLAN.md` names **zero specific third-par
 
 This table reflects repository work in progress. A slash command appearing in source does not count as accepted until its handler and the evidence above are complete.
 
+Legacy-behavior traceability (section 1A, 2026-10-16): all 179 declarations detected in the three source archives carry a reviewed disposition in `docs/audits/legacy-behavior-map.json` — 86 retained with a traced handler and named tests, 93 deliberately replaced with the approved decision recorded in [legacy-decisions.md](legacy-decisions.md). Verify with `node scripts/check-feature-coverage.mjs --mode release` (exit 0).
+
 | Area | Status | Current evidence or remaining work |
 |---|---|---|
 | Shared `/botinfo`, `/ping`, `/about` | Partial | Registered in the six bot command arrays; identity-specific details, owner mention, and runtime behavior still need per-bot acceptance. |

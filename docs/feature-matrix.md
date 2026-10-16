@@ -1,8 +1,8 @@
-# Ei Point — Feature Matrix (Phase 1 — traceability in progress)
+# Ei Point — Feature Matrix (Phase 1 — legacy-behavior ledger closed)
 
 > Source: `EI_POINT_VPS_BUILD_PLAN.md` §2 + §10 Phase 1.
-> Status: **Not certified complete.** The 54 rows below are curated requirements grouped from the plan; they do not establish exhaustive archive coverage or implemented semantic parity.
-> A reproducible file/hash and command-declaration inventory now covers the three original ZIPs under explicit exclusions. Source-to-handler behavior and executable acceptance mapping remain open.
+> Status: **Ledger closed (section 1A, 2026-10-16); the 54 curated rows remain requirements, not evidence.** The rows below are curated requirements grouped from the plan; they do not by themselves certify runtime parity.
+> The reproducible file/hash and command-declaration inventory covers the three original ZIPs under explicit exclusions, and every detected declaration in `docs/audits/legacy-behavior-map.json` now has a reviewed disposition: retained with a traced target handler and named tests, or deliberately replaced with an approved decision in `docs/product/legacy-decisions.md`.
 
 ## Bot registry (target — 6 identities, operator roster 2026-10-12; see `docs/bot-identities.md`)
 
@@ -90,7 +90,7 @@ Rule: adding/removing a bot = one registry row + deploy. No hard-coded bot lists
 
 ## Gate to Phase 2+
 
-Phase 1 remains open until every source behavior has a reviewed disposition: retained with a verified target handler and executable acceptance test, deliberately changed, or omitted with an operator decision. The acceptance descriptions above are requirements, not passing test evidence. Later phases may proceed independently, but this document does not certify their gates.
+The per-behavior ledger gate is met (section 1A, 2026-10-16): every detected declaration carries a reviewed disposition — retained with a traced target handler and named tests, deliberately replaced with an approved decision, or omitted with an operator decision. The acceptance descriptions above remain requirements, not passing test evidence; runtime acceptance is proven phase by phase. Later phases may proceed independently, but this document does not certify their gates.
 
 ## Reproducible archive traceability (2026-10-15)
 
@@ -108,6 +108,6 @@ These counts describe the scanner's scope and declarations, including subcommand
 
 JavaScript/TypeScript detection uses the TypeScript AST for root commands, subcommands/groups, literal descriptions, route-like HTTP calls, event listeners, custom IDs, scheduled-job calls and static asset paths. Python detection uses command/route/component/task decorators and `on_*` handlers. These are heuristic declaration candidates: dynamic registrations, parse/encoding limits, HTML/PHP/framework-specific routes, nested callback behavior and non-static asset paths remain explicit review gaps. No archive code is executed.
 
-The initial behavior map contains 179 detected declarations: 115 commands, 58 event listeners and 6 route-like declarations. Of these, 65 have a current command-name candidate and a related test-file reference, but remain `implemented-unverified`; 114 rows are `decision-required`. No row is `verified` or `replaced`. In particular, the archive's exact-name candidate count does not mean the mapped handler has equivalent behavior, authorization, financial effects, persistence or error handling. An absent candidate means this scanner found none; wrappers, renames and dynamic registration can require manual lookup. For example, archived `hand`, `deck`, `score`, `addmaster` and `removemaster` need reviewed retention/rename/omission decisions rather than an assumed parity claim.
+The behavior map contains 179 detected declarations: 115 commands, 58 event listeners and 6 route-like declarations. Section 1A resolved every row: 86 are `verified` (retained behavior traced to current handlers; each evidence note names the exact tests) and 93 are `replaced` (deliberately superseded with the decision recorded in [legacy-decisions.md](product/legacy-decisions.md)). No row remains `decision-required` or `implemented-unverified`. The archive's exact-name candidate count was only a hint: the evidence notes document the actual current handler and test layer, including rows whose tests exercise the surrounding mechanism (dispatch, persistence, module boundary) rather than exact event wiring. Archive SHA-256 values are unchanged after the 2026-10-16 refresh: Ei Paradise.zip `62dcf862c61ec2008b70d702097519cd11d88729f6109df6511674ca33d1265c`, EI-point.zip `c5dadd64aaa82351d3a759510948cbc0c2ecc7155fdeefbc27894765047c58ad`, swish.zip `f7a737622fef2915cae116aba271acd7e7cf39e18b5c77f833e9ffdc185538da`.
 
-The remaining gate is a per-behavior ledger linking archive file/line and intent to the actual target handler, a concrete executable acceptance test and its result, or an approved omission. Events, routes, components, dashboard controls, scheduled jobs, asset flows and persistence also require source-level review. Neither the automated inventory nor the 54 curated rows exhaust these behaviors.
+The ledger now links every detected declaration to a current target handler and test file, or an approved replacement decision. Verification commands: `node scripts/check-feature-coverage.mjs` (structural) and `node scripts/check-feature-coverage.mjs --mode release` both exit 0, and `node --test tests/feature-coverage.test.mjs` passes. The scanner remains heuristic (dynamic registrations, nested callbacks and non-static asset paths are explicit review gaps), so the inventory is a floor rather than an exhaustive proof of the legacy projects. Runtime acceptance for the 54 curated requirements above remains phase-by-phase work.

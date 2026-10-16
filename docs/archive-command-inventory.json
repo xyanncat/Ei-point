@@ -58,7 +58,7 @@
       "kind": "slash-command",
       "name": "ask",
       "parent_command": null,
-      "line": 35,
+      "line": 36,
       "declaration": "aiCommandDefinitions",
       "description": "Chat with the AI assistant",
       "detection": "typescript-ast-literal-builder",
@@ -69,7 +69,7 @@
       "kind": "slash-command",
       "name": "persona",
       "parent_command": null,
-      "line": 52,
+      "line": 53,
       "declaration": "aiCommandDefinitions",
       "description": "View or change your AI conversation persona",
       "detection": "typescript-ast-literal-builder",
@@ -80,7 +80,7 @@
       "kind": "slash-command",
       "name": "reset",
       "parent_command": null,
-      "line": 68,
+      "line": 69,
       "declaration": "aiCommandDefinitions",
       "description": "Reset your conversation history and persistent bot memory",
       "detection": "typescript-ast-literal-builder",
@@ -91,7 +91,7 @@
       "kind": "slash-command",
       "name": "usage",
       "parent_command": null,
-      "line": 74,
+      "line": 75,
       "declaration": "aiCommandDefinitions",
       "description": "Check your AI token usage today against daily limits",
       "detection": "typescript-ast-literal-builder",
@@ -102,7 +102,7 @@
       "kind": "slash-command",
       "name": "model",
       "parent_command": null,
-      "line": 79,
+      "line": 80,
       "declaration": "aiCommandDefinitions",
       "description": "View AI provider configuration and router status",
       "detection": "typescript-ast-literal-builder",
@@ -111,8 +111,17 @@
     {
       "file": "apps/bots/ai/src/index.ts",
       "kind": "event",
+      "name": "stateChange",
+      "line": 113,
+      "declaration": "connection",
+      "detection": "typescript-ast-event-listener",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/ai/src/index.ts",
+      "kind": "event",
       "name": "error",
-      "line": 102,
+      "line": 216,
       "declaration": "pool",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -121,7 +130,7 @@
       "file": "apps/bots/ai/src/index.ts",
       "kind": "event",
       "name": "unhandledRejection",
-      "line": 103,
+      "line": 217,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -130,7 +139,25 @@
       "file": "apps/bots/ai/src/index.ts",
       "kind": "event",
       "name": "MessageCreate",
-      "line": 163,
+      "line": 291,
+      "declaration": "client",
+      "detection": "typescript-ast-event-listener",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/ai/src/index.ts",
+      "kind": "event",
+      "name": "VoiceStateUpdate",
+      "line": 341,
+      "declaration": "client",
+      "detection": "typescript-ast-event-listener",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/ai/src/index.ts",
+      "kind": "event",
+      "name": "MessageCreate",
+      "line": 357,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -139,7 +166,7 @@
       "file": "apps/bots/ai/src/index.ts",
       "kind": "event",
       "name": "InteractionCreate",
-      "line": 212,
+      "line": 407,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -148,7 +175,7 @@
       "file": "apps/bots/ai/src/index.ts",
       "kind": "event",
       "name": "GuildCreate",
-      "line": 311,
+      "line": 534,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -157,7 +184,7 @@
       "file": "apps/bots/ai/src/index.ts",
       "kind": "event",
       "name": "SIGINT",
-      "line": 372,
+      "line": 596,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -166,7 +193,7 @@
       "file": "apps/bots/ai/src/index.ts",
       "kind": "event",
       "name": "SIGTERM",
-      "line": 373,
+      "line": 597,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -175,9 +202,20 @@
       "file": "apps/bots/ai/src/index.ts",
       "kind": "event",
       "name": "ClientReady",
-      "line": 375,
+      "line": 599,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/ai/src/translate.ts",
+      "kind": "slash-command",
+      "name": "translate",
+      "parent_command": null,
+      "line": 12,
+      "declaration": "translationCommandDefinition",
+      "description": "Translate text with Cyrene's local Hy-MT2 model",
+      "detection": "typescript-ast-literal-builder",
       "resolution": "literal"
     },
     {
@@ -185,51 +223,51 @@
       "kind": "slash-command",
       "name": "speak",
       "parent_command": null,
-      "line": 18,
+      "line": 14,
       "declaration": "ttsCommandDefinitions",
-      "description": "Speak text in your voice channel (Cyrene TTS)",
+      "description": "Create and attach a Cyrene voice file",
       "detection": "typescript-ast-literal-builder",
       "resolution": "literal"
     },
     {
       "file": "apps/bots/ai/src/tts.ts",
       "kind": "slash-command",
-      "name": "tts-voice",
+      "name": "tts",
       "parent_command": null,
-      "line": 30,
+      "line": 25,
       "declaration": "ttsCommandDefinitions",
-      "description": "View or set the TTS voice for this server",
+      "description": "Read this voice channel's text chat aloud",
       "detection": "typescript-ast-literal-builder",
       "resolution": "literal"
     },
     {
       "file": "apps/bots/ai/src/tts.ts",
       "kind": "slash-command",
-      "name": "tts-stop",
+      "name": "leave",
+      "parent_command": null,
+      "line": 29,
+      "declaration": "ttsCommandDefinitions",
+      "description": "Leave the active Cyrene voice session",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/ai/src/tts.ts",
+      "kind": "slash-command",
+      "name": "search",
+      "parent_command": null,
+      "line": 33,
+      "declaration": "ttsCommandDefinitions",
+      "description": "Search the configured Cyrene search source",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/commerce/src/commands.ts",
+      "kind": "slash-command",
+      "name": "orders",
       "parent_command": null,
       "line": 35,
-      "declaration": "ttsCommandDefinitions",
-      "description": "Stop TTS playback and leave voice",
-      "detection": "typescript-ast-literal-builder",
-      "resolution": "literal"
-    },
-    {
-      "file": "apps/bots/commerce/src/commands.ts",
-      "kind": "slash-command",
-      "name": "catalog",
-      "parent_command": null,
-      "line": 34,
-      "declaration": "commerceCommandDefinitions",
-      "description": "View available digital services and packages",
-      "detection": "typescript-ast-literal-builder",
-      "resolution": "literal"
-    },
-    {
-      "file": "apps/bots/commerce/src/commands.ts",
-      "kind": "slash-command",
-      "name": "order",
-      "parent_command": null,
-      "line": 39,
       "declaration": "commerceCommandDefinitions",
       "description": "Manage orders and payments",
       "detection": "typescript-ast-literal-builder",
@@ -238,9 +276,20 @@
     {
       "file": "apps/bots/commerce/src/commands.ts",
       "kind": "subcommand",
+      "name": "list",
+      "parent_command": "orders",
+      "line": 39,
+      "declaration": "commerceCommandDefinitions",
+      "description": "List services available for orders",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/commerce/src/commands.ts",
+      "kind": "subcommand",
       "name": "create",
-      "parent_command": "order",
-      "line": 44,
+      "parent_command": "orders",
+      "line": 41,
       "declaration": "commerceCommandDefinitions",
       "description": "Create a new service order",
       "detection": "typescript-ast-literal-builder",
@@ -250,8 +299,8 @@
       "file": "apps/bots/commerce/src/commands.ts",
       "kind": "subcommand",
       "name": "status",
-      "parent_command": "order",
-      "line": 50,
+      "parent_command": "orders",
+      "line": 47,
       "declaration": "commerceCommandDefinitions",
       "description": "Check the status of an existing order",
       "detection": "typescript-ast-literal-builder",
@@ -261,8 +310,8 @@
       "file": "apps/bots/commerce/src/commands.ts",
       "kind": "subcommand",
       "name": "claim",
-      "parent_command": "order",
-      "line": 56,
+      "parent_command": "orders",
+      "line": 53,
       "declaration": "commerceCommandDefinitions",
       "description": "Submit payment proof for an order",
       "detection": "typescript-ast-literal-builder",
@@ -270,10 +319,10 @@
     },
     {
       "file": "apps/bots/commerce/src/commands.ts",
-      "kind": "slash-command",
+      "kind": "subcommand",
       "name": "settle",
-      "parent_command": null,
-      "line": 65,
+      "parent_command": "orders",
+      "line": 61,
       "declaration": "commerceCommandDefinitions",
       "description": "Staff settlement for a claimed order",
       "detection": "typescript-ast-literal-builder",
@@ -284,7 +333,7 @@
       "kind": "slash-command",
       "name": "referral",
       "parent_command": null,
-      "line": 71,
+      "line": 66,
       "declaration": "commerceCommandDefinitions",
       "description": "Referral link generation and reward tracking",
       "detection": "typescript-ast-literal-builder",
@@ -293,9 +342,9 @@
     {
       "file": "apps/bots/commerce/src/commands.ts",
       "kind": "subcommand",
-      "name": "code",
+      "name": "link",
       "parent_command": "referral",
-      "line": 75,
+      "line": 70,
       "declaration": "commerceCommandDefinitions",
       "description": "Get your unique referral code and link",
       "detection": "typescript-ast-literal-builder",
@@ -304,11 +353,33 @@
     {
       "file": "apps/bots/commerce/src/commands.ts",
       "kind": "subcommand",
-      "name": "stats",
+      "name": "redeem",
       "parent_command": "referral",
-      "line": 76,
+      "line": 71,
+      "declaration": "commerceCommandDefinitions",
+      "description": "Apply a referral code to your future order",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/commerce/src/commands.ts",
+      "kind": "subcommand",
+      "name": "status",
+      "parent_command": "referral",
+      "line": 73,
       "declaration": "commerceCommandDefinitions",
       "description": "View referral stats and current month rewards",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/commerce/src/commands.ts",
+      "kind": "slash-command",
+      "name": "payment",
+      "parent_command": null,
+      "line": 74,
+      "declaration": "commerceCommandDefinitions",
+      "description": "Show available payment methods and checkout guidance",
       "detection": "typescript-ast-literal-builder",
       "resolution": "literal"
     },
@@ -316,7 +387,7 @@
       "file": "apps/bots/commerce/src/index.ts",
       "kind": "event",
       "name": "error",
-      "line": 38,
+      "line": 40,
       "declaration": "pool",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -325,7 +396,7 @@
       "file": "apps/bots/commerce/src/index.ts",
       "kind": "event",
       "name": "unhandledRejection",
-      "line": 39,
+      "line": 41,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -334,7 +405,7 @@
       "file": "apps/bots/commerce/src/index.ts",
       "kind": "event",
       "name": "InteractionCreate",
-      "line": 67,
+      "line": 71,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -343,7 +414,7 @@
       "file": "apps/bots/commerce/src/index.ts",
       "kind": "event",
       "name": "GuildCreate",
-      "line": 145,
+      "line": 158,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -352,7 +423,7 @@
       "file": "apps/bots/commerce/src/index.ts",
       "kind": "event",
       "name": "SIGINT",
-      "line": 203,
+      "line": 218,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -361,7 +432,7 @@
       "file": "apps/bots/commerce/src/index.ts",
       "kind": "event",
       "name": "SIGTERM",
-      "line": 204,
+      "line": 219,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -370,7 +441,7 @@
       "file": "apps/bots/commerce/src/index.ts",
       "kind": "event",
       "name": "ClientReady",
-      "line": 206,
+      "line": 221,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -589,7 +660,7 @@
       "kind": "slash-command",
       "name": "market",
       "parent_command": null,
-      "line": 142,
+      "line": 146,
       "declaration": "simple",
       "description": null,
       "detection": "typescript-ast-builder-helper-static-argument",
@@ -600,7 +671,7 @@
       "kind": "slash-command",
       "name": "buy",
       "parent_command": null,
-      "line": 143,
+      "line": 147,
       "declaration": "simple",
       "description": null,
       "detection": "typescript-ast-builder-helper-static-argument",
@@ -611,7 +682,7 @@
       "kind": "slash-command",
       "name": "trades",
       "parent_command": null,
-      "line": 150,
+      "line": 154,
       "declaration": "simple",
       "description": null,
       "detection": "typescript-ast-builder-helper-static-argument",
@@ -622,7 +693,7 @@
       "kind": "slash-command",
       "name": "trade",
       "parent_command": null,
-      "line": 158,
+      "line": 162,
       "declaration": "simple",
       "description": null,
       "detection": "typescript-ast-builder-helper-static-argument",
@@ -633,7 +704,7 @@
       "kind": "subcommand",
       "name": "offer",
       "parent_command": "trade",
-      "line": 160,
+      "line": 164,
       "declaration": "commandDefinitions",
       "description": "Offer cards and berries",
       "detection": "typescript-ast-literal-builder",
@@ -644,7 +715,7 @@
       "kind": "subcommand",
       "name": "accept",
       "parent_command": "trade",
-      "line": 202,
+      "line": 206,
       "declaration": "commandDefinitions",
       "description": "Accept an offer addressed to you",
       "detection": "typescript-ast-literal-builder",
@@ -655,7 +726,7 @@
       "kind": "subcommand",
       "name": "cancel",
       "parent_command": "trade",
-      "line": 214,
+      "line": 218,
       "declaration": "commandDefinitions",
       "description": "Cancel or reject an offer",
       "detection": "typescript-ast-literal-builder",
@@ -666,7 +737,7 @@
       "kind": "slash-command",
       "name": "cardadmin",
       "parent_command": null,
-      "line": 225,
+      "line": 229,
       "declaration": "simple",
       "description": null,
       "detection": "typescript-ast-builder-helper-static-argument",
@@ -677,7 +748,7 @@
       "kind": "subcommand",
       "name": "credit",
       "parent_command": "cardadmin",
-      "line": 227,
+      "line": 231,
       "declaration": "commandDefinitions",
       "description": "Grant berries",
       "detection": "typescript-ast-literal-builder",
@@ -688,7 +759,7 @@
       "kind": "subcommand",
       "name": "issue",
       "parent_command": "cardadmin",
-      "line": 242,
+      "line": 246,
       "declaration": "commandDefinitions",
       "description": "Issue a card subject to supply",
       "detection": "typescript-ast-literal-builder",
@@ -699,7 +770,7 @@
       "kind": "subcommand",
       "name": "revoke",
       "parent_command": "cardadmin",
-      "line": 253,
+      "line": 257,
       "declaration": "commandDefinitions",
       "description": "Revoke an unreserved card instance",
       "detection": "typescript-ast-literal-builder",
@@ -710,7 +781,7 @@
       "kind": "subcommand",
       "name": "define",
       "parent_command": "cardadmin",
-      "line": 257,
+      "line": 261,
       "declaration": "commandDefinitions",
       "description": "Import a card definition JSON",
       "detection": "typescript-ast-literal-builder",
@@ -721,7 +792,7 @@
       "kind": "subcommand",
       "name": "pack",
       "parent_command": "cardadmin",
-      "line": 269,
+      "line": 273,
       "declaration": "commandDefinitions",
       "description": "Configure a pack JSON",
       "detection": "typescript-ast-literal-builder",
@@ -730,20 +801,9 @@
     {
       "file": "apps/bots/community/src/commands.ts",
       "kind": "slash-command",
-      "name": "unlist",
-      "parent_command": null,
-      "line": 283,
-      "declaration": "simple",
-      "description": null,
-      "detection": "typescript-ast-builder-helper-static-argument",
-      "resolution": "literal"
-    },
-    {
-      "file": "apps/bots/community/src/commands.ts",
-      "kind": "slash-command",
       "name": "balance",
       "parent_command": null,
-      "line": 290,
+      "line": 287,
       "declaration": "simple",
       "description": null,
       "detection": "typescript-ast-builder-helper-static-argument",
@@ -753,7 +813,7 @@
       "file": "apps/bots/community/src/index.ts",
       "kind": "event",
       "name": "error",
-      "line": 44,
+      "line": 47,
       "declaration": "pool",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -762,7 +822,7 @@
       "file": "apps/bots/community/src/index.ts",
       "kind": "event",
       "name": "unhandledRejection",
-      "line": 47,
+      "line": 50,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -771,34 +831,7 @@
       "file": "apps/bots/community/src/index.ts",
       "kind": "event",
       "name": "InteractionCreate",
-      "line": 75,
-      "declaration": "client",
-      "detection": "typescript-ast-event-listener",
-      "resolution": "literal"
-    },
-    {
-      "file": "apps/bots/community/src/index.ts",
-      "kind": "event",
-      "name": "MessageCreate",
-      "line": 172,
-      "declaration": "client",
-      "detection": "typescript-ast-event-listener",
-      "resolution": "literal"
-    },
-    {
-      "file": "apps/bots/community/src/index.ts",
-      "kind": "event",
-      "name": "GuildMemberAdd",
-      "line": 198,
-      "declaration": "client",
-      "detection": "typescript-ast-event-listener",
-      "resolution": "literal"
-    },
-    {
-      "file": "apps/bots/community/src/index.ts",
-      "kind": "event",
-      "name": "GuildMemberRemove",
-      "line": 214,
+      "line": 77,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -807,7 +840,7 @@
       "file": "apps/bots/community/src/index.ts",
       "kind": "event",
       "name": "GuildCreate",
-      "line": 230,
+      "line": 162,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -816,7 +849,7 @@
       "file": "apps/bots/community/src/index.ts",
       "kind": "event",
       "name": "Error",
-      "line": 234,
+      "line": 166,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -825,7 +858,7 @@
       "file": "apps/bots/community/src/index.ts",
       "kind": "event",
       "name": "SIGINT",
-      "line": 342,
+      "line": 245,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -834,7 +867,7 @@
       "file": "apps/bots/community/src/index.ts",
       "kind": "event",
       "name": "SIGTERM",
-      "line": 345,
+      "line": 248,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -843,7 +876,7 @@
       "file": "apps/bots/community/src/index.ts",
       "kind": "event",
       "name": "ClientReady",
-      "line": 349,
+      "line": 252,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -851,7 +884,7 @@
     {
       "file": "apps/bots/himiko/src/commands.ts",
       "kind": "slash-command",
-      "name": "announce",
+      "name": "announcement",
       "parent_command": null,
       "line": 65,
       "declaration": "himikoCommandDefinitions",
@@ -871,10 +904,65 @@
       "resolution": "literal"
     },
     {
+      "file": "apps/bots/himiko/src/community-commands.ts",
+      "kind": "slash-command",
+      "name": null,
+      "parent_command": null,
+      "line": 5,
+      "declaration": "simple",
+      "description": null,
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "dynamic-name-unresolved"
+    },
+    {
+      "file": "apps/bots/himiko/src/community-commands.ts",
+      "kind": "slash-command",
+      "name": "testwelcome",
+      "parent_command": null,
+      "line": 33,
+      "declaration": "simple",
+      "description": null,
+      "detection": "typescript-ast-builder-helper-static-argument",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/himiko/src/community-commands.ts",
+      "kind": "slash-command",
+      "name": "xp",
+      "parent_command": null,
+      "line": 43,
+      "declaration": "simple",
+      "description": null,
+      "detection": "typescript-ast-builder-helper-static-argument",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/himiko/src/community-commands.ts",
+      "kind": "slash-command",
+      "name": "setlevelchannel",
+      "parent_command": null,
+      "line": 58,
+      "declaration": "simple",
+      "description": null,
+      "detection": "typescript-ast-builder-helper-static-argument",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/himiko/src/community-commands.ts",
+      "kind": "slash-command",
+      "name": "leaderboard",
+      "parent_command": null,
+      "line": 65,
+      "declaration": "simple",
+      "description": null,
+      "detection": "typescript-ast-builder-helper-static-argument",
+      "resolution": "literal"
+    },
+    {
       "file": "apps/bots/himiko/src/index.ts",
       "kind": "event",
       "name": "error",
-      "line": 45,
+      "line": 48,
       "declaration": "pool",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -883,7 +971,7 @@
       "file": "apps/bots/himiko/src/index.ts",
       "kind": "event",
       "name": "unhandledRejection",
-      "line": 46,
+      "line": 49,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -892,7 +980,34 @@
       "file": "apps/bots/himiko/src/index.ts",
       "kind": "event",
       "name": "InteractionCreate",
-      "line": 73,
+      "line": 83,
+      "declaration": "client",
+      "detection": "typescript-ast-event-listener",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/himiko/src/index.ts",
+      "kind": "event",
+      "name": "MessageCreate",
+      "line": 225,
+      "declaration": "client",
+      "detection": "typescript-ast-event-listener",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/himiko/src/index.ts",
+      "kind": "event",
+      "name": "GuildMemberAdd",
+      "line": 252,
+      "declaration": "client",
+      "detection": "typescript-ast-event-listener",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/himiko/src/index.ts",
+      "kind": "event",
+      "name": "GuildMemberRemove",
+      "line": 268,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -901,7 +1016,7 @@
       "file": "apps/bots/himiko/src/index.ts",
       "kind": "event",
       "name": "GuildCreate",
-      "line": 215,
+      "line": 348,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -910,7 +1025,7 @@
       "file": "apps/bots/himiko/src/index.ts",
       "kind": "event",
       "name": "SIGINT",
-      "line": 282,
+      "line": 448,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -919,7 +1034,7 @@
       "file": "apps/bots/himiko/src/index.ts",
       "kind": "event",
       "name": "SIGTERM",
-      "line": 283,
+      "line": 449,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -928,7 +1043,7 @@
       "file": "apps/bots/himiko/src/index.ts",
       "kind": "event",
       "name": "ClientReady",
-      "line": 285,
+      "line": 451,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -937,7 +1052,7 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "error",
-      "line": 60,
+      "line": 62,
       "declaration": "pool",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -946,7 +1061,7 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "unhandledRejection",
-      "line": 61,
+      "line": 63,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -955,7 +1070,7 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "GuildMemberAdd",
-      "line": 107,
+      "line": 116,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -964,7 +1079,7 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "GuildAuditLogEntryCreate",
-      "line": 144,
+      "line": 153,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -973,15 +1088,6 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "MessageDelete",
-      "line": 206,
-      "declaration": "client",
-      "detection": "typescript-ast-event-listener",
-      "resolution": "literal"
-    },
-    {
-      "file": "apps/bots/kafka/src/index.ts",
-      "kind": "event",
-      "name": "MessageUpdate",
       "line": 215,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
@@ -990,7 +1096,7 @@
     {
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
-      "name": "GuildMemberRemove",
+      "name": "MessageUpdate",
       "line": 224,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
@@ -999,8 +1105,17 @@
     {
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
+      "name": "GuildMemberRemove",
+      "line": 233,
+      "declaration": "client",
+      "detection": "typescript-ast-event-listener",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/kafka/src/index.ts",
+      "kind": "event",
       "name": "ChannelCreate",
-      "line": 228,
+      "line": 237,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1009,15 +1124,6 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "ChannelDelete",
-      "line": 238,
-      "declaration": "client",
-      "detection": "typescript-ast-event-listener",
-      "resolution": "literal"
-    },
-    {
-      "file": "apps/bots/kafka/src/index.ts",
-      "kind": "event",
-      "name": "GuildRoleCreate",
       "line": 247,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
@@ -1026,8 +1132,17 @@
     {
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
+      "name": "GuildRoleCreate",
+      "line": 256,
+      "declaration": "client",
+      "detection": "typescript-ast-event-listener",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/kafka/src/index.ts",
+      "kind": "event",
       "name": "GuildRoleDelete",
-      "line": 251,
+      "line": 260,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1036,7 +1151,7 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "VoiceStateUpdate",
-      "line": 255,
+      "line": 264,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1045,7 +1160,7 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "InteractionCreate",
-      "line": 278,
+      "line": 287,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1054,7 +1169,7 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "GuildCreate",
-      "line": 402,
+      "line": 460,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1063,7 +1178,7 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "SIGINT",
-      "line": 487,
+      "line": 630,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1072,7 +1187,7 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "SIGTERM",
-      "line": 488,
+      "line": 631,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1081,7 +1196,7 @@
       "file": "apps/bots/kafka/src/index.ts",
       "kind": "event",
       "name": "ClientReady",
-      "line": 490,
+      "line": 633,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1089,11 +1204,44 @@
     {
       "file": "apps/bots/moderation/src/commands.ts",
       "kind": "slash-command",
+      "name": "kick",
+      "parent_command": null,
+      "line": 50,
+      "declaration": "moderationCommandDefinitions",
+      "description": "Remove a member from this guild",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/moderation/src/commands.ts",
+      "kind": "slash-command",
       "name": "warn",
       "parent_command": null,
-      "line": 36,
+      "line": 57,
       "declaration": "moderationCommandDefinitions",
-      "description": "Issue a formal warning to a guild member",
+      "description": "Issue or remove a formal warning",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/moderation/src/commands.ts",
+      "kind": "subcommand",
+      "name": "add",
+      "parent_command": "warn",
+      "line": 61,
+      "declaration": "moderationCommandDefinitions",
+      "description": "Issue a formal warning to a member",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/moderation/src/commands.ts",
+      "kind": "subcommand",
+      "name": "remove",
+      "parent_command": "warn",
+      "line": 64,
+      "declaration": "moderationCommandDefinitions",
+      "description": "Remove a warning by case ID",
       "detection": "typescript-ast-literal-builder",
       "resolution": "literal"
     },
@@ -1102,7 +1250,7 @@
       "kind": "slash-command",
       "name": "ban",
       "parent_command": null,
-      "line": 43,
+      "line": 68,
       "declaration": "moderationCommandDefinitions",
       "description": "Ban a user from the guild",
       "detection": "typescript-ast-literal-builder",
@@ -1113,7 +1261,7 @@
       "kind": "slash-command",
       "name": "unban",
       "parent_command": null,
-      "line": 57,
+      "line": 82,
       "declaration": "moderationCommandDefinitions",
       "description": "Unban a previously banned user by ID",
       "detection": "typescript-ast-literal-builder",
@@ -1124,9 +1272,86 @@
       "kind": "slash-command",
       "name": "timeout",
       "parent_command": null,
-      "line": 64,
+      "line": 89,
       "declaration": "moderationCommandDefinitions",
-      "description": "Temporarily restrict a member from speaking or reacting",
+      "description": "Apply or remove a member timeout",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/moderation/src/commands.ts",
+      "kind": "subcommand",
+      "name": "apply",
+      "parent_command": "timeout",
+      "line": 93,
+      "declaration": "moderationCommandDefinitions",
+      "description": "Temporarily restrict a member",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/moderation/src/commands.ts",
+      "kind": "subcommand",
+      "name": "remove",
+      "parent_command": "timeout",
+      "line": 97,
+      "declaration": "moderationCommandDefinitions",
+      "description": "Remove an active member timeout",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/moderation/src/commands.ts",
+      "kind": "slash-command",
+      "name": "temp",
+      "parent_command": null,
+      "line": 101,
+      "declaration": "moderationCommandDefinitions",
+      "description": "Apply a temporary member restriction",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/moderation/src/commands.ts",
+      "kind": "subcommand",
+      "name": "ban",
+      "parent_command": "temp",
+      "line": 105,
+      "declaration": "moderationCommandDefinitions",
+      "description": "Temporarily ban a user",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/moderation/src/commands.ts",
+      "kind": "subcommand",
+      "name": "mute",
+      "parent_command": "temp",
+      "line": 109,
+      "declaration": "moderationCommandDefinitions",
+      "description": "Temporarily mute a member",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/moderation/src/commands.ts",
+      "kind": "subcommand",
+      "name": "role",
+      "parent_command": "temp",
+      "line": 113,
+      "declaration": "moderationCommandDefinitions",
+      "description": "Grant a role temporarily",
+      "detection": "typescript-ast-literal-builder",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/moderation/src/commands.ts",
+      "kind": "subcommand",
+      "name": "restriction",
+      "parent_command": "temp",
+      "line": 118,
+      "declaration": "moderationCommandDefinitions",
+      "description": "Temporarily restrict sending messages in a channel",
       "detection": "typescript-ast-literal-builder",
       "resolution": "literal"
     },
@@ -1135,7 +1360,7 @@
       "kind": "slash-command",
       "name": "purge",
       "parent_command": null,
-      "line": 79,
+      "line": 124,
       "declaration": "moderationCommandDefinitions",
       "description": "Bulk delete recent messages in this channel",
       "detection": "typescript-ast-literal-builder",
@@ -1146,7 +1371,7 @@
       "kind": "slash-command",
       "name": "cases",
       "parent_command": null,
-      "line": 92,
+      "line": 137,
       "declaration": "moderationCommandDefinitions",
       "description": "View moderation history for a user",
       "detection": "typescript-ast-literal-builder",
@@ -1157,7 +1382,7 @@
       "kind": "slash-command",
       "name": "note",
       "parent_command": null,
-      "line": 101,
+      "line": 146,
       "declaration": "moderationCommandDefinitions",
       "description": "Add an internal staff note to a user's record",
       "detection": "typescript-ast-literal-builder",
@@ -1167,7 +1392,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "error",
-      "line": 42,
+      "line": 41,
       "declaration": "pool",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1176,7 +1401,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "unhandledRejection",
-      "line": 43,
+      "line": 42,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1185,7 +1410,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "MessageDelete",
-      "line": 99,
+      "line": 98,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1194,7 +1419,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "MessageUpdate",
-      "line": 108,
+      "line": 107,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1203,7 +1428,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "GuildMemberAdd",
-      "line": 117,
+      "line": 116,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1212,7 +1437,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "GuildMemberRemove",
-      "line": 124,
+      "line": 123,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1221,7 +1446,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "ChannelCreate",
-      "line": 130,
+      "line": 129,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1230,7 +1455,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "ChannelDelete",
-      "line": 140,
+      "line": 139,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1239,7 +1464,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "GuildRoleCreate",
-      "line": 149,
+      "line": 148,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1248,7 +1473,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "GuildRoleDelete",
-      "line": 156,
+      "line": 155,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1257,7 +1482,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "VoiceStateUpdate",
-      "line": 163,
+      "line": 162,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1266,7 +1491,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "InteractionCreate",
-      "line": 185,
+      "line": 184,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1275,7 +1500,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "GuildCreate",
-      "line": 272,
+      "line": 279,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1284,7 +1509,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "SIGINT",
-      "line": 347,
+      "line": 339,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1293,7 +1518,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "SIGTERM",
-      "line": 348,
+      "line": 340,
       "declaration": "process",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1302,7 +1527,7 @@
       "file": "apps/bots/moderation/src/index.ts",
       "kind": "event",
       "name": "ClientReady",
-      "line": 350,
+      "line": 342,
       "declaration": "client",
       "detection": "typescript-ast-event-listener",
       "resolution": "literal"
@@ -1311,7 +1536,7 @@
       "file": "apps/bots/music-py/src/main.py",
       "kind": "event",
       "name": "ready",
-      "line": 728,
+      "line": 729,
       "declaration": "on_ready",
       "detection": "python-ast-event-handler",
       "resolution": "literal"
@@ -1320,7 +1545,7 @@
       "file": "apps/bots/music-py/src/main.py",
       "kind": "event",
       "name": "guild_join",
-      "line": 759,
+      "line": 763,
       "declaration": "on_guild_join",
       "detection": "python-ast-event-handler",
       "resolution": "literal"
@@ -1328,9 +1553,42 @@
     {
       "file": "apps/bots/music-py/src/main.py",
       "kind": "slash-command",
+      "name": "ping",
+      "parent_command": null,
+      "line": 788,
+      "declaration": "common_ping",
+      "decorator": "bot.tree.command",
+      "detection": "python-ast-decorator",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/music-py/src/main.py",
+      "kind": "slash-command",
+      "name": "botinfo",
+      "parent_command": null,
+      "line": 793,
+      "declaration": "common_botinfo",
+      "decorator": "bot.tree.command",
+      "detection": "python-ast-decorator",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/music-py/src/main.py",
+      "kind": "slash-command",
+      "name": "about",
+      "parent_command": null,
+      "line": 799,
+      "declaration": "common_about",
+      "decorator": "bot.tree.command",
+      "detection": "python-ast-decorator",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/music-py/src/main.py",
+      "kind": "slash-command",
       "name": "play",
       "parent_command": null,
-      "line": 776,
+      "line": 807,
       "declaration": "cmd_play",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1341,7 +1599,7 @@
       "kind": "slash-command",
       "name": "search",
       "parent_command": null,
-      "line": 820,
+      "line": 851,
       "declaration": "cmd_search",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1352,7 +1610,7 @@
       "kind": "slash-command",
       "name": "pause",
       "parent_command": null,
-      "line": 844,
+      "line": 875,
       "declaration": "cmd_pause",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1363,7 +1621,7 @@
       "kind": "slash-command",
       "name": "resume",
       "parent_command": null,
-      "line": 860,
+      "line": 891,
       "declaration": "cmd_resume",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1374,7 +1632,7 @@
       "kind": "slash-command",
       "name": "skip",
       "parent_command": null,
-      "line": 876,
+      "line": 907,
       "declaration": "cmd_skip",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1385,7 +1643,7 @@
       "kind": "slash-command",
       "name": "stop",
       "parent_command": null,
-      "line": 915,
+      "line": 946,
       "declaration": "cmd_stop",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1396,7 +1654,7 @@
       "kind": "slash-command",
       "name": "seek",
       "parent_command": null,
-      "line": 939,
+      "line": 970,
       "declaration": "cmd_seek",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1407,7 +1665,7 @@
       "kind": "slash-command",
       "name": "autoplay",
       "parent_command": null,
-      "line": 965,
+      "line": 996,
       "declaration": "cmd_autoplay",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1418,7 +1676,7 @@
       "kind": "slash-command",
       "name": "queue",
       "parent_command": null,
-      "line": 978,
+      "line": 1009,
       "declaration": "cmd_queue",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1429,7 +1687,7 @@
       "kind": "slash-command",
       "name": "nowplaying",
       "parent_command": null,
-      "line": 998,
+      "line": 1029,
       "declaration": "cmd_nowplaying",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1440,7 +1698,7 @@
       "kind": "slash-command",
       "name": "shuffle",
       "parent_command": null,
-      "line": 1027,
+      "line": 1058,
       "declaration": "cmd_shuffle",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1451,7 +1709,7 @@
       "kind": "slash-command",
       "name": "loop",
       "parent_command": null,
-      "line": 1043,
+      "line": 1074,
       "declaration": "cmd_loop",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1462,7 +1720,7 @@
       "kind": "slash-command",
       "name": "volume",
       "parent_command": null,
-      "line": 1062,
+      "line": 1093,
       "declaration": "cmd_volume",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1473,7 +1731,7 @@
       "kind": "slash-command",
       "name": "claimmaster",
       "parent_command": null,
-      "line": 1085,
+      "line": 1116,
       "declaration": "cmd_claimmaster",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1484,7 +1742,7 @@
       "kind": "slash-command",
       "name": "masters",
       "parent_command": null,
-      "line": 1129,
+      "line": 1160,
       "declaration": "cmd_masters",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
@@ -1495,10 +1753,19 @@
       "kind": "slash-command",
       "name": "disconnect",
       "parent_command": null,
-      "line": 1160,
+      "line": 1191,
       "declaration": "cmd_disconnect",
       "decorator": "bot.tree.command",
       "detection": "python-ast-decorator",
+      "resolution": "literal"
+    },
+    {
+      "file": "apps/bots/music-py/src/main.py",
+      "kind": "asset flow",
+      "name": "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif",
+      "line": 783,
+      "declaration": "string-literal-reference",
+      "detection": "python-ast-asset-reference",
       "resolution": "literal"
     },
     {
@@ -1753,8 +2020,8 @@
           "slash-command": 9,
           "subcommand": 3
         },
-        "symbols_with_exact_name_candidates": 3,
-        "symbols_without_exact_name_candidates": 9
+        "symbols_with_exact_name_candidates": 10,
+        "symbols_without_exact_name_candidates": 2
       },
       "excluded_counts": {
         "dependency-build-cache-or-agent-state": 6998,
@@ -1884,8 +2151,20 @@
               "description": "Shows Cipher status, uptime, and library details.",
               "detection": "typescript-ast-command-data-object",
               "resolution": "literal",
-              "target_candidates": [],
-              "parity_status": "no-exact-name-target-candidate"
+              "target_candidates": [
+                {
+                  "file": "apps/bots/music-py/src/main.py",
+                  "kind": "slash-command",
+                  "name": "botinfo",
+                  "parent_command": null,
+                  "line": 793,
+                  "declaration": "common_botinfo",
+                  "decorator": "bot.tree.command",
+                  "detection": "python-ast-decorator",
+                  "resolution": "literal"
+                }
+              ],
+              "parity_status": "semantic-parity-unverified"
             }
           ],
           "options_excluded": 0,
@@ -1930,8 +2209,20 @@
               "description": "Replies with the Cipher bot latency.",
               "detection": "typescript-ast-command-data-object",
               "resolution": "literal",
-              "target_candidates": [],
-              "parity_status": "no-exact-name-target-candidate"
+              "target_candidates": [
+                {
+                  "file": "apps/bots/music-py/src/main.py",
+                  "kind": "slash-command",
+                  "name": "ping",
+                  "parent_command": null,
+                  "line": 788,
+                  "declaration": "common_ping",
+                  "decorator": "bot.tree.command",
+                  "detection": "python-ast-decorator",
+                  "resolution": "literal"
+                }
+              ],
+              "parity_status": "semantic-parity-unverified"
             }
           ],
           "options_excluded": 0,
@@ -1959,7 +2250,7 @@
                   "kind": "slash-command",
                   "name": "referral",
                   "parent_command": null,
-                  "line": 71,
+                  "line": 66,
                   "declaration": "commerceCommandDefinitions",
                   "description": "Referral link generation and reward tracking",
                   "detection": "typescript-ast-literal-builder",
@@ -1977,8 +2268,20 @@
               "description": "Get your personal referral link (up to 5 confirmed referrals a month)",
               "detection": "typescript-ast-command-data-object",
               "resolution": "literal",
-              "target_candidates": [],
-              "parity_status": "no-exact-name-target-candidate"
+              "target_candidates": [
+                {
+                  "file": "apps/bots/commerce/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "link",
+                  "parent_command": "referral",
+                  "line": 70,
+                  "declaration": "commerceCommandDefinitions",
+                  "description": "Get your unique referral code and link",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                }
+              ],
+              "parity_status": "semantic-parity-unverified"
             },
             {
               "kind": "subcommand",
@@ -1994,10 +2297,21 @@
                   "file": "apps/bots/commerce/src/commands.ts",
                   "kind": "subcommand",
                   "name": "status",
-                  "parent_command": "order",
-                  "line": 50,
+                  "parent_command": "orders",
+                  "line": 47,
                   "declaration": "commerceCommandDefinitions",
                   "description": "Check the status of an existing order",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
+                {
+                  "file": "apps/bots/commerce/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "status",
+                  "parent_command": "referral",
+                  "line": 73,
+                  "declaration": "commerceCommandDefinitions",
+                  "description": "View referral stats and current month rewards",
                   "detection": "typescript-ast-literal-builder",
                   "resolution": "literal"
                 },
@@ -2024,8 +2338,20 @@
               "description": "Spend a ready reward on one discounted service",
               "detection": "typescript-ast-command-data-object",
               "resolution": "literal",
-              "target_candidates": [],
-              "parity_status": "no-exact-name-target-candidate"
+              "target_candidates": [
+                {
+                  "file": "apps/bots/commerce/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "redeem",
+                  "parent_command": "referral",
+                  "line": 71,
+                  "declaration": "commerceCommandDefinitions",
+                  "description": "Apply a referral code to your future order",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                }
+              ],
+              "parity_status": "semantic-parity-unverified"
             }
           ],
           "options_excluded": 2,
@@ -2385,8 +2711,20 @@
               "description": "Hu Tao presents Royal Paradise — premium services, zero funerals (this week).",
               "detection": "typescript-ast-command-data-object",
               "resolution": "literal",
-              "target_candidates": [],
-              "parity_status": "no-exact-name-target-candidate"
+              "target_candidates": [
+                {
+                  "file": "apps/bots/music-py/src/main.py",
+                  "kind": "slash-command",
+                  "name": "about",
+                  "parent_command": null,
+                  "line": 799,
+                  "declaration": "common_about",
+                  "decorator": "bot.tree.command",
+                  "detection": "python-ast-decorator",
+                  "resolution": "literal"
+                }
+              ],
+              "parity_status": "semantic-parity-unverified"
             }
           ],
           "options_excluded": 0,
@@ -2408,8 +2746,20 @@
               "description": "Shows status, uptime, and library details of Hu Tao.",
               "detection": "typescript-ast-command-data-object",
               "resolution": "literal",
-              "target_candidates": [],
-              "parity_status": "no-exact-name-target-candidate"
+              "target_candidates": [
+                {
+                  "file": "apps/bots/music-py/src/main.py",
+                  "kind": "slash-command",
+                  "name": "botinfo",
+                  "parent_command": null,
+                  "line": 793,
+                  "declaration": "common_botinfo",
+                  "decorator": "bot.tree.command",
+                  "detection": "python-ast-decorator",
+                  "resolution": "literal"
+                }
+              ],
+              "parity_status": "semantic-parity-unverified"
             }
           ],
           "options_excluded": 0,
@@ -2466,8 +2816,20 @@
               "description": "Replies with the bot latency — quick as a dispatched spirit.",
               "detection": "typescript-ast-command-data-object",
               "resolution": "literal",
-              "target_candidates": [],
-              "parity_status": "no-exact-name-target-candidate"
+              "target_candidates": [
+                {
+                  "file": "apps/bots/music-py/src/main.py",
+                  "kind": "slash-command",
+                  "name": "ping",
+                  "parent_command": null,
+                  "line": 788,
+                  "declaration": "common_ping",
+                  "decorator": "bot.tree.command",
+                  "detection": "python-ast-decorator",
+                  "resolution": "literal"
+                }
+              ],
+              "parity_status": "semantic-parity-unverified"
             }
           ],
           "options_excluded": 0,
@@ -2779,8 +3141,8 @@
           "slash-command": 51,
           "subcommand": 34
         },
-        "symbols_with_exact_name_candidates": 47,
-        "symbols_without_exact_name_candidates": 38
+        "symbols_with_exact_name_candidates": 50,
+        "symbols_without_exact_name_candidates": 35
       },
       "excluded_counts": {
         "dependency-build-cache-or-agent-state": 32491,
@@ -3064,6 +3426,17 @@
                   "description": null,
                   "detection": "typescript-ast-builder-helper-static-argument",
                   "resolution": "literal"
+                },
+                {
+                  "file": "apps/bots/himiko/src/community-commands.ts",
+                  "kind": "slash-command",
+                  "name": "testwelcome",
+                  "parent_command": null,
+                  "line": 33,
+                  "declaration": "simple",
+                  "description": null,
+                  "detection": "typescript-ast-builder-helper-static-argument",
+                  "resolution": "literal"
                 }
               ],
               "parity_status": "semantic-parity-unverified"
@@ -3089,8 +3462,20 @@
               "description": "Preview the leave message",
               "detection": "typescript-ast-literal-builder",
               "resolution": "literal",
-              "target_candidates": [],
-              "parity_status": "no-exact-name-target-candidate"
+              "target_candidates": [
+                {
+                  "file": "apps/bots/ai/src/tts.ts",
+                  "kind": "slash-command",
+                  "name": "leave",
+                  "parent_command": null,
+                  "line": 29,
+                  "declaration": "ttsCommandDefinitions",
+                  "description": "Leave the active Cyrene voice session",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                }
+              ],
+              "parity_status": "semantic-parity-unverified"
             }
           ],
           "options_excluded": 0,
@@ -3181,7 +3566,7 @@
                   "kind": "slash-command",
                   "name": "ask",
                   "parent_command": null,
-                  "line": 35,
+                  "line": 36,
                   "declaration": "aiCommandDefinitions",
                   "description": "Chat with the AI assistant",
                   "detection": "typescript-ast-literal-builder",
@@ -3239,7 +3624,7 @@
                   "kind": "slash-command",
                   "name": "model",
                   "parent_command": null,
-                  "line": 79,
+                  "line": 80,
                   "declaration": "aiCommandDefinitions",
                   "description": "View AI provider configuration and router status",
                   "detection": "typescript-ast-literal-builder",
@@ -3274,7 +3659,7 @@
                   "kind": "slash-command",
                   "name": "reset",
                   "parent_command": null,
-                  "line": 68,
+                  "line": 69,
                   "declaration": "aiCommandDefinitions",
                   "description": "Reset your conversation history and persistent bot memory",
                   "detection": "typescript-ast-literal-builder",
@@ -3309,9 +3694,9 @@
                   "kind": "slash-command",
                   "name": "speak",
                   "parent_command": null,
-                  "line": 18,
+                  "line": 14,
                   "declaration": "ttsCommandDefinitions",
-                  "description": "Speak text in your voice channel (Cyrene TTS)",
+                  "description": "Create and attach a Cyrene voice file",
                   "detection": "typescript-ast-literal-builder",
                   "resolution": "literal"
                 }
@@ -3516,7 +3901,7 @@
                   "kind": "slash-command",
                   "name": "cardadmin",
                   "parent_command": null,
-                  "line": 225,
+                  "line": 229,
                   "declaration": "simple",
                   "description": null,
                   "detection": "typescript-ast-builder-helper-static-argument",
@@ -3540,7 +3925,7 @@
                   "kind": "subcommand",
                   "name": "issue",
                   "parent_command": "cardadmin",
-                  "line": 242,
+                  "line": 246,
                   "declaration": "commandDefinitions",
                   "description": "Issue a card subject to supply",
                   "detection": "typescript-ast-literal-builder",
@@ -3564,7 +3949,7 @@
                   "kind": "subcommand",
                   "name": "revoke",
                   "parent_command": "cardadmin",
-                  "line": 253,
+                  "line": 257,
                   "declaration": "commandDefinitions",
                   "description": "Revoke an unreserved card instance",
                   "detection": "typescript-ast-literal-builder",
@@ -3809,7 +4194,7 @@
                   "kind": "slash-command",
                   "name": "market",
                   "parent_command": null,
-                  "line": 142,
+                  "line": 146,
                   "declaration": "simple",
                   "description": null,
                   "detection": "typescript-ast-builder-helper-static-argument",
@@ -3890,7 +4275,7 @@
                   "kind": "slash-command",
                   "name": "play",
                   "parent_command": null,
-                  "line": 776,
+                  "line": 807,
                   "declaration": "cmd_play",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -3995,7 +4380,7 @@
                   "kind": "slash-command",
                   "name": "trade",
                   "parent_command": null,
-                  "line": 158,
+                  "line": 162,
                   "declaration": "simple",
                   "description": null,
                   "detection": "typescript-ast-builder-helper-static-argument",
@@ -4019,7 +4404,7 @@
                   "kind": "subcommand",
                   "name": "offer",
                   "parent_command": "trade",
-                  "line": 160,
+                  "line": 164,
                   "declaration": "commandDefinitions",
                   "description": "Offer cards and berries",
                   "detection": "typescript-ast-literal-builder",
@@ -4043,7 +4428,7 @@
                   "kind": "subcommand",
                   "name": "accept",
                   "parent_command": "trade",
-                  "line": 202,
+                  "line": 206,
                   "declaration": "commandDefinitions",
                   "description": "Accept an offer addressed to you",
                   "detection": "typescript-ast-literal-builder",
@@ -4067,7 +4452,7 @@
                   "kind": "subcommand",
                   "name": "cancel",
                   "parent_command": "trade",
-                  "line": 214,
+                  "line": 218,
                   "declaration": "commandDefinitions",
                   "description": "Cancel or reject an offer",
                   "detection": "typescript-ast-literal-builder",
@@ -4102,7 +4487,7 @@
                   "kind": "slash-command",
                   "name": "trades",
                   "parent_command": null,
-                  "line": 150,
+                  "line": 154,
                   "declaration": "simple",
                   "description": null,
                   "detection": "typescript-ast-builder-helper-static-argument",
@@ -4354,6 +4739,17 @@
                   "description": null,
                   "detection": "typescript-ast-builder-helper-static-argument",
                   "resolution": "literal"
+                },
+                {
+                  "file": "apps/bots/himiko/src/community-commands.ts",
+                  "kind": "slash-command",
+                  "name": "leaderboard",
+                  "parent_command": null,
+                  "line": 65,
+                  "declaration": "simple",
+                  "description": null,
+                  "detection": "typescript-ast-builder-helper-static-argument",
+                  "resolution": "literal"
                 }
               ],
               "parity_status": "semantic-parity-unverified"
@@ -4420,6 +4816,17 @@
                   "name": "setlevelchannel",
                   "parent_command": null,
                   "line": 90,
+                  "declaration": "simple",
+                  "description": null,
+                  "detection": "typescript-ast-builder-helper-static-argument",
+                  "resolution": "literal"
+                },
+                {
+                  "file": "apps/bots/himiko/src/community-commands.ts",
+                  "kind": "slash-command",
+                  "name": "setlevelchannel",
+                  "parent_command": null,
+                  "line": 58,
                   "declaration": "simple",
                   "description": null,
                   "detection": "typescript-ast-builder-helper-static-argument",
@@ -4553,11 +4960,22 @@
               "resolution": "literal",
               "target_candidates": [
                 {
+                  "file": "apps/bots/ai/src/tts.ts",
+                  "kind": "slash-command",
+                  "name": "search",
+                  "parent_command": null,
+                  "line": 33,
+                  "declaration": "ttsCommandDefinitions",
+                  "description": "Search the configured Cyrene search source",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
+                {
                   "file": "apps/bots/music-py/src/main.py",
                   "kind": "slash-command",
                   "name": "search",
                   "parent_command": null,
-                  "line": 820,
+                  "line": 851,
                   "declaration": "cmd_search",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -4837,9 +5255,20 @@
                   "kind": "slash-command",
                   "name": "ban",
                   "parent_command": null,
-                  "line": 43,
+                  "line": 68,
                   "declaration": "moderationCommandDefinitions",
                   "description": "Ban a user from the guild",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
+                {
+                  "file": "apps/bots/moderation/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "ban",
+                  "parent_command": "temp",
+                  "line": 105,
+                  "declaration": "moderationCommandDefinitions",
+                  "description": "Temporarily ban a user",
                   "detection": "typescript-ast-literal-builder",
                   "resolution": "literal"
                 }
@@ -4889,8 +5318,20 @@
               "description": "Timeout a member",
               "detection": "typescript-ast-literal-builder",
               "resolution": "literal",
-              "target_candidates": [],
-              "parity_status": "no-exact-name-target-candidate"
+              "target_candidates": [
+                {
+                  "file": "apps/bots/moderation/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "mute",
+                  "parent_command": "temp",
+                  "line": 109,
+                  "declaration": "moderationCommandDefinitions",
+                  "description": "Temporarily mute a member",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                }
+              ],
+              "parity_status": "semantic-parity-unverified"
             }
           ],
           "options_excluded": 3,
@@ -4918,7 +5359,7 @@
                   "kind": "slash-command",
                   "name": "purge",
                   "parent_command": null,
-                  "line": 79,
+                  "line": 124,
                   "declaration": "moderationCommandDefinitions",
                   "description": "Bulk delete recent messages in this channel",
                   "detection": "typescript-ast-literal-builder",
@@ -4989,7 +5430,7 @@
                   "kind": "slash-command",
                   "name": "unban",
                   "parent_command": null,
-                  "line": 57,
+                  "line": 82,
                   "declaration": "moderationCommandDefinitions",
                   "description": "Unban a previously banned user by ID",
                   "detection": "typescript-ast-literal-builder",
@@ -5047,9 +5488,9 @@
                   "kind": "slash-command",
                   "name": "warn",
                   "parent_command": null,
-                  "line": 36,
+                  "line": 57,
                   "declaration": "moderationCommandDefinitions",
-                  "description": "Issue a formal warning to a guild member",
+                  "description": "Issue or remove a formal warning",
                   "detection": "typescript-ast-literal-builder",
                   "resolution": "literal"
                 }
@@ -5066,6 +5507,17 @@
               "detection": "typescript-ast-literal-builder",
               "resolution": "literal",
               "target_candidates": [
+                {
+                  "file": "apps/bots/moderation/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "add",
+                  "parent_command": "warn",
+                  "line": 61,
+                  "declaration": "moderationCommandDefinitions",
+                  "description": "Issue a formal warning to a member",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
                 {
                   "file": "apps/bots/security/src/commands.ts",
                   "kind": "subcommand",
@@ -5090,6 +5542,28 @@
               "detection": "typescript-ast-literal-builder",
               "resolution": "literal",
               "target_candidates": [
+                {
+                  "file": "apps/bots/moderation/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "remove",
+                  "parent_command": "warn",
+                  "line": 64,
+                  "declaration": "moderationCommandDefinitions",
+                  "description": "Remove a warning by case ID",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
+                {
+                  "file": "apps/bots/moderation/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "remove",
+                  "parent_command": "timeout",
+                  "line": 97,
+                  "declaration": "moderationCommandDefinitions",
+                  "description": "Remove an active member timeout",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
                 {
                   "file": "apps/bots/security/src/commands.ts",
                   "kind": "subcommand",
@@ -5390,10 +5864,21 @@
                   "file": "apps/bots/commerce/src/commands.ts",
                   "kind": "subcommand",
                   "name": "status",
-                  "parent_command": "order",
-                  "line": 50,
+                  "parent_command": "orders",
+                  "line": 47,
                   "declaration": "commerceCommandDefinitions",
                   "description": "Check the status of an existing order",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
+                {
+                  "file": "apps/bots/commerce/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "status",
+                  "parent_command": "referral",
+                  "line": 73,
+                  "declaration": "commerceCommandDefinitions",
+                  "description": "View referral stats and current month rewards",
                   "detection": "typescript-ast-literal-builder",
                   "resolution": "literal"
                 },
@@ -5504,6 +5989,17 @@
               "detection": "typescript-ast-literal-builder",
               "resolution": "literal",
               "target_candidates": [
+                {
+                  "file": "apps/bots/commerce/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "list",
+                  "parent_command": "orders",
+                  "line": 39,
+                  "declaration": "commerceCommandDefinitions",
+                  "description": "List services available for orders",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
                 {
                   "file": "apps/bots/security/src/commands.ts",
                   "kind": "subcommand",
@@ -5646,6 +6142,17 @@
               "resolution": "literal",
               "target_candidates": [
                 {
+                  "file": "apps/bots/moderation/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "add",
+                  "parent_command": "warn",
+                  "line": 61,
+                  "declaration": "moderationCommandDefinitions",
+                  "description": "Issue a formal warning to a member",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
+                {
                   "file": "apps/bots/security/src/commands.ts",
                   "kind": "subcommand",
                   "name": "add",
@@ -5669,6 +6176,28 @@
               "detection": "typescript-ast-literal-builder",
               "resolution": "literal",
               "target_candidates": [
+                {
+                  "file": "apps/bots/moderation/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "remove",
+                  "parent_command": "warn",
+                  "line": 64,
+                  "declaration": "moderationCommandDefinitions",
+                  "description": "Remove a warning by case ID",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
+                {
+                  "file": "apps/bots/moderation/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "remove",
+                  "parent_command": "timeout",
+                  "line": 97,
+                  "declaration": "moderationCommandDefinitions",
+                  "description": "Remove an active member timeout",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
                 {
                   "file": "apps/bots/security/src/commands.ts",
                   "kind": "subcommand",
@@ -5720,10 +6249,21 @@
                   "file": "apps/bots/commerce/src/commands.ts",
                   "kind": "subcommand",
                   "name": "status",
-                  "parent_command": "order",
-                  "line": 50,
+                  "parent_command": "orders",
+                  "line": 47,
                   "declaration": "commerceCommandDefinitions",
                   "description": "Check the status of an existing order",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
+                {
+                  "file": "apps/bots/commerce/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "status",
+                  "parent_command": "referral",
+                  "line": 73,
+                  "declaration": "commerceCommandDefinitions",
+                  "description": "View referral stats and current month rewards",
                   "detection": "typescript-ast-literal-builder",
                   "resolution": "literal"
                 },
@@ -8550,8 +9090,20 @@
               "description": "Show version and status for this bot",
               "detection": "typescript-ast-literal-builder",
               "resolution": "literal",
-              "target_candidates": [],
-              "parity_status": "no-exact-name-target-candidate"
+              "target_candidates": [
+                {
+                  "file": "apps/bots/music-py/src/main.py",
+                  "kind": "slash-command",
+                  "name": "about",
+                  "parent_command": null,
+                  "line": 799,
+                  "declaration": "common_about",
+                  "decorator": "bot.tree.command",
+                  "detection": "python-ast-decorator",
+                  "resolution": "literal"
+                }
+              ],
+              "parity_status": "semantic-parity-unverified"
             }
           ],
           "options_excluded": 0,
@@ -9473,7 +10025,7 @@
                   "kind": "slash-command",
                   "name": "play",
                   "parent_command": null,
-                  "line": 776,
+                  "line": 807,
                   "declaration": "cmd_play",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9497,7 +10049,7 @@
                   "kind": "slash-command",
                   "name": "pause",
                   "parent_command": null,
-                  "line": 844,
+                  "line": 875,
                   "declaration": "cmd_pause",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9521,7 +10073,7 @@
                   "kind": "slash-command",
                   "name": "resume",
                   "parent_command": null,
-                  "line": 860,
+                  "line": 891,
                   "declaration": "cmd_resume",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9545,7 +10097,7 @@
                   "kind": "slash-command",
                   "name": "skip",
                   "parent_command": null,
-                  "line": 876,
+                  "line": 907,
                   "declaration": "cmd_skip",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9569,7 +10121,7 @@
                   "kind": "slash-command",
                   "name": "stop",
                   "parent_command": null,
-                  "line": 915,
+                  "line": 946,
                   "declaration": "cmd_stop",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9593,7 +10145,7 @@
                   "kind": "slash-command",
                   "name": "queue",
                   "parent_command": null,
-                  "line": 978,
+                  "line": 1009,
                   "declaration": "cmd_queue",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9617,7 +10169,7 @@
                   "kind": "slash-command",
                   "name": "nowplaying",
                   "parent_command": null,
-                  "line": 998,
+                  "line": 1029,
                   "declaration": "cmd_nowplaying",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9641,7 +10193,7 @@
                   "kind": "slash-command",
                   "name": "shuffle",
                   "parent_command": null,
-                  "line": 1027,
+                  "line": 1058,
                   "declaration": "cmd_shuffle",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9665,7 +10217,7 @@
                   "kind": "slash-command",
                   "name": "loop",
                   "parent_command": null,
-                  "line": 1043,
+                  "line": 1074,
                   "declaration": "cmd_loop",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9689,7 +10241,7 @@
                   "kind": "slash-command",
                   "name": "volume",
                   "parent_command": null,
-                  "line": 1062,
+                  "line": 1093,
                   "declaration": "cmd_volume",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9713,7 +10265,7 @@
                   "kind": "slash-command",
                   "name": "seek",
                   "parent_command": null,
-                  "line": 939,
+                  "line": 970,
                   "declaration": "cmd_seek",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9737,7 +10289,7 @@
                   "kind": "slash-command",
                   "name": "autoplay",
                   "parent_command": null,
-                  "line": 965,
+                  "line": 996,
                   "declaration": "cmd_autoplay",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9761,7 +10313,7 @@
                   "kind": "slash-command",
                   "name": "claimmaster",
                   "parent_command": null,
-                  "line": 1085,
+                  "line": 1116,
                   "declaration": "cmd_claimmaster",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9809,7 +10361,7 @@
                   "kind": "slash-command",
                   "name": "masters",
                   "parent_command": null,
-                  "line": 1129,
+                  "line": 1160,
                   "declaration": "cmd_masters",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",
@@ -9828,6 +10380,28 @@
               "detection": "python-ast-decorator",
               "resolution": "literal",
               "target_candidates": [
+                {
+                  "file": "apps/bots/moderation/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "remove",
+                  "parent_command": "warn",
+                  "line": 64,
+                  "declaration": "moderationCommandDefinitions",
+                  "description": "Remove a warning by case ID",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
+                {
+                  "file": "apps/bots/moderation/src/commands.ts",
+                  "kind": "subcommand",
+                  "name": "remove",
+                  "parent_command": "timeout",
+                  "line": 97,
+                  "declaration": "moderationCommandDefinitions",
+                  "description": "Remove an active member timeout",
+                  "detection": "typescript-ast-literal-builder",
+                  "resolution": "literal"
+                },
                 {
                   "file": "apps/bots/security/src/commands.ts",
                   "kind": "subcommand",
@@ -9857,7 +10431,7 @@
                   "kind": "slash-command",
                   "name": "disconnect",
                   "parent_command": null,
-                  "line": 1160,
+                  "line": 1191,
                   "declaration": "cmd_disconnect",
                   "decorator": "bot.tree.command",
                   "detection": "python-ast-decorator",

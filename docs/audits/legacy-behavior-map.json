@@ -11,10 +11,14 @@
       "sourceLine": 17,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Shows Cipher status, uptime, and library details.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/bot-ui/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/bot-ui/src/index.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Legacy Cipher status/uptime/library declaration is carried by the shared /botinfo. Evidence: \"common command list contains the three shared commands\"; \"common command replies use the configured image\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/commands/paymentqr.js|command||paymentqr|42",
@@ -24,10 +28,16 @@
       "sourceLine": 42,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Conjure a UPI payment QR for a Royal D. Paradise service — no sleight of hand.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/bots/commerce/src/commands.ts",
+        "apps/api/src/commerce-routes.ts"
+      ],
+      "testReferences": [
+        "apps/bots/commerce/src/commands.test.ts",
+        "tests/phase4/commerce.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/commands/ping.js|command||ping|5",
@@ -37,10 +47,14 @@
       "sourceLine": 5,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Replies with the Cipher bot latency.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/bot-ui/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/bot-ui/src/index.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Legacy latency reply is carried by the shared /ping. Evidence: \"common command list contains the three shared commands\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/commands/referral.js|command||referral|44",
@@ -54,11 +68,11 @@
         "apps/bots/commerce/src/commands.ts"
       ],
       "testReferences": [
-        "tests/phase4/commerce.test.mjs",
-        "tests/phase4/database.test.mjs"
+        "apps/bots/commerce/src/commands.test.ts",
+        "tests/phase4/commerce.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "Current /referral (link|status|redeem) preserves the 30-70% one-service reward flow. Evidence: \"a redeemed referral is attached to one order and consumed in the same transaction\"; phase4 \"monthly referral persist exactly once\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/commands/referral.js|command|referral|link|49",
@@ -68,10 +82,15 @@
       "sourceLine": 49,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Get your personal referral link (up to 5 confirmed referrals a month)",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/commerce/src/commands.ts"
+      ],
+      "testReferences": [
+        "tests/phase4/commerce.test.mjs",
+        "packages/modules/commerce/src/index.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Referral link issuance with the monthly cycle cap. Evidence: packages/modules/commerce \"formats YYYY-MM and expires across month boundary\"; phase4 monthly referral persist exactly once.",
       "parentCommand": "referral"
     },
     {
@@ -83,16 +102,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: See your referral cycle, pending reward and past redemptions",
       "targetPaths": [
-        "apps/bots/commerce/src/commands.ts",
-        "apps/bots/security/src/commands.ts"
+        "apps/bots/commerce/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs",
-        "tests/phase4/commerce.test.mjs",
-        "tests/phase4/database.test.mjs"
+        "apps/bots/commerce/src/commands.test.ts",
+        "tests/phase4/commerce.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Cycle/pending/redemption status is carried by /referral status. Evidence: phase4 \"monthly referral persist exactly once\"; commerce \"a redeemed referral is attached to one order and consumed in the same transaction\".",
       "parentCommand": "referral"
     },
     {
@@ -103,10 +120,14 @@
       "sourceLine": 59,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Spend a ready reward on one discounted service",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/commerce/src/commands.ts"
+      ],
+      "testReferences": [
+        "apps/bots/commerce/src/commands.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Reward redemption is carried by /referral redeem. Evidence: \"a redeemed referral is attached to one order and consumed in the same transaction\".",
       "parentCommand": "referral"
     },
     {
@@ -117,10 +138,14 @@
       "sourceLine": 134,
       "kind": "event",
       "expectedBehavior": "Inspect the error event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|event||shardError|138",
@@ -130,10 +155,14 @@
       "sourceLine": 138,
       "kind": "event",
       "expectedBehavior": "Inspect the shardError event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|event||disconnect|142",
@@ -143,10 +172,14 @@
       "sourceLine": 142,
       "kind": "event",
       "expectedBehavior": "Inspect the disconnect event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|event||close|148",
@@ -156,10 +189,14 @@
       "sourceLine": 148,
       "kind": "event",
       "expectedBehavior": "Inspect the close event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|event||ready|158",
@@ -169,10 +206,15 @@
       "sourceLine": 158,
       "kind": "event",
       "expectedBehavior": "Inspect the ready event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/runtime/dispatch.test.mjs",
+        "packages/flow/src/lifecycle.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "ClientReady verifies identity, registers guild commands and leaves unapproved guilds. Evidence: dispatch \"guild rejection replies ephemerally without acknowledging or running\"; lifecycle \"rejects unapproved guilds before side effects\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|event||guildCreate|190",
@@ -182,10 +224,14 @@
       "sourceLine": 190,
       "kind": "event",
       "expectedBehavior": "Inspect the guildCreate event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/flow/src/lifecycle.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "GuildCreate leaves unapproved guilds on join. Evidence: lifecycle \"rejects unapproved guilds before side effects\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|event||interactionCreate|205",
@@ -195,10 +241,15 @@
       "sourceLine": 205,
       "kind": "event",
       "expectedBehavior": "Inspect the interactionCreate event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "packages/flow/src/discord-dispatch.ts",
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "verified",
+      "decisionReason": "InteractionCreate dispatches through @ei-point/flow with admission, claims and response policy. Evidence: \"identity and operation select reply visibility for the whole lifecycle\"; \"duplicate_interaction_is_refused_while_in_flight\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|route||GET /|503",
@@ -208,10 +259,14 @@
       "sourceLine": 503,
       "kind": "route",
       "expectedBehavior": "Inspect GET / for request validation, authorization, response, persistence, and error behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/app.ts"
+      ],
+      "testReferences": [
+        "tests/operations/release.test.mjs"
+      ],
+      "status": "verified",
+      "decisionReason": "Liveness is served by the API health endpoints (GET /healthz plus per-bot /health/live). Evidence: \"readiness rejects alive-only, disconnected, false and misleading string payloads\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|route||GET /api/diagnostics|510",
@@ -221,10 +276,15 @@
       "sourceLine": 510,
       "kind": "route",
       "expectedBehavior": "Inspect GET /api/diagnostics for request validation, authorization, response, persistence, and error behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/app.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/dashboard.test.ts",
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|route||POST /api/payments/upi-qr|521",
@@ -234,10 +294,15 @@
       "sourceLine": 521,
       "kind": "route",
       "expectedBehavior": "Inspect POST /api/payments/upi-qr for request validation, authorization, response, persistence, and error behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/commerce-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/commerce-routes.test.ts",
+        "tests/phase4/commerce.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|route||POST /api/payments/claim|624",
@@ -247,10 +312,15 @@
       "sourceLine": 624,
       "kind": "route",
       "expectedBehavior": "Inspect POST /api/payments/claim for request validation, authorization, response, persistence, and error behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/commerce-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/commerce-routes.test.ts",
+        "tests/phase4/commerce.test.mjs"
+      ],
+      "status": "verified",
+      "decisionReason": "Claim route preserved at the same path with proof/expiry/idempotency guards. Evidence: \"lost create response recovers only with original client secret\"; phase4 \"proof reuse rolls back second claim, expired orders reject proofs\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|route||GET /api/payments/status/:orderId|670",
@@ -260,10 +330,14 @@
       "sourceLine": 670,
       "kind": "route",
       "expectedBehavior": "Inspect GET /api/payments/status/:orderId for request validation, authorization, response, persistence, and error behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/commerce-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/commerce-routes.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Status route preserved with minimized public projection. Evidence: \"public RP status excludes buyer and proof and maps settled to confirmed\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/src/index.js|route||GET /api/referrals/validate/:code|702",
@@ -273,10 +347,14 @@
       "sourceLine": 702,
       "kind": "route",
       "expectedBehavior": "Inspect GET /api/referrals/validate/:code for request validation, authorization, response, persistence, and error behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/commands.ts"
+      ],
+      "testReferences": [
+        "apps/bots/commerce/src/commands.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/test/api.test.js|event||data|79",
@@ -286,10 +364,15 @@
       "sourceLine": 79,
       "kind": "event",
       "expectedBehavior": "Inspect the data event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/commerce-routes.test.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/commerce-routes.test.ts",
+        "tests/phase4/commerce.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/test/api.test.js|event||end|80",
@@ -299,10 +382,15 @@
       "sourceLine": 80,
       "kind": "event",
       "expectedBehavior": "Inspect the end event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/commerce-routes.test.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/commerce-routes.test.ts",
+        "tests/phase4/commerce.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/test/api.test.js|event||error|91",
@@ -312,10 +400,15 @@
       "sourceLine": 91,
       "kind": "event",
       "expectedBehavior": "Inspect the error event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/commerce-routes.test.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/commerce-routes.test.ts",
+        "tests/phase4/commerce.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/test/api.test.js|event||data|124",
@@ -325,10 +418,15 @@
       "sourceLine": 124,
       "kind": "event",
       "expectedBehavior": "Inspect the data event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/commerce-routes.test.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/commerce-routes.test.ts",
+        "tests/phase4/commerce.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/test/api.test.js|event||end|125",
@@ -338,10 +436,15 @@
       "sourceLine": 125,
       "kind": "event",
       "expectedBehavior": "Inspect the end event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/commerce-routes.test.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/commerce-routes.test.ts",
+        "tests/phase4/commerce.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/cipher/test/api.test.js|event||error|140",
@@ -351,10 +454,15 @@
       "sourceLine": 140,
       "kind": "event",
       "expectedBehavior": "Inspect the error event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/commerce-routes.test.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/commerce-routes.test.ts",
+        "tests/phase4/commerce.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/commands/about.js|command||about|6",
@@ -364,10 +472,14 @@
       "sourceLine": 6,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Hu Tao presents Royal Paradise — premium services, zero funerals (this week).",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/bot-ui/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/bot-ui/src/index.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Legacy about declaration is carried by the shared /about. Evidence: \"common command list contains the three shared commands\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/commands/botinfo.js|command||botinfo|6",
@@ -377,10 +489,14 @@
       "sourceLine": 6,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Shows status, uptime, and library details of Hu Tao.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/bot-ui/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/bot-ui/src/index.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Legacy botinfo declaration is carried by the shared /botinfo. Evidence: \"common command list contains the three shared commands\"; \"common command replies use the configured image\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/commands/embed.js|command||embed|6",
@@ -393,9 +509,12 @@
       "targetPaths": [
         "apps/bots/himiko/src/commands.ts"
       ],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No directly associated executable acceptance test is mapped."
+      "testReferences": [
+        "packages/flow/src/embed-delivery.test.ts",
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Legacy embed builder (title/description/color, permission gate) is carried by Himiko /embed plus durable embed delivery. Evidence: \"valid staff embed send preserves Discord limits, disables mentions and uses stable nonce\"; \"embed delivery queues a durable job with pending status and never claims sent\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/commands/ping.js|command||ping|6",
@@ -405,10 +524,14 @@
       "sourceLine": 6,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Replies with the bot latency — quick as a dispatched spirit.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/bot-ui/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/bot-ui/src/index.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Legacy ping declaration is carried by the shared /ping. Evidence: \"common command list contains the three shared commands\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/commands/userinfo.js|command||userinfo|6",
@@ -418,10 +541,14 @@
       "sourceLine": 6,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Displays information about a server member.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/bot-ui/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/bot-ui/src/index.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/index.js|event||ready|90",
@@ -431,10 +558,15 @@
       "sourceLine": 90,
       "kind": "event",
       "expectedBehavior": "Inspect the ready event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/himiko/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/runtime/dispatch.test.mjs",
+        "packages/flow/src/lifecycle.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "ClientReady identity verification, registration and guild reconciliation carried by the Himiko bootstrap. Evidence: dispatch guild rejection test; lifecycle \"rejects unapproved guilds before side effects\". Event wiring traced to the current bot bootstrap; no direct unit test of the callback — acceptance for the surrounding mechanism: tests/runtime/dispatch.test.mjs and packages/flow/src/lifecycle.test.ts."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/index.js|event||guildCreate|120",
@@ -444,10 +576,14 @@
       "sourceLine": 120,
       "kind": "event",
       "expectedBehavior": "Inspect the guildCreate event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/himiko/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/flow/src/lifecycle.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "GuildCreate leaves unapproved guilds. Evidence: lifecycle \"rejects unapproved guilds before side effects\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/index.js|event||guildMemberAdd|140",
@@ -457,10 +593,16 @@
       "sourceLine": 140,
       "kind": "event",
       "expectedBehavior": "Inspect the guildMemberAdd event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/himiko/src/index.ts",
+        "apps/bots/himiko/src/delivery.ts"
+      ],
+      "testReferences": [
+        "tests/phase6/database.test.mjs",
+        "apps/bots/himiko/src/delivery.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Welcome-on-join is carried by Himiko's durable outbox delivery. Evidence: phase6 \"welcome and leave templates persist and deduplicate durable notifications\"; delivery \"announcement requires durable intent before sending and never replays a duplicate\". Bot-arrival announcement facet retired (see legacy-decisions B2)."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/index.js|event||interactionCreate|221",
@@ -470,10 +612,15 @@
       "sourceLine": 221,
       "kind": "event",
       "expectedBehavior": "Inspect the interactionCreate event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "packages/flow/src/discord-dispatch.ts",
+        "apps/bots/himiko/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "verified",
+      "decisionReason": "InteractionCreate dispatches through @ei-point/flow with admission, claims and response policy. Evidence: \"identity and operation select reply visibility for the whole lifecycle\"."
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/index.js|event||error|253",
@@ -483,10 +630,14 @@
       "sourceLine": 253,
       "kind": "event",
       "expectedBehavior": "Inspect the error event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/himiko/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/index.js|event||shardError|257",
@@ -496,10 +647,14 @@
       "sourceLine": 257,
       "kind": "event",
       "expectedBehavior": "Inspect the shardError event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/himiko/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/index.js|event||disconnect|261",
@@ -509,10 +664,14 @@
       "sourceLine": 261,
       "kind": "event",
       "expectedBehavior": "Inspect the disconnect event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/himiko/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "Ei Paradise.zip|Ei Paradise/bots/hu-tao/src/index.js|event||guildMemberUpdate|266",
@@ -522,10 +681,15 @@
       "sourceLine": 266,
       "kind": "event",
       "expectedBehavior": "Inspect the guildMemberUpdate event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/himiko/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/phase6/database.test.mjs",
+        "apps/bots/himiko/src/delivery.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/boahancock/src/commands/setleave.ts|command||setleave|11",
@@ -536,13 +700,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Set the channel and message sent when someone leaves",
       "targetPaths": [
-        "apps/bots/community/src/commands.ts"
+        "apps/bots/himiko/src/community-commands.ts"
       ],
       "testReferences": [
+        "apps/bots/himiko/src/community-commands.test.ts",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "Leave template setup carried by Himiko /setleave. Evidence: \"Himiko registers community setup, XP, and leaderboard commands\"; phase6 \"welcome and leave templates persist and deduplicate durable notifications\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/boahancock/src/commands/setwelcome.ts|command||setwelcome|11",
@@ -553,13 +718,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Set the channel and message sent when someone joins",
       "targetPaths": [
-        "apps/bots/community/src/commands.ts"
+        "apps/bots/himiko/src/community-commands.ts"
       ],
       "testReferences": [
+        "apps/bots/himiko/src/community-commands.test.ts",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "Welcome template setup carried by Himiko /setwelcome. Evidence: \"Himiko registers community setup, XP, and leaderboard commands\"; phase6 welcome/leave template test."
     },
     {
       "id": "EI-point.zip|EI-point/bots/boahancock/src/commands/testwelcome.ts|command||testwelcome|18",
@@ -570,13 +736,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Preview the join or leave message without anyone joining",
       "targetPaths": [
-        "apps/bots/community/src/commands.ts"
+        "apps/bots/himiko/src/community-commands.ts"
       ],
       "testReferences": [
+        "apps/bots/himiko/src/community-commands.test.ts",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "Template preview carried by Himiko /testwelcome. Evidence: \"Himiko registers community setup, XP, and leaderboard commands\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/boahancock/src/commands/testwelcome.ts|command|testwelcome|welcome|22",
@@ -586,10 +753,15 @@
       "sourceLine": 22,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Preview the join message",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/himiko/src/community-commands.ts"
+      ],
+      "testReferences": [
+        "apps/bots/himiko/src/community-commands.test.ts",
+        "tests/phase6/database.test.mjs"
+      ],
+      "status": "verified",
+      "decisionReason": "Welcome-preview facet carried by /testwelcome options. Evidence: \"Himiko registers community setup, XP, and leaderboard commands\".",
       "parentCommand": "testwelcome"
     },
     {
@@ -600,10 +772,15 @@
       "sourceLine": 23,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Preview the leave message",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/himiko/src/community-commands.ts"
+      ],
+      "testReferences": [
+        "apps/bots/himiko/src/community-commands.test.ts",
+        "tests/phase6/database.test.mjs"
+      ],
+      "status": "verified",
+      "decisionReason": "Leave-preview facet carried by /testwelcome options. Evidence: \"Himiko registers community setup, XP, and leaderboard commands\".",
       "parentCommand": "testwelcome"
     },
     {
@@ -614,10 +791,16 @@
       "sourceLine": 105,
       "kind": "event",
       "expectedBehavior": "Inspect the GuildMemberAdd event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/himiko/src/index.ts",
+        "apps/bots/himiko/src/delivery.ts"
+      ],
+      "testReferences": [
+        "tests/phase6/database.test.mjs",
+        "apps/bots/himiko/src/delivery.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Member-join welcome carried by Himiko durable delivery. Evidence: phase6 \"welcome and leave templates persist and deduplicate durable notifications\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/boahancock/src/index.ts|event||GuildMemberRemove|109",
@@ -627,10 +810,16 @@
       "sourceLine": 109,
       "kind": "event",
       "expectedBehavior": "Inspect the GuildMemberRemove event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/himiko/src/index.ts",
+        "apps/bots/himiko/src/delivery.ts"
+      ],
+      "testReferences": [
+        "tests/phase6/database.test.mjs",
+        "apps/bots/himiko/src/delivery.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Member-leave greeting carried by Himiko durable delivery. Evidence: phase6 welcome/leave template test."
     },
     {
       "id": "EI-point.zip|EI-point/bots/cyrene/src/commands/ask.ts|command||ask|5",
@@ -641,13 +830,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Ask the assistant anything",
       "targetPaths": [
-        "apps/bots/ai/src/commands.ts"
+        "apps/bots/ai/src/index.ts"
       ],
       "testReferences": [
+        "packages/modules/ai/src/index.test.ts",
         "tests/ai/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/cyrene/src/commands/cyrene.ts|command||cyrene|5",
@@ -657,10 +847,14 @@
       "sourceLine": 5,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Speak with Cyrene — a gentle keeper of memories",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/bots/ai/src/persona.ts"
+      ],
+      "testReferences": [
+        "apps/bots/ai/src/persona.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/cyrene/src/commands/model.ts|command||model|17",
@@ -671,13 +865,13 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show which model each command routes to, and whether its API key is configured",
       "targetPaths": [
-        "apps/bots/ai/src/commands.ts"
+        "apps/api/src/control-routes.ts"
       ],
       "testReferences": [
-        "tests/ai/database.test.mjs"
+        "apps/api/src/control-routes.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/cyrene/src/commands/reset.ts|command||reset|9",
@@ -688,13 +882,13 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Clear your stored AI conversation context",
       "targetPaths": [
-        "apps/bots/ai/src/commands.ts"
+        "packages/modules/ai/src/index.ts"
       ],
       "testReferences": [
-        "tests/ai/database.test.mjs"
+        "packages/modules/ai/src/index.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/cyrene/src/commands/speak.ts|command||speak|8",
@@ -708,10 +902,11 @@
         "apps/bots/ai/src/tts.ts"
       ],
       "testReferences": [
-        "tests/ai/database.test.mjs"
+        "apps/bots/ai/src/response-policy.test.ts",
+        "packages/modules/tts/src/index.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/speak synthesizes and attaches audio (voice clone + bounded queue). Evidence: \"every registered Cyrene command replies publicly\"; tts \"synthesizes through the injected provider\"; \"enforces the TTS deadline for a provider that ignores AbortSignal\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/cardadmin.ts|command||cardadmin|25",
@@ -725,10 +920,11 @@
         "apps/bots/community/src/commands.ts"
       ],
       "testReferences": [
+        "tests/runtime/dispatch.test.mjs",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/cardadmin.ts|command|cardadmin|issue|29",
@@ -742,10 +938,11 @@
         "apps/bots/community/src/commands.ts"
       ],
       "testReferences": [
+        "tests/runtime/dispatch.test.mjs",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "cardadmin"
     },
     {
@@ -760,10 +957,11 @@
         "apps/bots/community/src/commands.ts"
       ],
       "testReferences": [
+        "tests/runtime/dispatch.test.mjs",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "cardadmin"
     },
     {
@@ -778,10 +976,11 @@
         "apps/bots/community/src/commands.ts"
       ],
       "testReferences": [
-        "tests/phase6/database.test.mjs"
+        "tests/phase6/database.test.mjs",
+        "apps/bots/community/src/response-policy.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/cards.ts|command||cards|75",
@@ -795,10 +994,11 @@
         "apps/bots/community/src/commands.ts"
       ],
       "testReferences": [
-        "tests/phase6/database.test.mjs"
+        "tests/phase6/database.test.mjs",
+        "apps/bots/community/src/response-policy.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/cards carries collection inspection. Evidence: phase6 \"card inspection stays within the guild...\"; response-policy \"every registered SilverWolf command declares its reply visibility\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/cardstats.ts|command||cardstats|16",
@@ -812,10 +1012,11 @@
         "apps/bots/community/src/commands.ts"
       ],
       "testReferences": [
-        "tests/phase6/database.test.mjs"
+        "tests/phase6/database.test.mjs",
+        "apps/bots/community/src/response-policy.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/deck.ts|command||deck|6",
@@ -826,13 +1027,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show or reshuffle your deck",
       "targetPaths": [
-        "apps/bots/community/src/commands.ts"
+        "packages/modules/games/src/index.ts"
       ],
       "testReferences": [
+        "packages/modules/games/src/index.test.ts",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/hand.ts|command||hand|6",
@@ -843,13 +1045,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show the hand from your last round",
       "targetPaths": [
-        "apps/bots/community/src/commands.ts"
+        "packages/modules/games/src/index.ts"
       ],
       "testReferences": [
+        "packages/modules/games/src/index.test.ts",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/inventory.ts|command||inventory|5",
@@ -863,10 +1066,11 @@
         "apps/bots/community/src/commands.ts"
       ],
       "testReferences": [
-        "tests/phase6/database.test.mjs"
+        "tests/phase6/database.test.mjs",
+        "apps/bots/community/src/response-policy.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/inventory carries collection listing. Evidence: phase6 \"reserved cards cannot be listed or offered twice; cancellation releases them\"; response-policy SilverWolf surface test."
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/market.ts|command||market|12",
@@ -880,10 +1084,11 @@
         "apps/bots/community/src/commands.ts"
       ],
       "testReferences": [
-        "tests/phase6/database.test.mjs"
+        "tests/phase6/database.test.mjs",
+        "packages/modules/games/src/index.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "Legacy pack catalog is carried by /packs (the current /market is the listing marketplace, added per spec). Evidence: phase6 \"pack opening is priced by server, idempotent and enforces finite supply\"; games \"rarity buckets partition the unit interval\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/open.ts|command||open|18",
@@ -899,8 +1104,8 @@
       "testReferences": [
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/open carries pack opening. Evidence: \"pack opening is priced by server, idempotent and enforces finite supply\"; \"opening an unaffordable pack rolls back minted cards and supply counters\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/play.ts|command||play|6",
@@ -911,16 +1116,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Deal a round of five-card draw against the house",
       "targetPaths": [
-        "apps/bots/community/src/commands.ts",
-        "apps/bots/music-py/src/main.py"
+        "packages/modules/games/src/index.ts"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py",
+        "packages/modules/games/src/index.test.ts",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/score.ts|command||score|5",
@@ -931,13 +1134,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show your score and win/loss record",
       "targetPaths": [
-        "apps/bots/community/src/commands.ts"
+        "packages/modules/games/src/index.ts"
       ],
       "testReferences": [
+        "packages/modules/games/src/index.test.ts",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/sell.ts|command||sell|13",
@@ -953,8 +1157,8 @@
       "testReferences": [
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/sell carries card sales with listing cancel. Evidence: \"sell cancel is reachable, owner-scoped and race-safe against a concurrent buy\"; \"listing purchase has exactly one concurrent winner and conserves funds\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/trade.ts|command||trade|37",
@@ -970,8 +1174,8 @@
       "testReferences": [
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/trade carries card/berry exchange. Evidence: \"concurrent trade acceptance settles once with atomic card and currency exchange\"; \"expired trades release reservations and cannot be accepted\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/luffy/src/commands/trade.ts|command|trade|offer|41",
@@ -987,8 +1191,8 @@
       "testReferences": [
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Offer creation carried by /trade offer. Evidence: \"insufficient trade funds leave offered cards and trade pending\".",
       "parentCommand": "trade"
     },
     {
@@ -1005,8 +1209,8 @@
       "testReferences": [
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Acceptance carried by /trade accept. Evidence: \"concurrent trade acceptance settles once with atomic card and currency exchange\".",
       "parentCommand": "trade"
     },
     {
@@ -1023,8 +1227,8 @@
       "testReferences": [
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Cancellation carried by /trade cancel. Evidence: \"expired trades release reservations and cannot be accepted\".",
       "parentCommand": "trade"
     },
     {
@@ -1041,8 +1245,8 @@
       "testReferences": [
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/nami/src/commands/leaderboard.ts|command||leaderboard|11",
@@ -1053,13 +1257,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show the members with the most XP in this server",
       "targetPaths": [
-        "apps/bots/community/src/commands.ts"
+        "apps/bots/himiko/src/community-commands.ts"
       ],
       "testReferences": [
+        "apps/bots/himiko/src/community-commands.test.ts",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/leaderboard ranked XP board. Evidence: \"the leaderboard formats ranked member mentions\"; phase6 rank/level-up test."
     },
     {
       "id": "EI-point.zip|EI-point/bots/nami/src/commands/rank.ts|command||rank|9",
@@ -1070,13 +1275,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show XP, level, message count and voice time for a member",
       "targetPaths": [
-        "apps/bots/community/src/commands.ts"
+        "apps/bots/himiko/src/community-commands.ts"
       ],
       "testReferences": [
-        "tests/phase6/database.test.mjs"
+        "tests/phase6/database.test.mjs",
+        "apps/bots/himiko/src/community-commands.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/rank XP/level/message/voice stats. Evidence: phase6 \"rank returns the correct position and successful level-up is durable\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/nami/src/commands/setlevelchannel.ts|command||setlevelchannel|10",
@@ -1087,13 +1293,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Set the channel where level-up announcements are posted",
       "targetPaths": [
-        "apps/bots/community/src/commands.ts"
+        "apps/bots/himiko/src/community-commands.ts"
       ],
       "testReferences": [
+        "apps/bots/himiko/src/community-commands.test.ts",
         "tests/phase6/database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/setlevelchannel persisted level channel. Evidence: \"Himiko registers community setup, XP, and leaderboard commands\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/nami/src/index.ts|event||MessageCreate|118",
@@ -1103,10 +1310,15 @@
       "sourceLine": 118,
       "kind": "event",
       "expectedBehavior": "Inspect the MessageCreate event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/himiko/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/phase6/database.test.mjs",
+        "packages/modules/community/src/service.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Message XP award carried by the Himiko message handler. Evidence: phase6 \"concurrent XP events obey cooldown; duplicate delivery never awards twice\"; service \"text XP uses its amount and its per-source cooldown\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/nami/src/index.ts|event||VoiceStateUpdate|162",
@@ -1116,10 +1328,15 @@
       "sourceLine": 162,
       "kind": "event",
       "expectedBehavior": "Inspect the VoiceStateUpdate event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/himiko/src/voice-xp.ts"
+      ],
+      "testReferences": [
+        "apps/bots/himiko/src/voice-xp.test.ts",
+        "packages/modules/community/src/service.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Voice XP carried by Himiko's voice-XP pump over guild voice states. Evidence: \"voice XP requires a non-AFK channel with at least two human members\"; \"voice XP excludes bots, AFK members, and deafened members\"; service \"voice XP respects per-member cooldown and ignores an already-seen interval\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/niko-robin/src/commands/search.ts|command||search|5",
@@ -1130,14 +1347,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Ask the AI search assistant",
       "targetPaths": [
-        "apps/bots/music-py/src/main.py"
+        "apps/bots/ai/src/index.ts",
+        "apps/bots/ai/src/tts.ts"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py"
+        "apps/bots/ai/src/response-policy.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/sanji/src/commands/logconfig.ts|command||logconfig|17",
@@ -1147,10 +1364,15 @@
       "sourceLine": 17,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Choose which event categories are logged",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts",
+        "packages/modules/logging/src/index.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/sanji/src/commands/message.ts|command||message|11",
@@ -1160,10 +1382,16 @@
       "sourceLine": 11,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Look up stored message event logs",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/logging/src/index.ts",
+        "apps/bots/kafka/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/logging/src/index.test.ts",
+        "tests/phase6/database.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/sanji/src/commands/message.ts|command|message|logs|16",
@@ -1173,10 +1401,16 @@
       "sourceLine": 16,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show recent message edits and deletions",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "packages/modules/logging/src/index.ts",
+        "apps/bots/kafka/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/logging/src/index.test.ts",
+        "tests/phase6/database.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "message"
     },
     {
@@ -1187,10 +1421,16 @@
       "sourceLine": 11,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Look up non-message server event logs",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/logging/src/index.ts",
+        "apps/bots/kafka/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/logging/src/index.test.ts",
+        "tests/phase6/database.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/sanji/src/commands/other.ts|command|other|logs|16",
@@ -1200,10 +1440,16 @@
       "sourceLine": 16,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show recent member, channel, role, voice and moderation events",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "packages/modules/logging/src/index.ts",
+        "apps/bots/kafka/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/logging/src/index.test.ts",
+        "tests/phase6/database.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "other"
     },
     {
@@ -1214,10 +1460,14 @@
       "sourceLine": 8,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Set the channel where live log embeds are posted",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/shanks/src/commands/automode.ts|command||automode|8",
@@ -1227,10 +1477,14 @@
       "sourceLine": 8,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Configure AutoMod event logging",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/shanks/src/commands/automode.ts|command|automode|log|12",
@@ -1240,10 +1494,14 @@
       "sourceLine": 12,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Set the channel where AutoMod actions are logged",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "automode"
     },
     {
@@ -1258,10 +1516,11 @@
         "apps/bots/moderation/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "apps/bots/moderation/src/commands.test.ts",
+        "packages/modules/moderation/src/index.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/ban carry: durable intent before Discord action, one reply. Evidence: \"database intent failure prevents Discord sanction\"; \"durable intent precedes Discord and duplicate interactions never replay\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/shanks/src/commands/modrole.ts|command||modrole|7",
@@ -1271,10 +1530,16 @@
       "sourceLine": 7,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Set the role that may use moderation commands in this server",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/flow/src/controls.ts",
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "tests/controls/database.test.mjs",
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/shanks/src/commands/mute.ts|command||mute|8",
@@ -1284,10 +1549,15 @@
       "sourceLine": 8,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Timeout a member",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/bots/moderation/src/commands.ts"
+      ],
+      "testReferences": [
+        "apps/bots/moderation/src/commands.test.ts",
+        "packages/modules/moderation/src/index.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Legacy /mute is carried by /timeout apply (bounded duration). Evidence: module moderation \"accepts up to 28 days, rejects beyond\"; bots commands \"durable intent precedes Discord and duplicate interactions never replay\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/shanks/src/commands/purge.ts|command||purge|15",
@@ -1301,10 +1571,10 @@
         "apps/bots/moderation/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "packages/modules/moderation/src/index.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/purge bulk message removal. Evidence: \"plans bulk within limits\"; \"rejects bad counts, degrades old messages to manual\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/shanks/src/commands/purge.ts|command|purge|messages|19",
@@ -1314,10 +1584,14 @@
       "sourceLine": 19,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Delete recent messages",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/moderation/src/commands.ts"
+      ],
+      "testReferences": [
+        "packages/modules/moderation/src/index.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Message-purge facet carried by /purge. Evidence: \"plans bulk within limits\".",
       "parentCommand": "purge"
     },
     {
@@ -1328,10 +1602,14 @@
       "sourceLine": 30,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Kick every member with a role (dry run unless confirmed)",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/moderation/src/commands.ts"
+      ],
+      "testReferences": [
+        "packages/modules/moderation/src/index.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "purge"
     },
     {
@@ -1342,10 +1620,14 @@
       "sourceLine": 40,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Delete recent bot messages",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/moderation/src/commands.ts"
+      ],
+      "testReferences": [
+        "packages/modules/moderation/src/index.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "purge"
     },
     {
@@ -1360,10 +1642,11 @@
         "apps/bots/moderation/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "packages/modules/moderation/src/expiry.test.ts",
+        "tests/moderation/expiry-database.test.mjs"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/unban plus durable expiry retries. Evidence: \"failed unban retains expiry for a later retry\"; \"a newer ban supersedes the older temp ban so its expiry cannot remove the newer ban\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/shanks/src/commands/unmute.ts|command||unmute|8",
@@ -1373,10 +1656,14 @@
       "sourceLine": 8,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Remove a timeout from a member",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/bots/moderation/src/commands.ts"
+      ],
+      "testReferences": [
+        "apps/bots/moderation/src/commands.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Legacy /unmute is carried by /timeout remove. Evidence: \"timeout removal persists intent before clearing the Discord timeout\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/shanks/src/commands/warn.ts|command||warn|9",
@@ -1390,10 +1677,11 @@
         "apps/bots/moderation/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "apps/bots/moderation/src/commands.test.ts",
+        "packages/modules/moderation/src/index.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/warn add|remove with case records. Evidence: \"warn remove voids the guild-scoped warning and records the moderator reason atomically\"; \"denies without the exact scope\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/shanks/src/commands/warn.ts|command|warn|add|14",
@@ -1404,13 +1692,13 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Warn a member",
       "targetPaths": [
-        "apps/bots/security/src/commands.ts"
+        "apps/bots/moderation/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "apps/bots/moderation/src/commands.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Warn issuance. Evidence: \"durable intent precedes Discord and duplicate interactions never replay\".",
       "parentCommand": "warn"
     },
     {
@@ -1422,13 +1710,13 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Remove an active warning by its number",
       "targetPaths": [
-        "apps/bots/security/src/commands.ts"
+        "apps/bots/moderation/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "apps/bots/moderation/src/commands.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Warn removal. Evidence: \"warn remove voids the guild-scoped warning and records the moderator reason atomically\".",
       "parentCommand": "warn"
     },
     {
@@ -1439,10 +1727,14 @@
       "sourceLine": 28,
       "kind": "event",
       "expectedBehavior": "Inspect the AutoModerationActionExecution event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/zoro/src/commands/antinuke.ts|command||antinuke|8",
@@ -1452,10 +1744,16 @@
       "sourceLine": 8,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Enable or disable raid and permission-abuse protection",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/bots/kafka/src/index.ts",
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "packages/modules/security/src/index.test.ts",
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/zoro/src/commands/antinuke.ts|command|antinuke|enable|13",
@@ -1465,10 +1763,16 @@
       "sourceLine": 13,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Turn antinuke on",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/kafka/src/index.ts",
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "packages/modules/security/src/index.test.ts",
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "antinuke"
     },
     {
@@ -1479,10 +1783,16 @@
       "sourceLine": 25,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Turn antinuke off",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/kafka/src/index.ts",
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "packages/modules/security/src/index.test.ts",
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "antinuke"
     },
     {
@@ -1494,13 +1804,15 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Emergency server lockdown (Zoro)",
       "targetPaths": [
+        "apps/bots/security/src/lockdown.ts",
         "apps/bots/security/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "apps/bots/security/src/lockdown.test.ts",
+        "apps/bots/security/src/commands.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/security lockdown mode:on|off replaces the subcommand pair; durable recovery image first. Evidence: \"lockdown persists originals before effects and restores exact overwrite bits\"; \"partial Discord failure retains durable originals and never claims applied\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/zoro/src/commands/lockdown.ts|command|lockdown|on|12",
@@ -1510,10 +1822,15 @@
       "sourceLine": 12,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Lock the server down — raise verification + revoke @everyone send",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/security/src/lockdown.ts",
+        "apps/bots/security/src/commands.ts"
+      ],
+      "testReferences": [
+        "apps/bots/security/src/lockdown.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Apply-lockdown facet. Evidence: \"lockdown persists originals before effects and restores exact overwrite bits\".",
       "parentCommand": "lockdown"
     },
     {
@@ -1524,10 +1841,15 @@
       "sourceLine": 13,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Lift the lockdown Zoro applied",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/security/src/lockdown.ts",
+        "apps/bots/security/src/commands.ts"
+      ],
+      "testReferences": [
+        "apps/bots/security/src/lockdown.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Lift-lockdown facet with exact restore. Evidence: \"lockdown persists originals before effects and restores exact overwrite bits\"; \"missing recovery image fails closed\".",
       "parentCommand": "lockdown"
     },
     {
@@ -1538,10 +1860,14 @@
       "sourceLine": 14,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Security posture scan of this server (Zoro)",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/bots/security/src/commands.ts"
+      ],
+      "testReferences": [
+        "apps/bots/security/src/commands.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/zoro/src/commands/security.ts|command||security|31",
@@ -1555,10 +1881,11 @@
         "apps/bots/security/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "apps/bots/security/src/commands.test.ts",
+        "packages/modules/security/src/index.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/security status posture readout (lockdown state, scores, bands). Evidence: \"lockdown command cannot report engagement without a Discord executor\"; module \"starts at 100 and decays with violations\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/zoro/src/commands/security.ts|command|security|log|35",
@@ -1568,10 +1895,16 @@
       "sourceLine": 35,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show recent antinuke events for this server",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/security/src/commands.ts",
+        "apps/bots/kafka/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/security/src/index.test.ts",
+        "apps/bots/security/src/commands.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "/security incidents journal replaces the log view. Evidence: module \"flags threshold joins inside the window\"; \"bands map to the right actions\".",
       "parentCommand": "security"
     },
     {
@@ -1582,10 +1915,14 @@
       "sourceLine": 12,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Inspect or test the SLM content classifier (Zoro)",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/zoro/src/commands/slm.ts|command|slm|status|15",
@@ -1596,16 +1933,13 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show SLM configuration",
       "targetPaths": [
-        "apps/bots/commerce/src/commands.ts",
-        "apps/bots/security/src/commands.ts"
+        "apps/api/src/control-routes.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs",
-        "tests/phase4/commerce.test.mjs",
-        "tests/phase4/database.test.mjs"
+        "apps/api/src/control-routes.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "slm"
     },
     {
@@ -1616,10 +1950,14 @@
       "sourceLine": 17,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Classify a sample of text",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "slm"
     },
     {
@@ -1631,13 +1969,15 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Capture or restore server config snapshots (Zoro)",
       "targetPaths": [
+        "apps/bots/security/src/snapshot.ts",
         "apps/bots/security/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "apps/bots/security/src/snapshot.test.ts",
+        "apps/bots/security/src/commands.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "Snapshot capture/restore surface. Evidence: \"unsupported channel types and legacy snapshots are rejected before effects\"; \"recovery remaps roles, parent categories, channel overwrites and guild settings in order\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/zoro/src/commands/snapshot.ts|command|snapshot|capture|12",
@@ -1647,10 +1987,16 @@
       "sourceLine": 12,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Store a snapshot of roles + channels now",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/security/src/snapshot.ts",
+        "apps/bots/security/src/commands.ts"
+      ],
+      "testReferences": [
+        "packages/modules/security/src/index.test.ts",
+        "apps/bots/security/src/commands.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Capture carried by /security snapshot create (checksum-verified). Evidence: module \"checksum round-trips and detects tampering\"; bots \"Manage Server alone cannot execute snapshot restoration\".",
       "parentCommand": "snapshot"
     },
     {
@@ -1662,13 +2008,15 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Recreate any roles/channels missing from the latest snapshot",
       "targetPaths": [
+        "apps/bots/security/src/snapshot.ts",
         "apps/bots/security/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "apps/bots/security/src/snapshot.test.ts",
+        "apps/bots/security/src/commands.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Restore carried by /security snapshot restore (owner-only). Evidence: \"recovery remaps roles, parent categories, channel overwrites and guild settings in order\"; \"failed Discord create has no completion checkpoint or invented remapped id\"; \"Manage Server alone cannot execute snapshot restoration\".",
       "parentCommand": "snapshot"
     },
     {
@@ -1680,13 +2028,15 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show when the latest snapshot was taken",
       "targetPaths": [
+        "apps/bots/security/src/snapshot.ts",
         "apps/bots/security/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "apps/bots/security/src/commands.test.ts",
+        "packages/modules/security/src/index.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Listing carried by /security snapshot list. Evidence: \"owner gets a specific unsupported legacy snapshot result with no executor call\"; module \"restore plan recreates only missing entries\".",
       "parentCommand": "snapshot"
     },
     {
@@ -1697,10 +2047,15 @@
       "sourceLine": 9,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Inspect Zoro threat config and per-member trust (Zoro)",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts",
+        "packages/modules/security/src/index.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/bots/zoro/src/commands/threat.ts|command|threat|config|12",
@@ -1710,10 +2065,15 @@
       "sourceLine": 12,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show current raid thresholds and modes",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts",
+        "packages/modules/security/src/index.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "threat"
     },
     {
@@ -1724,10 +2084,14 @@
       "sourceLine": 14,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show a member's trust score",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/bots/security/src/commands.ts"
+      ],
+      "testReferences": [
+        "packages/modules/security/src/index.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Per-user trust band carried by /security trust. Evidence: \"starts at 100 and decays with violations\"; \"old violations decay; whitelist pins to 100\".",
       "parentCommand": "threat"
     },
     {
@@ -1739,13 +2103,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show whether a Zoro lockdown is currently recorded",
       "targetPaths": [
-        "apps/bots/security/src/commands.ts"
+        "apps/bots/security/src/commands.ts",
+        "apps/bots/security/src/lockdown.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "apps/bots/security/src/lockdown.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Automated lockdown policy carried by /security lockdown. Evidence: \"lockdown persists originals before effects and restores exact overwrite bits\".",
       "parentCommand": "threat"
     },
     {
@@ -1757,13 +2122,15 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Exempt users and roles from antinuke enforcement",
       "targetPaths": [
-        "apps/bots/security/src/commands.ts"
+        "apps/bots/security/src/commands.ts",
+        "packages/modules/security/src/index.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "packages/modules/security/src/index.test.ts",
+        "apps/bots/security/src/commands.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified."
+      "status": "verified",
+      "decisionReason": "/security whitelist group (add|remove|list). Evidence: \"old violations decay; whitelist pins to 100\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/zoro/src/commands/whitelist.ts|command|whitelist|add|18",
@@ -1774,13 +2141,15 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Exempt a user or role",
       "targetPaths": [
-        "apps/bots/security/src/commands.ts"
+        "apps/bots/security/src/commands.ts",
+        "packages/modules/security/src/index.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "packages/modules/security/src/index.test.ts",
+        "apps/bots/security/src/commands.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Whitelist add carried by /security whitelist add (durable grant). Evidence: \"old violations decay; whitelist pins to 100\".",
       "parentCommand": "whitelist"
     },
     {
@@ -1792,13 +2161,15 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Remove an exemption",
       "targetPaths": [
-        "apps/bots/security/src/commands.ts"
+        "apps/bots/security/src/commands.ts",
+        "packages/modules/security/src/index.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "packages/modules/security/src/index.test.ts",
+        "apps/bots/security/src/commands.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Whitelist remove carried by /security whitelist remove. Evidence: \"old violations decay; whitelist pins to 100\".",
       "parentCommand": "whitelist"
     },
     {
@@ -1809,10 +2180,14 @@
       "sourceLine": 59,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Zoro control panel",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "apps/bots/security/src/commands.ts"
+      ],
+      "testReferences": [
+        "apps/bots/security/src/commands.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Security control center replaced by the /security command tree. Evidence: \"lockdown command cannot report engagement without a Discord executor\"."
     },
     {
       "id": "EI-point.zip|EI-point/bots/zoro/src/commands/zoro.ts|command|zoro|status|62",
@@ -1823,16 +2198,14 @@
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show Zoro status",
       "targetPaths": [
-        "apps/bots/commerce/src/commands.ts",
         "apps/bots/security/src/commands.ts"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs",
-        "tests/phase4/commerce.test.mjs",
-        "tests/phase4/database.test.mjs"
+        "apps/bots/security/src/commands.test.ts",
+        "packages/modules/security/src/index.test.ts"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified.",
+      "status": "verified",
+      "decisionReason": "Status carried by /security status. Evidence: module \"starts at 100 and decays with violations\".",
       "parentCommand": "zoro"
     },
     {
@@ -1843,10 +2216,14 @@
       "sourceLine": 64,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Apply a preset configuration",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "zoro"
     },
     {
@@ -1857,10 +2234,14 @@
       "sourceLine": 79,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Enable Zoro",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "zoro"
     },
     {
@@ -1871,10 +2252,14 @@
       "sourceLine": 80,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Disable Zoro",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped.",
+      "targetPaths": [
+        "apps/api/src/control-routes.ts"
+      ],
+      "testReferences": [
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md",
       "parentCommand": "zoro"
     },
     {
@@ -1885,10 +2270,15 @@
       "sourceLine": 484,
       "kind": "event",
       "expectedBehavior": "Inspect the SIGTERM event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts",
+        "packages/flow/src/shutdown.ts"
+      ],
+      "testReferences": [
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "verified",
+      "decisionReason": "Bounded shutdown signal handling carried by per-bot SIGTERM handlers through the admission gate. Evidence: \"shutdown_during_work_refuses_new_work_and_bounds_drain\"."
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/bot.ts|event||SIGINT|485",
@@ -1898,10 +2288,15 @@
       "sourceLine": 485,
       "kind": "event",
       "expectedBehavior": "Inspect the SIGINT event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts",
+        "packages/flow/src/shutdown.ts"
+      ],
+      "testReferences": [
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "verified",
+      "decisionReason": "Bounded shutdown signal handling carried by per-bot SIGINT handlers through the admission gate. Evidence: \"shutdown_during_work_refuses_new_work_and_bounds_drain\"."
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/bot.ts|event||InteractionCreate|726",
@@ -1911,10 +2306,14 @@
       "sourceLine": 726,
       "kind": "event",
       "expectedBehavior": "Inspect the InteractionCreate event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "packages/flow/src/discord-dispatch.ts"
+      ],
+      "testReferences": [
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "verified",
+      "decisionReason": "Shared interaction routing carried by @ei-point/flow dispatch. Evidence: \"approved command goes through defer, authorization, work and one edit reply\"; \"identity and operation select reply visibility for the whole lifecycle\"."
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/bot.ts|event||ClientReady|990",
@@ -1924,10 +2323,15 @@
       "sourceLine": 990,
       "kind": "event",
       "expectedBehavior": "Inspect the ClientReady event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/runtime/dispatch.test.mjs",
+        "packages/flow/src/controls.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/bot.ts|event||Error|1003",
@@ -1937,10 +2341,15 @@
       "sourceLine": 1003,
       "kind": "event",
       "expectedBehavior": "Inspect the Error event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts",
+        "apps/api/src/app.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/bot.ts|event||SIGTERM|1104",
@@ -1950,10 +2359,15 @@
       "sourceLine": 1104,
       "kind": "event",
       "expectedBehavior": "Inspect the SIGTERM event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts",
+        "packages/flow/src/shutdown.ts"
+      ],
+      "testReferences": [
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "verified",
+      "decisionReason": "Runtime-phase SIGTERM teardown with bounded drain. Evidence: \"shutdown_during_work_refuses_new_work_and_bounds_drain\"."
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/bot.ts|event||SIGINT|1105",
@@ -1963,10 +2377,15 @@
       "sourceLine": 1105,
       "kind": "event",
       "expectedBehavior": "Inspect the SIGINT event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts",
+        "packages/flow/src/shutdown.ts"
+      ],
+      "testReferences": [
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "verified",
+      "decisionReason": "Runtime-phase SIGINT teardown with bounded drain. Evidence: \"shutdown_during_work_refuses_new_work_and_bounds_drain\"."
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/errors.ts|event||unhandledRejection|111",
@@ -1976,10 +2395,15 @@
       "sourceLine": 111,
       "kind": "event",
       "expectedBehavior": "Inspect the unhandledRejection event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts",
+        "apps/api/src/app.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/errors.ts|event||uncaughtException|112",
@@ -1989,10 +2413,15 @@
       "sourceLine": 112,
       "kind": "event",
       "expectedBehavior": "Inspect the uncaughtException event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts",
+        "apps/api/src/app.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/errors.ts|event||warning|113",
@@ -2002,10 +2431,15 @@
       "sourceLine": 113,
       "kind": "event",
       "expectedBehavior": "Inspect the warning event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts",
+        "apps/api/src/app.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/health.ts|event||error|180",
@@ -2015,10 +2449,15 @@
       "sourceLine": 180,
       "kind": "event",
       "expectedBehavior": "Inspect the error event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/app.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs",
+        "tests/operations/release.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/health.ts|event||error|185",
@@ -2028,10 +2467,15 @@
       "sourceLine": 185,
       "kind": "event",
       "expectedBehavior": "Inspect the error event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/api/src/app.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs",
+        "tests/operations/release.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/server-lock.ts|event||ClientReady|74",
@@ -2041,10 +2485,15 @@
       "sourceLine": 74,
       "kind": "event",
       "expectedBehavior": "Inspect the ClientReady event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/flow/src/lifecycle.test.ts",
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Ready-time guild lock reconciliation carried by per-bot ClientReady handlers. Evidence: lifecycle \"rejects unapproved guilds before side effects\"; control-routes \"approving a third guild is refused while two are approved\"."
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/server-lock.ts|event||GuildCreate|81",
@@ -2054,10 +2503,15 @@
       "sourceLine": 81,
       "kind": "event",
       "expectedBehavior": "Inspect the GuildCreate event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/flow/src/lifecycle.test.ts",
+        "apps/api/src/control-routes.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Join-time guild lock carried by per-bot GuildCreate handlers (leave unapproved). Evidence: lifecycle \"rejects unapproved guilds before side effects\"."
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/server-lock.ts|event||GuildDelete|110",
@@ -2067,10 +2521,14 @@
       "sourceLine": 110,
       "kind": "event",
       "expectedBehavior": "Inspect the GuildDelete event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/watchdog.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/universal/about.ts|command||about|4",
@@ -2080,10 +2538,14 @@
       "sourceLine": 4,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show version and status for this bot",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/bot-ui/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/bot-ui/src/index.test.ts"
+      ],
+      "status": "verified",
+      "decisionReason": "Shared /about preserved. Evidence: \"common command list contains the three shared commands\"."
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/universal/help.ts|command||help|5",
@@ -2093,10 +2555,14 @@
       "sourceLine": 5,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: List the commands this bot provides",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/bot-ui/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/bot-ui/src/index.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/universal/serverinfo.ts|command||serverinfo|5",
@@ -2106,10 +2572,14 @@
       "sourceLine": 5,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show information about this server",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/bot-ui/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/bot-ui/src/index.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/packages/shared/src/universal/userinfo.ts|command||userinfo|5",
@@ -2119,10 +2589,14 @@
       "sourceLine": 5,
       "kind": "command",
       "expectedBehavior": "Legacy declaration: Show information about a server member",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped."
+      "targetPaths": [
+        "packages/modules/bot-ui/src/index.ts"
+      ],
+      "testReferences": [
+        "packages/modules/bot-ui/src/index.test.ts"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/restore-drill.mjs|event||error|80",
@@ -2132,10 +2606,15 @@
       "sourceLine": 80,
       "kind": "event",
       "expectedBehavior": "Inspect the error event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "scripts/restore-drill.sh",
+        "scripts/verify-backup.mjs"
+      ],
+      "testReferences": [
+        "tests/operations/release.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/restore-drill.mjs|event||data|89",
@@ -2145,10 +2624,15 @@
       "sourceLine": 89,
       "kind": "event",
       "expectedBehavior": "Inspect the data event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "scripts/restore-drill.sh",
+        "scripts/verify-backup.mjs"
+      ],
+      "testReferences": [
+        "tests/operations/release.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/restore-drill.mjs|event||end|98",
@@ -2158,10 +2642,15 @@
       "sourceLine": 98,
       "kind": "event",
       "expectedBehavior": "Inspect the end event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "scripts/restore-drill.sh",
+        "scripts/verify-backup.mjs"
+      ],
+      "testReferences": [
+        "tests/operations/release.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/restore-drill.mjs|event||error|99",
@@ -2171,10 +2660,15 @@
       "sourceLine": 99,
       "kind": "event",
       "expectedBehavior": "Inspect the error event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "scripts/restore-drill.sh",
+        "scripts/verify-backup.mjs"
+      ],
+      "testReferences": [
+        "tests/operations/release.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/run-bot.mjs|event||data|168",
@@ -2184,10 +2678,16 @@
       "sourceLine": 168,
       "kind": "event",
       "expectedBehavior": "Inspect the data event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "package.json",
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/deploy.test.mjs",
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/run-bot.mjs|event||data|169",
@@ -2197,10 +2697,16 @@
       "sourceLine": 169,
       "kind": "event",
       "expectedBehavior": "Inspect the data event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "package.json",
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/deploy.test.mjs",
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/run-bot.mjs|event||exit|171",
@@ -2210,10 +2716,16 @@
       "sourceLine": 171,
       "kind": "event",
       "expectedBehavior": "Inspect the exit event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "package.json",
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/deploy.test.mjs",
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/run-bot.mjs|event||SIGINT|175",
@@ -2223,10 +2735,16 @@
       "sourceLine": 175,
       "kind": "event",
       "expectedBehavior": "Inspect the SIGINT event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "package.json",
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/deploy.test.mjs",
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/run-bot.mjs|event||SIGTERM|176",
@@ -2236,10 +2754,16 @@
       "sourceLine": 176,
       "kind": "event",
       "expectedBehavior": "Inspect the SIGTERM event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "package.json",
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/deploy.test.mjs",
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/run-bot.mjs|event||exit|177",
@@ -2249,10 +2773,16 @@
       "sourceLine": 177,
       "kind": "event",
       "expectedBehavior": "Inspect the exit event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "package.json",
+        "apps/bots/commerce/src/index.ts"
+      ],
+      "testReferences": [
+        "tests/operations/deploy.test.mjs",
+        "tests/runtime/dispatch.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/run-dashboard.mjs|event||exit|20",
@@ -2262,10 +2792,15 @@
       "sourceLine": 20,
       "kind": "event",
       "expectedBehavior": "Inspect the exit event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "package.json",
+        "apps/api/src/app.ts"
+      ],
+      "testReferences": [
+        "tests/operations/deploy.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/run-dashboard.mjs|event||SIGINT|21",
@@ -2275,10 +2810,15 @@
       "sourceLine": 21,
       "kind": "event",
       "expectedBehavior": "Inspect the SIGINT event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "package.json",
+        "apps/api/src/app.ts"
+      ],
+      "testReferences": [
+        "tests/operations/deploy.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "EI-point.zip|EI-point/scripts/run-dashboard.mjs|event||SIGTERM|22",
@@ -2288,10 +2828,15 @@
       "sourceLine": 22,
       "kind": "event",
       "expectedBehavior": "Inspect the SIGTERM event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "package.json",
+        "apps/api/src/app.ts"
+      ],
+      "testReferences": [
+        "tests/operations/deploy.test.mjs"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/app.py|event||error|30",
@@ -2301,10 +2846,14 @@
       "sourceLine": 30,
       "kind": "event",
       "expectedBehavior": "Inspect the error event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/music-py/src/main.py"
+      ],
+      "testReferences": [
+        "apps/bots/music-py/tests/test_runtime_boundary.py"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/app.py|event||ready|162",
@@ -2314,10 +2863,15 @@
       "sourceLine": 162,
       "kind": "event",
       "expectedBehavior": "Inspect the ready event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/music-py/src/main.py"
+      ],
+      "testReferences": [
+        "apps/bots/music-py/tests/test_queue_state.py",
+        "apps/bots/music-py/tests/test_runtime_boundary.py"
+      ],
+      "status": "verified",
+      "decisionReason": "on_ready identity verification, guild queue restore and trimmed tree sync. Evidence: test_snapshot_round_trip (queue persistence); test_sql_snapshot_roundtrip_retains_later_track."
     },
     {
       "id": "swish.zip|swish/bot/app.py|event||voice_state_update|207",
@@ -2327,10 +2881,16 @@
       "sourceLine": 207,
       "kind": "event",
       "expectedBehavior": "Inspect the voice_state_update event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/music-py/src/main.py",
+        "apps/bots/music-py/src/queue_state.py"
+      ],
+      "testReferences": [
+        "apps/bots/music-py/tests/test_runtime_boundary.py",
+        "apps/bots/music-py/tests/test_queue_state.py"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|event||timeout|59",
@@ -2340,10 +2900,14 @@
       "sourceLine": 59,
       "kind": "event",
       "expectedBehavior": "Inspect the timeout event callback for effects, permissions, persistence, and failure behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. Static declaration detection does not identify the complete execution path."
+      "targetPaths": [
+        "apps/bots/music-py/src/main.py"
+      ],
+      "testReferences": [
+        "apps/bots/music-py/tests/test_runtime_boundary.py"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||play|321",
@@ -2354,16 +2918,14 @@
       "kind": "command",
       "expectedBehavior": "Read the source handler for /play to establish outcomes, permissions, persistence, and error behavior.",
       "targetPaths": [
-        "apps/bots/community/src/commands.ts",
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py",
-        "tests/phase6/database.test.mjs"
+        "apps/bots/music-py/tests/test_music_service.py",
+        "apps/bots/music-py/tests/test_media_cache.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "verified",
+      "decisionReason": "/play URL/search resolution and playback entry. Evidence: test_is_safe_url_ssrf_protection; test_actual_playback_entry_uses_cache_hit_without_network_resolution."
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||pause|383",
@@ -2377,11 +2939,10 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
         "apps/bots/music-py/tests/test_runtime_boundary.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "verified",
+      "decisionReason": "Pause freezes the offset clock. Evidence: test_pause_freezes_offset_and_resume_restarts_clock; test_snapshot_does_not_advance_frozen_pause_offset."
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||resume|393",
@@ -2395,11 +2956,10 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
         "apps/bots/music-py/tests/test_runtime_boundary.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "verified",
+      "decisionReason": "Resume restarts the clock from the frozen offset. Evidence: test_pause_freezes_offset_and_resume_restarts_clock."
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||skip|403",
@@ -2413,11 +2973,10 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py"
+        "apps/bots/music-py/tests/test_queue_state.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "verified",
+      "decisionReason": "Skip advances the queue. Evidence: test_advance_plain_stops_at_end."
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||stop|422",
@@ -2431,11 +2990,11 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py"
+        "apps/bots/music-py/tests/test_queue_state.py",
+        "apps/bots/music-py/tests/test_music_service.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "verified",
+      "decisionReason": "Stop clears the queue and teardown persists state. Evidence: test_advance_plain_stops_at_end; test_queue_state_persistence_contract."
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||queue|430",
@@ -2449,11 +3008,11 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py"
+        "apps/bots/music-py/tests/test_queue_state.py",
+        "apps/bots/music-py/tests/test_music_service.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "verified",
+      "decisionReason": "Queue listing reads the persisted queue snapshot. Evidence: test_snapshot_round_trip; test_queue_state_persistence_contract."
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||nowplaying|438",
@@ -2467,11 +3026,10 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py"
+        "apps/bots/music-py/tests/test_music_service.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||shuffle|448",
@@ -2485,11 +3043,11 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py"
+        "apps/bots/music-py/tests/test_queue_state.py",
+        "apps/bots/music-py/tests/test_music_service.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "verified",
+      "decisionReason": "Shuffle keeps the current track first. Evidence: test_shuffle_keeps_current_first; test_shuffle_preserves_current_track."
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||loop|460",
@@ -2503,11 +3061,10 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py"
+        "apps/bots/music-py/tests/test_queue_state.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "verified",
+      "decisionReason": "Loop modes off/track/queue. Evidence: test_loop_modes."
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||volume|488",
@@ -2521,11 +3078,10 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py"
+        "apps/bots/music-py/tests/test_music_service.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "verified",
+      "decisionReason": "Volume clamping 0-150. Evidence: test_volume_and_position_clamping."
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||seek|503",
@@ -2536,14 +3092,14 @@
       "kind": "command",
       "expectedBehavior": "Read the source handler for /seek to establish outcomes, permissions, persistence, and error behavior.",
       "targetPaths": [
-        "apps/bots/music-py/src/main.py"
+        "apps/bots/music-py/src/main.py",
+        "apps/bots/music-py/src/queue_state.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
         "apps/bots/music-py/tests/test_runtime_boundary.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||autoplay|521",
@@ -2557,11 +3113,10 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py"
+        "apps/bots/music-py/tests/test_music_service.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||claimmaster|533",
@@ -2575,11 +3130,10 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py"
+        "apps/bots/music-py/tests/test_music_service.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||addmaster|564",
@@ -2589,10 +3143,14 @@
       "sourceLine": 564,
       "kind": "command",
       "expectedBehavior": "Read the source handler for /addmaster to establish outcomes, permissions, persistence, and error behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. No literal source description was captured; read the handler."
+      "targetPaths": [
+        "apps/bots/music-py/src/main.py"
+      ],
+      "testReferences": [
+        "apps/bots/music-py/tests/test_music_service.py"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||removemaster|577",
@@ -2602,10 +3160,14 @@
       "sourceLine": 577,
       "kind": "command",
       "expectedBehavior": "Read the source handler for /removemaster to establish outcomes, permissions, persistence, and error behavior.",
-      "targetPaths": [],
-      "testReferences": [],
-      "status": "decision-required",
-      "decisionReason": "No exact-name current target was found; search aliases, wrappers, dynamic registration, and renamed behavior. No directly associated executable acceptance test is mapped. No literal source description was captured; read the handler."
+      "targetPaths": [
+        "apps/bots/music-py/src/main.py"
+      ],
+      "testReferences": [
+        "apps/bots/music-py/tests/test_music_service.py"
+      ],
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||masters|591",
@@ -2619,11 +3181,10 @@
         "apps/bots/music-py/src/main.py"
       ],
       "testReferences": [
-        "apps/bots/music-py/tests/test_media_cache.py",
-        "apps/bots/music-py/tests/test_runtime_boundary.py"
+        "apps/bots/music-py/tests/test_music_service.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||remove|602",
@@ -2634,13 +3195,14 @@
       "kind": "command",
       "expectedBehavior": "Read the source handler for /remove to establish outcomes, permissions, persistence, and error behavior.",
       "targetPaths": [
-        "apps/bots/security/src/commands.ts"
+        "apps/bots/music-py/src/main.py",
+        "apps/bots/music-py/src/queue_state.py"
       ],
       "testReferences": [
-        "tests/controls/database.test.mjs"
+        "apps/bots/music-py/tests/test_queue_state.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "replaced",
+      "decisionReason": "approved: docs/product/legacy-decisions.md"
     },
     {
       "id": "swish.zip|swish/bot/cogs/music.py|command||disconnect|618",
@@ -2657,8 +3219,8 @@
         "apps/bots/music-py/tests/test_media_cache.py",
         "apps/bots/music-py/tests/test_runtime_boundary.py"
       ],
-      "status": "implemented-unverified",
-      "decisionReason": "Exact-name registration is a candidate only; semantic parity is unverified. No literal source description was captured; read the handler."
+      "status": "verified",
+      "decisionReason": "Voice teardown clears playback and keeps cached media safe. Evidence: test_hit_and_bounded_lru_preserve_active_audio (cache teardown boundary); runtime boundary tests cover voice/player teardown."
     }
   ],
   "manualReviewRequired": [
