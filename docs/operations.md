@@ -6,6 +6,14 @@ Slice `ei-point.slice`: `CPUQuota=900% MemorySwapMax=2G` (RAM uncapped — Ei Po
 Per-service CPU/RAM caps live in `infra/docker/compose.yml` (`deploy.resources.limits` + `mem_limit`).
 Allocation: runtime 7.45 CPU / 32.5 GiB; concurrent maximum 7.95 CPU / 33.75 GiB; project ceiling 9 CPU of 10, memory uncapped; swap is emergency headroom only.
 
+## Verification entrypoint (§2B / §10A)
+
+`node scripts/verify-project.mjs` (or `pnpm verify`) is the reproducible verification entrypoint. It runs every gate with a **separate** result and exits `0` only when all mandatory gates pass: `1` if a mandatory gate failed, `2` if a mandatory gate is **blocked** (for example `python` absent). A gate with no local runner (container/OS image scan) is reported `blocked` and executed by CI, never counted as passed. Use `--only <ids>` for a partial run (labelled "not a release verdict"), `--skip <id>` to omit, and `--json` for the machine-readable report used in the §10A evidence bundle.
+
+`.github/workflows/verify.yml` runs the same gate list on pinned Node (`.nvmrc` → `setup-node`) with a frozen lockfile: pinned-runtime check, dependency scans, feature coverage, `pnpm test`, typecheck, browser acceptance and the Python music suites. Run it locally with `pnpm verify` (or a subset via `--only`).
+
+Migrations are forward-only and serialized by a database advisory lock. `infra/postgres/run-migrations.mjs` exports `runMigrations(url, { dir, upTo })`; `tests/operations/migrations.test.mjs` proves a fresh database, an upgrade from a prior snapshot, a rolled-back failure that is not recorded and retried cleanly, and concurrent runners that never double-apply.
+
 ## Storage envelope (§7) — dedicated host, uncapped (owner decision 2026-10-16)
 
 The table below remains the working allocation target for planning, not a hard cap:

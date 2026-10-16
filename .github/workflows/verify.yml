@@ -1,0 +1,62 @@
+# Reproducible verification (§2B / §10A). Pinned Node from .nvmrc; every required
+# gate runs with a separate result. Local, non-CI parts are aggregated by
+# scripts/verify-project.mjs so operators and CI share one gate list.
+name: verify
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        node-file: [.nvmrc]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+      - name: Pin check (Node major matches .nvmrc)
+        run: node scripts/verify-project.mjs --only node-runtime,pnpm-toolchain --json
+      - name: Dependency scans (recorded, triaged)
+        run: |
+          pnpm audit --prod --json > npm-audit.json || true
+          python -m pip install --quiet pip-audit
+          python -m pip_audit -r apps/bots/music-py/requirements.txt --format json > python-audit.json || true
+      - name: Feature coverage
+        run: node scripts/check-feature-coverage.mjs --mode structural
+      - name: Root suites + phase gates + resource budget
+        run: pnpm test
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Dashboard build + browser acceptance
+        run: pnpm exec playwright install --with-deps msedge && pnpm test:browser
+      - name: Python music suites
+        run: python -m unittest discover -s apps/bots/music-py/tests -p "test_*.py"
+      - name: Publish verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-evidence-${{ github.sha }}
+          path: |
+            npm-audit.json
+            python-audit.json
+          if-no-files-found: ignore
+          retention-days: 30

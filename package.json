@@ -14,6 +14,7 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm --filter @ei-point/contracts build && pnpm --filter @ei-point/flow build && pnpm --filter @ei-point/module-games build && pnpm --filter @ei-point/module-community build && pnpm -r typecheck",
     "migrate": "node infra/postgres/run-migrations.mjs",
+    "verify": "node scripts/verify-project.mjs",
     "test:browser": "pnpm --filter @ei-point/dashboard build && playwright test",
     "generate:dashboard-api": "openapi-typescript apps/api/src/openapi.json -o packages/contracts/src/dashboard-api.ts",
     "test:phase6": "pnpm --filter @ei-point/flow build && pnpm --filter @ei-point/module-games build && pnpm --filter @ei-point/module-community build && pnpm --filter @ei-point/bot-community build && node --test tests/phase6/*.test.mjs",

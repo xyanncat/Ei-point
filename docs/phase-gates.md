@@ -114,6 +114,8 @@
 
 # Phase 9 — Operations (tooling repaired; actual recovery acceptance open)
 
+- [~] Reproducible foundation (§2B / A20, local scope): `scripts/verify-project.mjs` aggregates every gate with separate results and blocks (never passes) a gate whose mandatory tool is missing; `.github/workflows/verify.yml` runs the same list on pinned `.nvmrc` Node + frozen lockfile; `tests/operations/migrations.test.mjs` proves fresh DB, upgrade-from-snapshot, rolled-back failure and advisory-lock concurrency against real PostgreSQL; dependency/container scans are recorded by CI. Linux image build (Docker unavailable locally) and the container scan remain open.
+
 - [x] Backups: pgBackRest configuration (`infra/backup/pgbackrest.conf`) for base backups and WAL streaming to off-host S3; restic file volume backup script (`infra/backup/restic-backup.sh`) with 7-daily/4-weekly retention and music-cache exclusions.
 - [x] Local VPS tier (no outer source): `infra/backup/local-backup.sh` (pg_dump -Fc + roles + artwork tarball + manifest, 700/600 perms) on a 6h systemd timer (`infra/systemd/ei-point-local-backup.*`), 28-snapshot retention, atomic publish via `.partial` + rename.
 - [x] Host Watchdog: startup grace check, consecutive-failure threshold, bounded hourly restart budget (`MAX_RESTARTS_PER_HOUR=3`), and disk usage alerts at 70/80/90% (`infra/systemd/ei-point-watchdog.sh`).
