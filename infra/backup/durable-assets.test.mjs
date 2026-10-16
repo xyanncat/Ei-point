@@ -11,6 +11,7 @@ import {
   RTO_TARGET_HOURS,
   validateDurableInventory,
   listBackedUpPaths,
+  privateVolumes,
 } from './durable-assets.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -91,6 +92,17 @@ test('the real off-host backup includes private paths through the shared invento
 
   const incomplete = listBackedUpPaths({ ...base, CYRENE_REFERENCE_AUDIO_PATH: join(directory, 'gone.mp3'), CYRENE_PERSONA_MEMORY_FILE: persona });
   assert.deepEqual(incomplete.missing.map((entry) => entry.id).sort(), ['cyrene-reference-audio'], 'a missing required private asset must be reported');
+});
+
+test('the off-host restic volume set covers the private artwork and the physical pgbackrest repository, never live pgdata', () => {
+  // Regression guard: the wal-archive/pgbackrest volume is classification
+  // "database" but must still ride the off-host set; the live pgdata volume must not.
+  const volumes = privateVolumes().sort();
+  assert.deepEqual(volumes, ['artwork', 'pgbackrest'], `unexpected restic volume set: ${volumes.join(',')}`);
+  const withoutMarker = validateDurableInventory([
+    { id: 'x', owner: 'o', classification: 'unique-private', runtimePath: 'docker-volume:x', backup: ['off-host:restic(encrypted)'], integrity: 'sha256', retention: 'r', restoreValidation: 'r' },
+  ]);
+  assert.ok(withoutMarker.some((entry) => entry.code === 'private-volume-not-in-restic-set'));
 });
 
 test('the proposed RPO/RTO targets match the plan and are documented', () => {

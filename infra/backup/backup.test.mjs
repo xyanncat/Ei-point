@@ -70,6 +70,10 @@ else echo '${unix(physical)}'; fi`);
   await f.mock('restic','printf "restic %s\\n" "$*" >> "$MOCK_LOG"; [[ "$1" != snapshots ]]');
   const r=f.run('infra/backup/restic-backup.sh',{RESTIC_REPOSITORY:'s3:https://example.invalid/bucket',RESTIC_PASSWORD:'test-secret'});assert.notEqual(r.status,0);
   const log=await readFile(f.log,'utf8');assert.match(log,/project=ei-point/);assert.match(log,/volume inspect/);assert.match(log,/restic snapshots/);assert.doesNotMatch(log,/restic init|restic backup|restic forget/);
+  // Regression guard: BOTH restic volumes must be discovered — artwork (unique/private)
+  // and pgbackrest (physical backup + WAL repository); dropping either breaks recovery.
+  assert.match(log,/label=com\.docker\.compose\.volume=artwork/);
+  assert.match(log,/label=com\.docker\.compose\.volume=pgbackrest/);
  }finally{await f.cleanup();}
 });
 test('local backup fails closed on lock contention before Docker and does not prune unrelated directories',async()=>{

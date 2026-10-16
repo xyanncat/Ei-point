@@ -105,7 +105,7 @@ The supplied `EI_POINT_COMPLETION_BUILD_PLAN.md` names **zero specific third-par
 | Kafka | Real disposable-guild tests for each sanction, temporary expiry, permission denial, partial Discord failure, retry, and audit record. |
 | Payments | Razorpay hosted payment page (no API keys): server-priced order returns the page link/QR, reference claim plus staff verification uphold the never-confirm-from-a-client rule; UPI QR amount/payee validation; USDT quote/address validation. |
 | Levels | Text and voice XP cooldown/farming tests, empty/AFK/deaf exclusions, level-up delivery, and leaderboard consistency. |
-| Release | Build and startup with pinned local models on the benchmark VPS, with CPU/RAM budgets recalculated against the 8-core/40-GiB project cap. |
+| Release | Build and startup with pinned local models on the benchmark VPS, with CPU/RAM budgets recalculated against the 9-CPU project ceiling (RAM/disk uncapped on the single-project host; owner decision 2026-10-16). |
 
 ## Implementation status snapshot
 

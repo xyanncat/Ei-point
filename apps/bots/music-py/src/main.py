@@ -593,7 +593,7 @@ class SearchPickerSelect(discord.ui.Select):
         if not vc.is_playing() and not vc.is_paused():
             await start_playback(self.guild_id)
 
-        await respond(interaction, f"🎵 **Added to queue** (#{pos}): `{track.title}`", title="Robin · Queue", view=None)
+        await respond(interaction, f"🎵 **Added to queue** (#{pos}): `{track.title}`", title="Robin · Queue", edit=True, view=None)
 
 
 class SearchPickerView(discord.ui.View):
@@ -755,10 +755,17 @@ async def on_guild_join(guild: discord.Guild):
         await asyncio.to_thread(restore_guild_queue, str(guild.id))
 
 
-async def respond(interaction: discord.Interaction, message: str, ephemeral: bool = False, title: str = "Ei Point", **kwargs):
-    """Safely respond to an interaction whether deferred or not."""
+async def respond(interaction: discord.Interaction, message: str, ephemeral: bool = False, title: str = "Ei Point", edit: bool = False, **kwargs):
+    """Safely respond to an interaction whether deferred or not.
+
+    ``edit=True`` replaces the original (deferred) response in place — used by
+    component callbacks that must clear their own view instead of posting a
+    second message.
+    """
     if "embed" not in kwargs and "embeds" not in kwargs:
         kwargs["embed"] = make_ei_embed(message, title)
+    if edit:
+        return await interaction.edit_original_response(**kwargs)
     if interaction.response.is_done():
         return await interaction.followup.send(ephemeral=ephemeral, **kwargs)
     return await interaction.response.send_message(ephemeral=ephemeral, **kwargs)

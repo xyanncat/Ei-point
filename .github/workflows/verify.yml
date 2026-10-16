@@ -42,6 +42,8 @@ jobs:
           python -m pip_audit -r apps/bots/music-py/requirements.txt --format json > python-audit.json || true
       - name: Feature coverage
         run: node scripts/check-feature-coverage.mjs --mode structural
+      - name: Dashboard API contract sync
+        run: node scripts/check-openapi-sync.mjs
       - name: Root suites + phase gates + resource budget
         run: pnpm test
       - name: Typecheck

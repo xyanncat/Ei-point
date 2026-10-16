@@ -27,8 +27,10 @@ flock -n 9 || { echo 'Another backup is running' >&2; exit 1; }
 durable_list=$(node "$ROOT/infra/backup/durable-assets.mjs" --list-private) || { echo 'Refusing the off-host backup: a required durable asset is missing' >&2; exit 1; }
 [[ -n "$durable_list" ]] || { echo 'Durable inventory resolved no private paths; refusing an incomplete off-host backup' >&2; exit 1; }
 mapfile -t private_paths <<< "$durable_list"
-mapfile -t private_volumes < <(node "$ROOT/infra/backup/durable-assets.mjs" --list-volumes)
-[[ ${#private_volumes[@]} -gt 0 ]] || { echo 'Durable inventory resolved no private volumes' >&2; exit 1; }
+# Same exit-status rule as --list-private: a failing inventory listing must refuse the backup.
+durable_volumes=$(node "$ROOT/infra/backup/durable-assets.mjs" --list-volumes) || { echo 'Durable inventory failed to resolve the restic volume set' >&2; exit 1; }
+[[ -n "$durable_volumes" ]] || { echo 'Durable inventory resolved no restic volumes' >&2; exit 1; }
+mapfile -t private_volumes <<< "$durable_volumes"
 paths=()
 for name in "${private_volumes[@]}"; do
   mapfile -t ids < <(docker volume ls -q --filter "label=com.docker.compose.project=$PROJECT" --filter "label=com.docker.compose.volume=$name")

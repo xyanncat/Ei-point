@@ -48,6 +48,13 @@ test("an unavailable mandatory tool is blocked, while a present tool's failure i
   assert.equal(external.status, "blocked");
 });
 
+test("a genuinely missing executable is blocked through the real spawner (shell 9009/127 or ENOENT)", async () => {
+  const gate = { id: "missing-tool", label: "absent tool", command: "ei-point-definitely-missing-tool-xyz", args: [], mandatory: true, tool: "ei-point-definitely-missing-tool-xyz" };
+  const outcome = await runGate(gate); // no injected exec: exercises spawnCapture
+  assert.equal(outcome.status, "blocked", outcome.detail);
+  assert.match(outcome.detail, /not installed/);
+});
+
 test("the pinned runtime gate reads .nvmrc and compares the major version", async () => {
   assert.equal(await readNvmrc(repo), "24.8.0");
   const gate = gatePlan("24.8.0").find((entry) => entry.id === "node-runtime");

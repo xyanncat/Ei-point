@@ -18,8 +18,8 @@ const RESTIC_METHOD = "off-host:restic(encrypted)";
 
 export const DURABLE_ASSETS = [
   { id: "database", owner: "postgres", classification: "database", runtimePath: "docker-volume:pgdata", integrity: "PG checksums + physical backup manifest", backup: ["logical:bundle.mjs (postgres.dump+roles)", "off-host:restic(physical pgbackrest)", "PITR:WAL archive-push"], retention: "28 logical snapshots; 24h/7d/4w restic; 14d WAL window", restoreValidation: "scripts/restore-drill.sh logical bundle; pgBackRest physical/PITR drill", rpoMinutes: 15 },
-  { id: "wal-archive", owner: "postgres", classification: "database", runtimePath: "docker-volume:pgbackrest", integrity: "pgBackRest backup.info/manifest", backup: ["off-host:restic(encrypted physical+WAL)"], retention: "14-day physical/WAL window", restoreValidation: "pgBackRest restore to a prior system identifier in isolation", rpoMinutes: 15 },
-  { id: "artwork", owner: "api/dashboard", classification: "unique-private", runtimePath: "docker-volume:artwork", env: null, integrity: "sha256 in the logical bundle manifest", backup: [RESTIC_METHOD, "logical:artwork.tar.gz per-file bytes"], retention: "with the 6h logical tier and 24h/7d/4w restic tier", restoreValidation: "restore-drill.sh extracts and byte-checks every regular file", rpoHours: 6 },
+  { id: "wal-archive", owner: "postgres", classification: "database", runtimePath: "docker-volume:pgbackrest", resticVolume: true, integrity: "pgBackRest backup.info/manifest", backup: ["off-host:restic(encrypted physical+WAL)"], retention: "14-day physical/WAL window", restoreValidation: "pgBackRest restore to a prior system identifier in isolation", rpoMinutes: 15 },
+  { id: "artwork", owner: "api/dashboard", classification: "unique-private", runtimePath: "docker-volume:artwork", resticVolume: true, env: null, integrity: "sha256 in the logical bundle manifest", backup: [RESTIC_METHOD, "logical:artwork.tar.gz per-file bytes"], retention: "with the 6h logical tier and 24h/7d/4w restic tier", restoreValidation: "restore-drill.sh extracts and byte-checks every regular file", rpoHours: 6 },
   { id: "cyrene-reference-audio", owner: "cyrene (qwen-tts)", classification: "unique-private", runtimePath: "host:CYRENE_REFERENCE_AUDIO_PATH", env: "CYRENE_REFERENCE_AUDIO_PATH", integrity: "sha256 recorded at provision time", backup: [RESTIC_METHOD], retention: "with the off-host restic tier (max 24h copy age)", restoreValidation: "hash must match before tts-qwen will start ready", rpoHours: 6 },
   { id: "cyrene-persona-memory", owner: "cyrene (bot-ai)", classification: "unique-private", runtimePath: "host:CYRENE_PERSONA_MEMORY_FILE", env: "CYRENE_PERSONA_MEMORY_FILE", integrity: "sha256 recorded at provision time", backup: [RESTIC_METHOD], retention: "with the off-host restic tier (max 24h copy age)", restoreValidation: "bot-ai rejects an unreadable/oversize persona and reports not-ready", rpoHours: 6 },
   { id: "deployment-secret", owner: "operator", classification: "secret", runtimePath: "host:ENV_FILE (.env)", env: "ENV_FILE", integrity: "filesystem perms 600 + encrypted restic snapshot", backup: [RESTIC_METHOD], retention: "with the off-host restic tier (max 24h copy age)", restoreValidation: "restore to a 600 file and re-run release health gates", rpoHours: 6 },
@@ -52,6 +52,10 @@ export function validateDurableInventory(assets = DURABLE_ASSETS) {
       if (!asset.integrity || !/sha-?256|hash|manifest|perms/iu.test(asset.integrity))
         issues.push({ code: "private-without-integrity", detail: asset.id });
     }
+    if (asset.classification === "unique-private" && String(asset.runtimePath ?? "").startsWith("docker-volume:") && !asset.resticVolume)
+      issues.push({ code: "private-volume-not-in-restic-set", detail: asset.id });
+    if (asset.resticVolume && !(Array.isArray(asset.backup) && asset.backup.some((method) => /restic/u.test(method))))
+      issues.push({ code: "incoherent-restic-volume", detail: asset.id });
     if (asset.classification === "reprovisionable") {
       if (!asset.provisioning || !/prepare_[a-z0-9_]+\.py/iu.test(asset.provisioning))
         issues.push({ code: "reprovisionable-without-provisioning", detail: asset.id });
@@ -82,10 +86,14 @@ export function listBackedUpPaths(env = process.env) {
   return { paths, missing };
 }
 
-/** Docker named volumes (resolved separately) that carry unique/private data. */
+/** Docker named volumes that ride the off-host restic set directly.
+ * `resticVolume: true` marks direct restic content: artwork (unique/private)
+ * and the pgbackrest repository (physical backup + WAL). The live `pgdata`
+ * volume is deliberately NOT here — its physical coverage reaches restic
+ * through the pgbackrest repository, never as a raw live-data copy. */
 export function privateVolumes() {
   return DURABLE_ASSETS
-    .filter((asset) => asset.classification === "unique-private" && String(asset.runtimePath).startsWith("docker-volume:"))
+    .filter((asset) => asset.resticVolume && String(asset.runtimePath).startsWith("docker-volume:"))
     .map((asset) => String(asset.runtimePath).slice("docker-volume:".length));
 }
 

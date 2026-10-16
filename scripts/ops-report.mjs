@@ -114,7 +114,13 @@ async function main() {
     return;
   }
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
-  await client.connect();
+  try {
+    await client.connect();
+  } catch (error) {
+    console.error(`Database connection failed: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 2;
+    return;
+  }
   try {
     const query = async (sql) => (await client.query(sql)).rows;
     const report = await runReport(query, { backupRoot, maxBackupAgeHours: maxAgeHours });

@@ -24,7 +24,7 @@ export async function readNvmrc(base = root) {
 export function gatePlan(pinned) {
   return [
     { id: "node-runtime", label: "pinned Node runtime (.nvmrc)", kind: "runtime", mandatory: true, pinned },
-    { id: "pnpm-toolchain", label: "pnpm toolchain", command: "pnpm", args: ["--version"], mandatory: true, expectStdout: /^9\./ },
+    { id: "pnpm-toolchain", label: "pnpm toolchain", command: "pnpm", args: ["--version"], mandatory: true, tool: "pnpm", expectStdout: /^9\./ },
     { id: "python-music", label: "music bot unit tests", command: "python", args: ["-m", "unittest", "discover", "-s", "apps/bots/music-py/tests", "-p", "test_*.py"], mandatory: true, tool: "python" },
     { id: "feature-coverage", label: "legacy feature coverage (structural)", command: "node", args: ["scripts/check-feature-coverage.mjs", "--mode", "structural"], mandatory: true },
     { id: "openapi-sync", label: "dashboard API contract sync", command: "node", args: ["scripts/check-openapi-sync.mjs"], mandatory: true },
@@ -46,30 +46,46 @@ function tail(text, lines = 8) {
   return all.slice(-lines).join(" | ");
 }
 
-function spawnCapture(command, args, { cwd, timeoutMs = 600_000 } = {}) {
+export function spawnCapture(command, args, { cwd, timeoutMs = 600_000 } = {}) {
   return new Promise((settle) => {
     const useShell = process.platform === "win32";
     const quote = (value) => (/[\s"]/u.test(value) ? `"${String(value).replace(/"/gu, '\\"')}"` : value);
-    const child = useShell
-      ? spawn([command, ...args].map(quote).join(" "), { cwd, shell: true, windowsHide: true })
-      : spawn(command, args, { cwd, windowsHide: true });
-    let stdout = "";
-    let stderr = "";
-    let timer;
-    const finish = (value) => {
-      if (timer) clearTimeout(timer);
-      settle(value);
+    const start = () => {
+      const child = useShell
+        ? spawn([command, ...args].map(quote).join(" "), { cwd, shell: true, windowsHide: true })
+        : spawn(command, args, { cwd, windowsHide: true });
+      let stdout = "";
+      let stderr = "";
+      let timer;
+      const finish = (value) => {
+        if (timer) clearTimeout(timer);
+        settle(value);
+      };
+      child.on("error", (error) => finish({ code: null, stdout, stderr, missing: error.code === "ENOENT", error }));
+      if (timeoutMs > 0) {
+        timer = setTimeout(() => {
+          try { child.kill(); } catch { /* already gone */ }
+          finish({ code: null, stdout, stderr, error: new Error(`timed out after ${timeoutMs}ms`) });
+        }, timeoutMs);
+      }
+      child.stdout?.on("data", (chunk) => { stdout += chunk; });
+      child.stderr?.on("data", (chunk) => { stderr += chunk; });
+      child.on("close", (code) => finish({ code, stdout, stderr, missing: useShell && (code === 9009 || code === 127) }));
     };
-    child.on("error", (error) => finish({ code: null, stdout, stderr, missing: error.code === "ENOENT", error }));
-    if (timeoutMs > 0) {
-      timer = setTimeout(() => {
-        try { child.kill(); } catch { /* already gone */ }
-        finish({ code: null, stdout, stderr, error: new Error(`timed out after ${timeoutMs}ms`) });
-      }, timeoutMs);
+    if (!useShell) {
+      start();
+      return;
     }
-    child.stdout?.on("data", (chunk) => { stdout += chunk; });
-    child.stderr?.on("data", (chunk) => { stderr += chunk; });
-    child.on("close", (code) => finish({ code, stdout, stderr }));
+    // Windows shell mode: probe availability first. Which exit code a missing
+    // command produces depends on ComSpec (9009 under cmd.exe, 1 under others),
+    // so `where` is the deterministic check; a failed probe classifies the gate
+    // as blocked instead of failed.
+    const probe = spawn("where", [command], { windowsHide: true });
+    probe.on("error", () => settle({ code: null, stdout: "", stderr: "", missing: true }));
+    probe.on("close", (code) => {
+      if (code !== 0) settle({ code: null, stdout: "", stderr: "", missing: true });
+      else start();
+    });
   });
 }
 

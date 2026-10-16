@@ -135,8 +135,7 @@ test("backup freshness surfaces age, corruption and missing roots as breaches", 
   assert.match(missing.detail, /missing|no completed snapshot/);
 });
 
-test("the CLI reports breaches and exits non-zero for the operator", async () => {
-  const root = await mkdtemp(join(tmpdir(), "ei-ops-cli-"));
+test("the CLI reports breaches and exits non-zero for the operator", async () => {  const root = await mkdtemp(join(tmpdir(), "ei-ops-cli-"));
   await snapshot(root);
   await pool.query("INSERT INTO ops.jobs (kind,payload,idempotency_key,status,created_at) VALUES ('probe','{}'::jsonb,'cli-1','pending',now()-interval '3 hours')");
   const run = await execute(process.execPath, [join(repo, "scripts/ops-report.mjs"), "--backup-root", root, "--json"], {
@@ -151,4 +150,15 @@ test("the CLI reports breaches and exits non-zero for the operator", async () =>
   assert.ok(report.sections.some((entry) => entry.id === "queue-lag" && entry.status === "breach"), run.stdout);
   assert.ok(report.sections.some((entry) => entry.id === "backup-freshness" && entry.status === "ok"), run.stdout);
   await pool.query("DELETE FROM ops.jobs");
+});
+
+test("a database connection failure exits 2 as misconfiguration, not a breach", async () => {
+  const run = await execute(process.execPath, [join(repo, "scripts/ops-report.mjs"), "--json"], {
+    env: { ...process.env, DATABASE_URL: "postgresql://postgres:isolated-test-only@127.0.0.1:1/ei_point" },
+  }).then(
+    (result) => ({ code: 0, stdout: result.stdout }),
+    (error) => ({ code: error.code, stdout: error.stdout, stderr: error.stderr }),
+  );
+  assert.equal(run.code, 2, run.stderr ?? run.stdout);
+  assert.match(run.stderr ?? "", /connection failed/i);
 });
