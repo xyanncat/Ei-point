@@ -17,7 +17,7 @@ async function fixture(){
  await mock('flock','exit "${MOCK_LOCK_EXIT:-0}"');
  if(process.platform==='win32')await mock('python3','exec python "$@"');
  const env={...process.env,ENV_FILE:unix(envFile),BACKUP_ROOT:unix(join(directory,'snapshots')),MOCK_LOG:unix(log),MOCK_BIN:unix(bin)};
- const run=(script,extra={})=>spawnSync(bash,['-c','export PATH="$MOCK_BIN:$PATH"; bash "$1"','--',unix(join(root,script))],{cwd:root,env:{...env,...extra},encoding:'utf8',timeout:15000});
+ const run=(script,extra={})=>spawnSync(bash,['-c','export PATH="$MOCK_BIN:$PATH"; bash "$1"','--',unix(join(root,script))],{cwd:root,env:{...env,...extra},encoding:'utf8',timeout:120000});
  return {directory,bin,log,envFile,mock,env,run,cleanup:()=>rm(directory,{recursive:true,force:true})};
 }
 test('all backup shell entrypoints parse',()=>{

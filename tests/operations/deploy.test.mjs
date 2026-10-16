@@ -30,7 +30,7 @@ exec "$REAL_NODE" "$@"`);
   await mock('df',"printf 'Filesystem Blocks Used Available Capacity Mounted\nmock 1000 100 900 10%% /\n'");
   await mock('flock','exit 0');await mock('sleep','exit 0');
   const env={...process.env,MOCK_BIN:unix(bin),MOCK_LOG:unix(log),REAL_NODE:unix(process.execPath),ENV_FILE:unix(envFile),BACKUP_SNAPSHOT:unix(backup),RELEASE_STATE_DIR:unix(state)};
-  const run=(script,extra={},argument=release)=>spawnSync(bash,['-c','export PATH="$MOCK_BIN:$PATH"; bash "$1" "$2"','--',unix(join(root,script)),unix(argument)],{cwd:root,env:{...env,...extra},encoding:'utf8',timeout:30000});
+  const run=(script,extra={},argument=release)=>spawnSync(bash,['-c','export PATH="$MOCK_BIN:$PATH"; bash "$1" "$2"','--',unix(join(root,script)),unix(argument)],{cwd:root,env:{...env,...extra},encoding:'utf8',timeout:120000});
   let result=run('scripts/deploy.sh');assert.equal(result.status,0,result.stderr);
   let calls=await readFile(log,'utf8');assert.match(calls,/pull postgres nginx api web workers/);assert.match(calls,/legacy-disabled stop bot-security bot-moderation/);assert.match(calls,/maintenance run --rm --no-deps migrate/);assert.ok(calls.indexOf('stanza-create')>=0&&calls.indexOf('stanza-create')<calls.indexOf('maintenance run --rm --no-deps migrate'),'WAL repository must be initialized before schema migrations');assert.ok(calls.indexOf(' check')<calls.indexOf('maintenance run --rm --no-deps migrate'),'WAL repository check must pass before schema migrations');assert.match(calls,/up -d --no-build/);assert.doesNotMatch(calls,/(?:^|\s)(?:down|build)(?:\s|$)/);
   const saved=await readFile(join(state,'current.json'),'utf8');

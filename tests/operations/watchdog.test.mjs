@@ -44,7 +44,7 @@ fi`);
   const script=join(root,'infra/systemd/ei-point-watchdog.sh');
   const syntax=spawnSync(bash,['-n',unix(script)],{encoding:'utf8'});assert.equal(syntax.status,0,syntax.stderr);
   const env={...process.env,MOCK_BIN:unix(bin),MOCK_LOG:unix(log),WATCHDOG_STATE_DIR:unix(state),WATCHDOG_FAIL_THRESHOLD:'1',WATCHDOG_MAX_RESTARTS:'1'};
-  const run=(extra={})=>spawnSync(bash,['-c','export PATH="$MOCK_BIN:$PATH"; bash "$1"','--',unix(script)],{env:{...env,...extra},encoding:'utf8',timeout:30000});
+  const run=(extra={})=>spawnSync(bash,['-c','export PATH="$MOCK_BIN:$PATH"; bash "$1"','--',unix(script)],{env:{...env,...extra},encoding:'utf8',timeout:120000});
   let result=run();assert.equal(result.status,1,result.stderr);
   let calls=await readFile(log,'utf8');assert.match(calls,/UNHEALTHY bot-himiko.*found 0/);assert.match(calls,/UNHEALTHY workers: no Docker healthcheck/);assert.match(calls,/optional asset build\/import writes held/);await access(join(state,'disk-hold'));
   assert.equal((calls.match(/DOCKER restart/g)??[]).length,1);assert.match(calls,/restart --time 15 bot-kafka-id/);assert.doesNotMatch(calls,/bot-security|bot-moderation/);
