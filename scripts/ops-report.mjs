@@ -7,8 +7,10 @@
 //   DATABASE_URL=... node scripts/ops-report.mjs [--backup-root DIR] [--max-backup-age-hours N] [--json]
 //
 // Exit codes: 0 all clear, 1 at least one breach, 2 misconfigured.
-import { readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { verifyBackup } from "./lib/operations.mjs";
 
@@ -55,6 +57,11 @@ export async function heartbeatSection(query) {
   const rows = await query(
     `SELECT service, liveness, gateway, db_ready, updated_at > now() - interval '${THRESHOLDS.heartbeatStaleSeconds} seconds' AS fresh FROM ops.service_status`,
   );
+  if (!rows.length) {
+    // Zero rows is "no data", not "healthy": a fleet that never reported (or
+    // lost its rows) must not read as fresh.
+    return section("service-heartbeats", "breach", "no service heartbeats recorded — the fleet has never reported or the table lost rows");
+  }
   const degraded = rows.filter((row) => !(row.fresh && row.liveness === "ok" && row.gateway === "ok" && row.db_ready));
   if (degraded.length) {
     return section("service-heartbeats", "breach", `stale/unready: ${degraded.map((row) => row.service).join(", ")}`);
@@ -81,13 +88,43 @@ export async function backupFreshnessSection(root, maxAgeHours = 24) {
   }
 }
 
+/** Restore age (§9C): the newest snapshot must carry a verified restore-drill record. */
+export async function restoreAgeSection(root, maxAgeDays = 30) {
+  if (!root) return section("restore-age", "breach", "backup root is not configured");
+  let entries;
+  try {
+    entries = (await readdir(root)).filter((name) => /^\d{8}T\d{6}Z$/u.test(name)).sort();
+  } catch {
+    return section("restore-age", "breach", `backup root is missing: ${root}`);
+  }
+  const latest = entries.at(-1);
+  if (!latest) return section("restore-age", "breach", `no completed snapshot under ${root}`);
+  let record;
+  try {
+    record = JSON.parse(await readFile(join(root, latest, "restore-verified.json"), "utf8"));
+  } catch {
+    return section("restore-age", "breach", `latest snapshot ${latest} has no verified restore drill on record`);
+  }
+  const verifiedAt = Date.parse(record.verifiedAt);
+  const ageDays = Number.isFinite(verifiedAt) ? (Date.now() - verifiedAt) / 86_400_000 : Number.NaN;
+  const breach = !Number.isFinite(ageDays) || ageDays > maxAgeDays;
+  return section(
+    "restore-age",
+    breach ? "breach" : "ok",
+    breach
+      ? `latest verified restore of ${latest} is ${Number.isFinite(ageDays) ? `${ageDays.toFixed(1)}d` : "unknown"} old (max ${maxAgeDays}d)`
+      : `latest verified restore of ${latest}: ${ageDays.toFixed(1)}d old (max ${maxAgeDays}d)`,
+  );
+}
+
 /** Aggregate the operator report. `query` is a bound sql->rows function. */
-export async function runReport(query, { backupRoot, maxBackupAgeHours = 24 } = {}) {
+export async function runReport(query, { backupRoot, maxBackupAgeHours = 24, maxRestoreAgeDays = 30 } = {}) {
   const sections = [
     await queueLagSection(query),
     await deliveryFailuresSection(query),
     await heartbeatSection(query),
     await backupFreshnessSection(backupRoot, maxBackupAgeHours),
+    await restoreAgeSection(backupRoot, maxRestoreAgeDays),
   ];
   const breaches = sections.filter((entry) => entry.status === "breach");
   return { sections, breaches, exitCode: breaches.length ? 1 : 0 };
@@ -136,4 +173,4 @@ async function main() {
   }
 }
 
-if (process.argv[1] && process.argv[1].endsWith("ops-report.mjs")) await main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

@@ -32,3 +32,8 @@ bounded python3 "$ROOT/infra/backup/extract-artwork.py" "$BACKUP_SNAPSHOT/artwor
 ELAPSED=$(( $(date +%s)-START ))
 ((ELAPSED<=RTO_SECONDS)) || { echo 'Restore exceeded RTO' >&2; exit 1; }
 printf 'Logical bundle restore PASS: database=%s elapsed=%ss; artifact hashes, pg_restore, SQL read and extracted artwork content verified. WAL/PITR and recovery-point age were not tested.\n' "$database" "$ELAPSED"
+# Persist the verification so operators can surface restore age (§9C): the record
+# lives beside the snapshot it verified and ages out with snapshot retention.
+printf '{"version":1,"verifiedAt":"%s","database":"%s","elapsedSeconds":%s,"snapshot":"%s"}\n' \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$database" "$ELAPSED" "$(basename -- "$BACKUP_SNAPSHOT")" \
+  > "$BACKUP_SNAPSHOT/restore-verified.json"

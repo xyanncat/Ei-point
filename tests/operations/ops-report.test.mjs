@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createServer } from "node:net";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import EmbeddedPostgres from "../helpers/embedded-postgres.mjs";
 import { runMigrations } from "../../infra/postgres/run-migrations.mjs";
-import { runReport, queueLagSection, deliveryFailuresSection, heartbeatSection, backupFreshnessSection } from "../../scripts/ops-report.mjs";
+import { runReport, queueLagSection, deliveryFailuresSection, heartbeatSection, backupFreshnessSection, restoreAgeSection } from "../../scripts/ops-report.mjs";
 
 const execute = promisify(execFile);
 const repo = fileURLToPath(new URL("../../", import.meta.url));
@@ -18,12 +18,14 @@ let server;
 let url;
 let pool;
 
-/** Create a verified backup snapshot directory (real bundle manifest + artifacts). */
+/** Create a verified backup snapshot directory (real bundle manifest + artifacts + restore record). */
 async function snapshot(root, name = "20260101T000000Z") {
   const directory = join(root, name);
   await mkdir(directory, { recursive: true });
   for (const artifact of ["postgres.dump", "roles.sql", "artwork.tar.gz"]) await writeFile(join(directory, artifact), `fixture ${artifact}`);
   await execute(process.execPath, [join(repo, "infra/backup/bundle.mjs"), "create", directory, "ei_point"]);
+  // §9C: a completed logical restore drill persists this record beside its snapshot.
+  await writeFile(join(directory, "restore-verified.json"), JSON.stringify({ version: 1, verifiedAt: new Date().toISOString(), database: "ei_point", elapsedSeconds: 42, snapshot: name }) + "\n");
   return directory;
 }
 
@@ -62,6 +64,8 @@ after(async () => {
 test("a fresh deployment reports every operator surface clear", async () => {
   const root = await mkdtemp(join(tmpdir(), "ei-ops-backup-"));
   await snapshot(root);
+  // A live deployment has reported heartbeats; zero rows is a breach, not "fresh".
+  await pool.query("INSERT INTO ops.service_status (service,liveness,gateway,db_ready) VALUES ('bot-music','ok','ok',true),('workers','ok','ok',true)");
   const query = async (sql) => (await pool.query(sql)).rows;
   const report = await runReport(query, { backupRoot: root });
   assert.deepEqual(report.sections.map((entry) => [entry.id, entry.status]), [
@@ -69,8 +73,10 @@ test("a fresh deployment reports every operator surface clear", async () => {
     ["delivery-failures", "ok"],
     ["service-heartbeats", "ok"],
     ["backup-freshness", "ok"],
+    ["restore-age", "ok"],
   ]);
   assert.equal(report.exitCode, 0);
+  await pool.query("DELETE FROM ops.service_status");
 });
 
 test("an aged durable queue and dead jobs breach queue lag", async () => {
@@ -100,6 +106,9 @@ test("unpublished outbox events breach only when delivery is actually late", asy
 
 test("stale or degraded heartbeats are surfaced per service", async () => {
   const query = async (sql) => (await pool.query(sql)).rows;
+  const empty = await heartbeatSection(query);
+  assert.equal(empty.status, "breach", "zero heartbeat rows must read as no-data, not healthy");
+  assert.match(empty.detail, /no service heartbeats recorded/);
   await pool.query("INSERT INTO ops.service_status (service,liveness,gateway,db_ready) VALUES ('bot-music','ok','ok',true),('bot-ai','ok','ok',true)");
   const fresh = await heartbeatSection(query);
   assert.equal(fresh.status, "ok");
@@ -133,6 +142,25 @@ test("backup freshness surfaces age, corruption and missing roots as breaches", 
   const missing = await backupFreshnessSection(join(root, "not-there"), 24);
   assert.equal(missing.status, "breach");
   assert.match(missing.detail, /missing|no completed snapshot/);
+});
+
+test("restore age surfaces the verified drill record and breaches on missing or stale proof", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ei-ops-restore-"));
+  const directory = await snapshot(root);
+  await rm(join(directory, "restore-verified.json"));
+  const missing = await restoreAgeSection(root);
+  assert.equal(missing.status, "breach");
+  assert.match(missing.detail, /no verified restore drill on record/);
+  await writeFile(join(directory, "restore-verified.json"), JSON.stringify({ version: 1, verifiedAt: new Date().toISOString(), database: "ei_point", elapsedSeconds: 42, snapshot: "20260101T000000Z" }) + "\n");
+  const fresh = await restoreAgeSection(root);
+  assert.equal(fresh.status, "ok");
+  assert.match(fresh.detail, /latest verified restore of 20260101T000000Z/);
+  const record = JSON.parse(await readFile(join(directory, "restore-verified.json"), "utf8"));
+  record.verifiedAt = new Date(Date.now() - 45 * 86_400_000).toISOString();
+  await writeFile(join(directory, "restore-verified.json"), JSON.stringify(record) + "\n");
+  const stale = await restoreAgeSection(root, 30);
+  assert.equal(stale.status, "breach");
+  assert.match(stale.detail, /old \(max 30d\)/);
 });
 
 test("the CLI reports breaches and exits non-zero for the operator", async () => {  const root = await mkdtemp(join(tmpdir(), "ei-ops-cli-"));

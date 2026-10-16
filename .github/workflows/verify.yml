@@ -40,10 +40,14 @@ jobs:
           pnpm audit --prod --json > npm-audit.json || true
           python -m pip install --quiet pip-audit
           python -m pip_audit -r apps/bots/music-py/requirements.txt --format json > python-audit.json || true
-      - name: Feature coverage
+      - name: Feature coverage (structural)
         run: node scripts/check-feature-coverage.mjs --mode structural
       - name: Dashboard API contract sync
         run: node scripts/check-openapi-sync.mjs
+      - name: Build every workspace package
+        run: pnpm build
+      - name: Lint
+        run: pnpm lint
       - name: Root suites + phase gates + resource budget
         run: pnpm test
       - name: Typecheck
@@ -62,3 +66,17 @@ jobs:
             python-audit.json
           if-no-files-found: ignore
           retention-days: 30
+
+  # §2B: build the locked immutable service images on Linux. The Dockerfiles
+  # are self-contained (corepack + pnpm install run inside each build), so a
+  # plain checkout suffices. Container/OS scanning is not configured yet and
+  # is recorded as BLOCKED by scripts/verify-project.mjs.
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the locked service images
+        run: docker compose -f infra/docker/compose.yml build --pull
+      - name: Validate the rendered Compose configuration
+        run: docker compose -f infra/docker/compose.yml config --quiet

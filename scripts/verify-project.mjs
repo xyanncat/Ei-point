@@ -27,14 +27,17 @@ export function gatePlan(pinned) {
     { id: "pnpm-toolchain", label: "pnpm toolchain", command: "pnpm", args: ["--version"], mandatory: true, tool: "pnpm", expectStdout: /^9\./ },
     { id: "python-music", label: "music bot unit tests", command: "python", args: ["-m", "unittest", "discover", "-s", "apps/bots/music-py/tests", "-p", "test_*.py"], mandatory: true, tool: "python" },
     { id: "feature-coverage", label: "legacy feature coverage (structural)", command: "node", args: ["scripts/check-feature-coverage.mjs", "--mode", "structural"], mandatory: true },
+    // §10A lists strict coverage as a release requirement; §1B (release-mode
+    // reconciliation) has not run yet, so this gate is recorded and expected
+    // to stay red until then — never silently absent from the bundle.
+    { id: "feature-coverage-release", label: "legacy feature coverage (release mode; recorded pending §1B)", command: "node", args: ["scripts/check-feature-coverage.mjs", "--mode", "release"], mandatory: false },
     { id: "openapi-sync", label: "dashboard API contract sync", command: "node", args: ["scripts/check-openapi-sync.mjs"], mandatory: true },
     { id: "root-suites", label: "root suites + phase gates + resource budget", command: "pnpm", args: ["test"], mandatory: true, timeoutMs: 1_500_000 },
     { id: "typecheck", label: "workspace typecheck", command: "pnpm", args: ["typecheck"], mandatory: true, timeoutMs: 1_500_000 },
     { id: "browser", label: "browser acceptance", command: "pnpm", args: ["test:browser"], mandatory: true, timeoutMs: 1_800_000 },
     { id: "npm-audit", label: "npm production advisories (recorded, triaged)", command: "pnpm", args: ["audit", "--prod", "--json"], mandatory: false },
     { id: "python-audit", label: "python dependency advisories (recorded, triaged)", command: "python", args: ["-m", "pip_audit", "-r", "apps/bots/music-py/requirements.txt"], mandatory: false, tool: "python" },
-    { id: "container-scan", label: "container/OS image scan", kind: "external", mandatory: false },
-  ];
+    { id: "container-scan", label: "container/OS image scan", kind: "external", mandatory: false },  ];
 }
 
 function result(gate, status, detail) {
@@ -104,7 +107,7 @@ export async function runGate(gate, ctx = {}) {
     return result(gate, "passed", `running ${actual}; pinned ${pinned}`);
   }
   if (gate.kind === "external" || !gate.command) {
-    return result(gate, "blocked", "no local runner; executed by the Linux CI workflow");
+    return result(gate, "blocked", "no runner on this host; the service images build in the Linux CI workflow (images job), but no container/OS scanner is configured yet");
   }
   const exec = ctx.exec ?? spawnCapture;
   let outcome;
@@ -150,7 +153,16 @@ async function main() {
   const skip = new Set(valueFor(args, "--skip")?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? []);
   const json = args.includes("--json");
   const pinned = await readNvmrc(root);
-  const gates = gatePlan(pinned).filter(
+  const plan = gatePlan(pinned);
+  const known = new Set(plan.map((gate) => gate.id));
+  const requested = [...(only ?? []), ...skip];
+  const unknown = requested.filter((id) => !known.has(id));
+  if (unknown.length) {
+    console.error(`Unknown gate id(s): ${unknown.join(", ")}; known: ${[...known].join(", ")}`);
+    process.exitCode = 2;
+    return;
+  }
+  const gates = plan.filter(
     (gate) => (only ? only.includes(gate.id) : true) && !skip.has(gate.id),
   );
   const results = [];

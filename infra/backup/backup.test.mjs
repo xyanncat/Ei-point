@@ -95,6 +95,7 @@ if [[ "$*" == *' exec '* ]]; then exit 2; fi
 if [[ "$*" == *'pg_restore'* || "$*" == *'psql -X -v ON_ERROR_STOP=1'* && "$*" != *'SELECT count'* ]]; then cat >/dev/null; fi
 exit 0`);
   const result=f.run('scripts/restore-drill.sh',{BACKUP_SNAPSHOT:unix(f.directory)});assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/Logical bundle restore PASS/);assert.match(result.stdout,/Artwork verified: 1/);
+  assert.match(await readFile(join(f.directory,'restore-verified.json'),'utf8'),/verifiedAt/,'a passing drill must persist its restore-age record');
   const log=await readFile(f.log,'utf8');assert.match(log,/--network none/);assert.match(log,/pg_restore --exit-on-error/);assert.match(log,/ON_ERROR_STOP=1/);assert.match(log,/pg_isready -h 127\.0\.0\.1/);assert.match(log,/rm -f ei-point-restore/);assert.doesNotMatch(log,/migrations/);
  }finally{await f.cleanup();}
 });

@@ -47,6 +47,6 @@ done
 # Initialisation is a deliberate operator action. Auth, network, and corruption
 # failures must never trigger init or be reported as successful backups.
 restic snapshots >/dev/null
-restic backup --tag ei-point --tag physical-and-private -- "$ENV_FILE" "${private_paths[@]}" "${paths[@]}"
+restic backup --tag ei-point --tag physical-and-private -- "${private_paths[@]}" "${paths[@]}"
 restic forget --tag ei-point --keep-hourly 24 --keep-daily 7 --keep-weekly 4 --prune
 echo 'Off-host encrypted backup completed; restore/PITR acceptance still requires a measured drill.'

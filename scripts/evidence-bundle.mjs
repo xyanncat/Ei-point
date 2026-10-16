@@ -22,7 +22,10 @@ function valueFor(args, flag) {
 
 function run(command, args, { shell = false } = {}) {
   return new Promise((settle) => {
-    const child = spawn(command, args, { cwd: root, shell: shell || process.platform === "win32", windowsHide: true });
+    // Honor the explicit shell flag: git/node/python are real executables and
+    // must not go through cmd.exe (which also mangles argument handling);
+    // callers pass { shell: true } for .cmd shims such as pnpm.
+    const child = spawn(command, args, { cwd: root, shell, windowsHide: true });
     let stdout = "";
     let stderr = "";
     child.stdout?.on("data", (chunk) => { stdout += chunk; });
@@ -43,7 +46,24 @@ async function main() {
 
   const revision = (await run("git", ["rev-parse", "HEAD"], { shell: false })).stdout.trim();
   const branch = (await run("git", ["rev-parse", "--abbrev-ref", "HEAD"], { shell: false })).stdout.trim();
-  const porcelain = normalize((await run("git", ["status", "--porcelain"], { shell: false })).stdout).trim();
+  // No whole-string trim here: porcelain's first line may legitimately start with
+  // a space (" M path"), and trimming it would shift the XY columns.
+  const porcelain = normalize((await run("git", ["status", "--porcelain"], { shell: false })).stdout);
+
+  // Classify each dirty entry from observed state — never hardcode a narrative.
+  // Untracked files are labelled as such; a modified path whose only difference
+  // is line endings (git diff --ignore-cr-at-eol is empty) is derived, not assumed.
+  const dirty = [];
+  for (const line of porcelain.split("\n").filter((entry) => entry.trim() !== "")) {
+    const status = line.slice(0, 2).trim();
+    const path = line.slice(3).trim();
+    if (status === "??") {
+      dirty.push({ status, path, kind: "untracked" });
+      continue;
+    }
+    const diff = await run("git", ["diff", "--ignore-cr-at-eol", "--quiet", "--", path], { shell: false });
+    dirty.push({ status, path, kind: diff.code === 0 ? "line-ending-only" : "content-modified" });
+  }
 
   const verifierArgs = ["scripts/verify-project.mjs", "--json"];
   if (gates) verifierArgs.push("--only", gates);
@@ -58,10 +78,13 @@ async function main() {
 
   const tools = await Promise.all([
     run("node", ["--version"], { shell: false }),
-    run("pnpm", ["--version"]),
+    run("pnpm", ["--version"], { shell: true }),
     run("python", ["--version"]),
   ]);
-  const dirty = porcelain.split("\n").filter((line) => line.trim() !== "");
+  const kinds = Object.groupBy(dirty, (entry) => entry.kind);
+  const dirtyStateNote = dirty.length
+    ? `Derived from observed state: ${kinds["line-ending-only"]?.length ?? 0} line-ending-only, ${kinds["content-modified"]?.length ?? 0} content-modified, ${kinds["untracked"]?.length ?? 0} untracked. No claims are made about content beyond this classification.`
+    : "clean";
   const releaseId = `${startedAt.toISOString().replace(/[-:]/gu, "").replace(/\.\d+Z$/u, "Z")}-${revision.slice(0, 8)}-${dirty.length ? "dirty" : "clean"}`;
   const directory = resolve(out, releaseId);
   await mkdir(directory, { recursive: true });
@@ -74,9 +97,7 @@ async function main() {
     revision,
     branch,
     dirtyState: dirty.length ? dirty : [],
-    dirtyStateNote: dirty.length
-      ? "Working tree entries above were present at capture time; docs/audits/2026-10-15-project-audit-1000.md is the owner-supplied audit copy and apps/dashboard/lib/project-assets.json is a known line-ending-only artifact."
-      : "clean",
+    dirtyStateNote,
     toolchain: {
       node: tools[0].stdout.trim() || tools[0].stderr.trim(),
       pnpm: tools[1].stdout.trim() || tools[1].stderr.trim(),
@@ -100,7 +121,7 @@ async function main() {
     summary: report?.summary ?? null,
     images: {
       status: "blocked",
-      note: "Linux image build and container/OS scans require Docker on a Linux host; recorded as BLOCKED, never passed (§2B/§10A).",
+      note: "Service images build in the Linux CI workflow (images job). Container/OS scanning is not configured on any runner yet and remains BLOCKED — never passed — until a scanner is added (§2B/§10A).",
     },
   };
 

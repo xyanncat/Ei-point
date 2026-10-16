@@ -111,10 +111,10 @@ function main() {
     return;
   }
   if (args.includes("--list-volumes")) {
-  for (const volume of privateVolumes()) console.log(volume);
-  return;
-}
-if (args.includes("--list-private")) {
+    for (const volume of privateVolumes()) console.log(volume);
+    return;
+  }
+  if (args.includes("--list-private")) {
     const { paths, missing } = listBackedUpPaths(process.env);
     if (missing.length) {
       console.error(`Missing required durable assets: ${missing.map((entry) => `${entry.id} (${entry.env})`).join(", ")}`);

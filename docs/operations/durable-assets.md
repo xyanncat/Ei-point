@@ -40,7 +40,9 @@ missing.
 
 These numbers are **proposed targets**. They are not claimed as achieved until a
 measured drill on the real VPS, informed by measured bandwidth, produces the
-times. See `docs/operations/durable-assets` evidence and the plan §9B.
+times (§9B, §10B). A completed logical drill persists a dated
+`restore-verified.json` beside the snapshot it verified;
+`scripts/ops-report.mjs` surfaces its age to operators.
 
 - Database RPO **15 minutes** (WAL archiving + 6h logical tier).
 - Unique-asset RPO **6 hours** (6h logical tier; restic timer).

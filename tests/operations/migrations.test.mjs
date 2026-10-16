@@ -114,10 +114,11 @@ test("an upgrade from a prior snapshot applies only the newer migrations", async
 
   const upgrade = await migrate(url);
   assert.equal(upgrade.code, 0, upgrade.stderr);
-  assert.deepEqual(
-    upgrade.result.applied,
-    ["016_community_voice_xp_cooldown.sql", "017_sanction_ownership.sql", "018_razorpay.sql", "019_reward_redemption.sql"],
-  );
+  // Computed from the directory listing, so adding migration 020 keeps this test honest.
+  const { readdir } = await import("node:fs/promises");
+  const expected = (await readdir(migrationsDir)).filter((name) => name.endsWith(".sql")).sort()
+    .filter((name) => name > "015_himiko_community_ownership.sql");
+  assert.deepEqual(upgrade.result.applied, expected);
   // The upgraded schema now carries the 019 column the app expects.
   assert.equal(
     (await count(url, "SELECT 1 FROM information_schema.columns WHERE table_schema='commerce' AND table_name='orders' AND column_name='credit_applied_minor'")).length,

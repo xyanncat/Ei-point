@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { gatePlan, summarize, runGate, readNvmrc } from "../../scripts/verify-project.mjs";
 
@@ -21,9 +22,11 @@ test("the gate plan keeps required and recorded gates distinct", () => {
     "browser",
   ])
     assert.ok(mandatory.includes(required), `${required} must be a mandatory gate`);
-  // Scans are recorded/triaged, not release-blocking (§10A wording).
-  for (const recorded of ["npm-audit", "python-audit", "container-scan"])
+  // Scans are recorded/triaged, not release-blocking (§10A wording); the
+  // release-mode coverage gate stays recorded and red until §1B completes.
+  for (const recorded of ["npm-audit", "python-audit", "container-scan", "feature-coverage-release"])
     assert.ok(!mandatory.includes(recorded), `${recorded} must be recorded, not mandatory`);
+  assert.ok(plan.some((gate) => gate.id === "feature-coverage-release" && gate.args?.includes("release")), "strict coverage must be a recorded gate");
 });
 
 test("a blocked mandatory gate is not a pass; exit codes separate fail from blocked", () => {
@@ -71,6 +74,38 @@ test("the CI workflow exists and runs every mandatory gate with a frozen lockfil
   const yaml = readFileSync(workflow, "utf8");
   assert.match(yaml, /node-version-file:\s*\.nvmrc/);
   assert.match(yaml, /pnpm install --frozen-lockfile/);
-  for (const command of ["pnpm test", "pnpm typecheck", "test:browser", "check-feature-coverage.mjs", "unittest discover"])
+  for (const command of ["pnpm test", "pnpm typecheck", "pnpm lint", "pnpm build", "test:browser", "check-feature-coverage.mjs", "check-openapi-sync.mjs", "unittest discover"])
     assert.ok(yaml.includes(command), `workflow must run: ${command}`);
+  // §2B: locked immutable images must build in Linux CI.
+  assert.match(yaml, /docker compose -f infra\/docker\/compose\.yml build --pull/);
+  assert.match(yaml, /docker compose -f infra\/docker\/compose\.yml config --quiet/);
+});
+
+test("the evidence bundle classifies dirty state from observed paths that exist", async () => {
+  const { mkdtemp, readdir, readFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const out = await mkdtemp(join(tmpdir(), "ei-bundle-test-"));
+  const run = spawnSync(process.execPath, ["scripts/evidence-bundle.mjs", "--out", out, "--gates", "node-runtime"], { encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  const bundleDir = (await readdir(out))[0];
+  const evidence = JSON.parse(await readFile(join(out, bundleDir, "evidence.json"), "utf8"));
+  assert.ok(Array.isArray(evidence.dirtyState), "dirtyState must be an array");
+  // A porcelain parsing bug once ate the leading "." of the first entry's path;
+  // every classified path must exist on disk exactly as recorded.
+  for (const entry of evidence.dirtyState) {
+    assert.ok(existsSync(entry.path), `dirty path must exist on disk: ${entry.path}`);
+    assert.ok(["untracked", "line-ending-only", "content-modified"].includes(entry.kind), `unexpected kind: ${entry.kind}`);
+  }
+  assert.match(evidence.dirtyStateNote, /Derived from observed state|^clean$/);
+  assert.equal(evidence.verifierExitCode, 0);
+  await rm(out, { recursive: true, force: true });
+});
+
+test("the CLI rejects unknown gate ids instead of selecting zero gates and exiting 0", () => {
+  const bad = spawnSync(process.execPath, ["scripts/verify-project.mjs", "--only", "no-such-gate"], { encoding: "utf8" });
+  assert.equal(bad.status, 2, bad.stderr);
+  assert.match(bad.stderr, /Unknown gate id/);
+  const skipped = spawnSync(process.execPath, ["scripts/verify-project.mjs", "--skip", "not-a-gate"], { encoding: "utf8" });
+  assert.equal(skipped.status, 2, skipped.stderr);
 });
