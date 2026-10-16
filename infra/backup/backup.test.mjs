@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,writeFile,readFile,mkdir,chmod,readdir,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,appendFile,readFile,mkdir,chmod,readdir,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -45,10 +45,24 @@ test('restore validates artifacts before any Docker call and requires explicit s
   await assert.rejects(readFile(f.log),/ENOENT/);
  }finally{await f.cleanup();}
 });
+test('restic refuses to run when a required private durable asset is missing',async()=>{
+  const f=await fixture();try{
+    await f.mock('docker','printf "%s\\n" "$*" >> "$MOCK_LOG"');
+    await f.mock('restic','printf "restic %s\\n" "$*" >> "$MOCK_LOG"');
+    const r=f.run('infra/backup/restic-backup.sh',{RESTIC_REPOSITORY:'s3:https://example.invalid/bucket',RESTIC_PASSWORD:'test-secret'});
+    assert.notEqual(r.status,0);
+    assert.match(r.stderr,/durable asset is missing|no private paths/i);
+    await assert.rejects(readFile(f.log),/ENOENT/); // no docker/restic call was ever made
+  }finally{await f.cleanup();}
+});
 test('restic fails on repository errors without auto-init and discovers actual named volumes',async()=>{
  const f=await fixture();try{
   const artwork=join(f.directory,'artwork'),physical=join(f.directory,'physical');await mkdir(artwork);await mkdir(physical);
   await mkdir(join(physical,'backup','ei-point','20261014-120000F'),{recursive:true});await writeFile(join(physical,'backup','ei-point','backup.info'),'fixture');await writeFile(join(physical,'backup','ei-point','20261014-120000F','backup.manifest'),'fixture');
+  // §9B/A19: the unique/private host assets must ride the encrypted off-host set.
+  await writeFile(join(f.directory,'cyrene-reference.mp3'),'reference-bytes');
+  await writeFile(join(f.directory,'persona.md'),'persona-bytes');
+  await appendFile(f.envFile,`CYRENE_REFERENCE_AUDIO_PATH=${unix(join(f.directory,'cyrene-reference.mp3'))}\nCYRENE_PERSONA_MEMORY_FILE=${unix(join(f.directory,'persona.md'))}\n`);
   await f.mock('docker',`printf '%s\n' "$*" >> "$MOCK_LOG"
 if [[ "$*" == *'volume ls'* ]]; then [[ "$*" == *'=artwork'* ]] && echo artwork-id || echo pgbackrest-id
 elif [[ "$*" == *artwork-id* ]]; then echo '${unix(artwork)}'
