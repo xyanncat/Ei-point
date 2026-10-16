@@ -139,6 +139,7 @@ services:
     environment:
       API_INTERNAL_URL: http://api:3001
       NEXT_PUBLIC_API_BASE: http://api:3001
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
     networks: [app]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     deploy:

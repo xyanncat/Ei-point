@@ -30,12 +30,14 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
   try{return await handler(req,reply);}catch(e){if(e instanceof PaymentError)return reply.code(e.status).send({code:e.code,error:e.message});
    if((e as any)?.code==="23505")return reply.code(409).send({code:"payment-conflict",error:"This payment proof or order already exists."});throw e;}
  };
- const limit=async(req:FastifyRequest)=>{
+ const limit=async(req:FastifyRequest,client?:string)=>{
   const rows=await query(`INSERT INTO commerce.checkout_rate_limits(bucket) VALUES($1)
    ON CONFLICT(bucket) DO UPDATE SET requests=CASE WHEN commerce.checkout_rate_limits.window_started_at < now()-interval '1 minute' THEN 1 ELSE commerce.checkout_rate_limits.requests+1 END,
-   window_started_at=CASE WHEN commerce.checkout_rate_limits.window_started_at < now()-interval '1 minute' THEN now() ELSE commerce.checkout_rate_limits.window_started_at END RETURNING requests`,[hash(req.ip)]);
+   window_started_at=CASE WHEN commerce.checkout_rate_limits.window_started_at < now()-interval '1 minute' THEN now() ELSE commerce.checkout_rate_limits.window_started_at END RETURNING requests`,[hash(client??req.ip)]);
   if(Number(rows[0]?.requests??1)>30)fail(429,"rate-limit","Too many payment requests. Retry shortly.");
  };
+ // Internal callers (the dashboard lookup) may forward the edge's visitor address; only the last hop is used so a spoofed prefix cannot pick a bucket.
+ const forwardedClient=(req:FastifyRequest)=>{const raw=req.headers["x-ei-client-ip"];if(typeof raw!=="string")return undefined;const v=raw.split(",").map(part=>part.trim()).filter(Boolean).pop()??"";return /^[0-9a-fA-F:.]{3,45}$/.test(v)?v:undefined;};
  const publicWrite=async(req:FastifyRequest)=>{guard();if(req.headers.origin!==origin)fail(403,"origin-denied","Payment requests require the configured website Origin.");await limit(req);const approved=(await query("SELECT guild_id FROM access.guilds WHERE guild_id=$1 AND approved",[guild]))[0];if(!approved)fail(403,"guild-not-approved","Commerce guild is not approved.");};
  const body=(req:FastifyRequest)=>req.body as Record<string,unknown>??{};
  // HttpOnly recovery cookie: reloads and lost responses resume the same order without
@@ -99,6 +101,19 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
    return {...orderResponse(o,token),resumed:true};
   }));
   app.get<{Params:{orderId:string}}>("/api/payments/status/:orderId",run(async(req)=>{guard();await limit(req);const id=(req.params as any).orderId;if(!publicId(id))fail(400,"invalid-order","Order IDs look like RP-XXXXXX.");const o=(await query("SELECT o.*,c.name FROM commerce.orders o JOIN commerce.catalog c USING(sku) WHERE public_id=$1 AND guild_id=$2",[id,guild]))[0];if(!o)fail(404,"order-not-found","Order was not found.");return view(o!);}));
+ // Trusted internal lookup for server-rendered verification (nginx blocks external /api/internal/). The public bucket is skipped only for the token-authenticated caller; the visitor address forwarded by the dashboard keeps throttling per client.
+ app.get("/api/internal/payments/verify",run(async(req,reply)=>{
+  reply.header("Cache-Control","no-store");
+  const expected=env.INTERNAL_SERVICE_TOKEN??"",raw=req.headers.authorization??"",supplied=raw.startsWith("Bearer ")?raw.slice(7):"";
+  if(expected.length<32||Buffer.byteLength(supplied)!==Buffer.byteLength(expected)||!timingSafeEqual(Buffer.from(supplied),Buffer.from(expected)))fail(403,"service-token-denied","Internal service token is required.");
+  const q=req.query as Record<string,unknown>,id=typeof q.id==="string"?q.id.trim():"",token=typeof q.token==="string"?q.token.trim():"";
+  if(!id&&(token.length<16||token.length>200))fail(400,"bad-token","Verification link is invalid.");
+  if(id&&!publicId(id))fail(400,"invalid-order","Order IDs look like RP-XXXXXX.");
+  await limit(req,forwardedClient(req));
+  const o=(id?await query("SELECT o.status,o.amount_minor,o.method,o.expires_at,c.name AS sku_name FROM commerce.orders o JOIN commerce.catalog c USING(sku) WHERE o.public_id=$1 AND o.guild_id=$2",[id,guild]):await query("SELECT o.status,o.amount_minor,o.method,o.expires_at,c.name AS sku_name FROM commerce.orders o JOIN commerce.catalog c ON c.sku=o.sku WHERE o.order_token_hash=$1",[hash(token)]))[0];
+  if(!o)fail(404,"order-unknown","No order matches this link.");
+  return {skuName:o!.sku_name,amountMinor:Number(o!.amount_minor),status:o!.status==="settled"?"confirmed":o!.status==="pending"&&new Date(o!.expires_at).getTime()<Date.now()?"expired":o!.status,currency:o!.method==="upi"?"INR":"USDT"};
+ }));
  app.post("/api/payments/claim",run(async(req)=>{
   await publicWrite(req);const b=body(req),id=b.orderId,token=b.token??b.orderToken;
   if(!publicId(id)||typeof token!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(token))fail(400,"invalid-claim","Supply the order ID and original order token.");
@@ -116,8 +131,9 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
    await q("UPDATE commerce.orders SET status='claimed' WHERE order_id=$1",[o!.order_id]);return {orderId:id,status:"claimed",notificationStatus:"not-configured"};
   });
  }));
- const staff=async(req:FastifyRequest)=>{const id=(req.params as any).guildId;if(!snowflake(id))fail(400,"invalid-guild","Guild is invalid.");const s=await deps.authorize(req,id,"commerce");if(!s.isAdmin)fail(403,"admin-required","Administrator access is required for payment operations.");return s;};
- app.get("/api/guilds/:guildId/commerce/orders",run(async(req)=>{await staff(req);return {orders:await query(`SELECT o.public_id AS "orderId",o.buyer_id AS "buyerId",o.sku,o.service_name AS "serviceName",o.amount_minor AS "amountMinor",o.method,o.status,o.created_at AS "createdAt",o.expires_at AS "expiresAt",c.proof_ref AS "proofRef" FROM commerce.orders o LEFT JOIN commerce.claims c USING(order_id) WHERE o.guild_id=$1 ORDER BY o.created_at DESC LIMIT 100`,[(req.params as any).guildId])};}));
+ const reader=async(req:FastifyRequest)=>{const id=(req.params as any).guildId;if(!snowflake(id))fail(400,"invalid-guild","Guild is invalid.");return deps.authorize(req,id,"commerce");};
+ const staff=async(req:FastifyRequest)=>{const s=await reader(req);if(!s.isAdmin)fail(403,"admin-required","Administrator access is required for payment operations.");return s;};
+ app.get("/api/guilds/:guildId/commerce/orders",run(async(req)=>{const s=await reader(req);const orders=await query(`SELECT o.public_id AS "orderId",o.buyer_id AS "buyerId",o.sku,o.service_name AS "serviceName",o.amount_minor AS "amountMinor",o.method,o.status,o.created_at AS "createdAt",o.expires_at AS "expiresAt",c.proof_ref AS "proofRef" FROM commerce.orders o LEFT JOIN commerce.claims c USING(order_id) WHERE o.guild_id=$1 ORDER BY o.created_at DESC LIMIT 100`,[(req.params as any).guildId]);return {orders:s.isAdmin?orders:orders.map(o=>({orderId:o.orderId,sku:o.sku,serviceName:o.serviceName,amountMinor:o.amountMinor,method:o.method,status:o.status,createdAt:o.createdAt,expiresAt:o.expiresAt}))};}));
  for(const action of ["settle","reject"] as const)app.post(`/api/guilds/:guildId/commerce/orders/:orderId/${action}`,run(async(req)=>{
   const s=await staff(req),p=req.params as any;if(!publicId(p.orderId))fail(400,"invalid-order","Order is invalid.");const idem=key(req);
   return transaction(async(q)=>{const o=(await q("SELECT * FROM commerce.orders WHERE public_id=$1 AND guild_id=$2 FOR UPDATE",[p.orderId,p.guildId]))[0];if(!o)fail(404,"order-not-found","Order was not found.");

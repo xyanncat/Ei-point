@@ -1,20 +1,48 @@
 import type { OrderVerification } from "@ei-point/contracts";
+import { headers } from "next/headers";
 import { PageArt } from "../../components/page-art";
+type Verification =
+  | { state: "ok"; order: OrderVerification & { currency?: string } }
+  | { state: "unknown" }
+  | { state: "unavailable" };
 async function fetchVerification(
   token: string,
   id?: string,
-): Promise<(OrderVerification & {currency?:string}) | null> {
+  forwarded?: string,
+): Promise<Verification> {
   const base = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3001";
+  const service = process.env.INTERNAL_SERVICE_TOKEN ?? "";
+  const url = service
+    ? `${base}/api/internal/payments/verify?${id ? `id=${encodeURIComponent(id)}` : `token=${encodeURIComponent(token)}`}`
+    : id
+      ? `${base}/api/payments/status/${encodeURIComponent(id)}`
+      : `${base}/api/orders/verify?token=${encodeURIComponent(token)}`;
   try {
-    const res = await fetch(
-      id ? `${base}/api/payments/status/${encodeURIComponent(id)}` : `${base}/api/orders/verify?token=${encodeURIComponent(token)}`,
-      { cache: "no-store" },
-    );
-    if (!res.ok) return null;
-    const result=await res.json();
-    return id ? {skuName:result.serviceName,amountMinor:Math.round(Number(result.amount)*100),status:result.status,currency:result.currency} : result as OrderVerification;
+    const res = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+      ...(service
+        ? {
+            headers: {
+              authorization: `Bearer ${service}`,
+              ...(forwarded ? { "x-ei-client-ip": forwarded } : {}),
+            },
+          }
+        : {}),
+    });
+    if (res.status === 400 || res.status === 404) return { state: "unknown" };
+    if (!res.ok) return { state: "unavailable" };
+    const result = await res.json();
+    return {
+      state: "ok",
+      order: service
+        ? (result as OrderVerification & { currency?: string })
+        : id
+          ? { skuName: result.serviceName, amountMinor: Math.round(Number(result.amount) * 100), status: result.status, currency: result.currency }
+          : (result as OrderVerification),
+    };
   } catch {
-    return null;
+    return { state: "unavailable" };
   }
 }
 export default async function VerifyPage({
@@ -25,7 +53,8 @@ export default async function VerifyPage({
   const params=await searchParams;
   const token = params.token?.trim() ?? "";
   const id=params.id?.trim()??"";
-  const order = id || token.length >= 16 ? await fetchVerification(token,id||undefined) : null;
+  const forwarded = (await headers()).get("x-forwarded-for") ?? "";
+  const result = id || token.length >= 16 ? await fetchVerification(token, id || undefined, forwarded || undefined) : null;
   return (
     <section className="ei-page-layout" aria-label="Order verification">
       <div className="ei-page-body">
@@ -41,16 +70,16 @@ export default async function VerifyPage({
         </p>
         {(token||id) && (
           <div className="ei-verify-result" role="status">
-            {order ? (
+            {result?.state === "ok" ? (
               <>
                 <h2>Order details</h2>
                 <dl>
                   <dt>Item</dt>
-                  <dd>{order.skuName}</dd>
+                  <dd>{result.order.skuName}</dd>
                   <dt>Amount</dt>
-                  <dd>{(order.amountMinor / 100).toFixed(2)} {order.currency ?? "INR"}</dd>
+                  <dd>{(result.order.amountMinor / 100).toFixed(2)} {result.order.currency ?? "INR"}</dd>
                   <dt>Status</dt>
-                  <dd>{order.status}</dd>
+                  <dd>{result.order.status}</dd>
                 </dl>
               </>
             ) : (
@@ -58,12 +87,16 @@ export default async function VerifyPage({
                 <h2>
                   {!id && token.length < 16
                     ? "Check your token"
-                    : "Order not available"}
+                    : result?.state === "unavailable"
+                      ? "Verification unavailable"
+                      : "Order not available"}
                 </h2>
                 <p>
                   {!id && token.length < 16
                     ? "This token is incomplete. Copy the full token from your verification link."
-                    : "No order matches this ID or link, or verification is temporarily unavailable. Check with staff or try again shortly."}
+                    : result?.state === "unavailable"
+                      ? "Order verification is temporarily unavailable. Your order is not affected — retry in a moment."
+                      : "No order matches this ID or link."}
                 </p>
               </>
             )}

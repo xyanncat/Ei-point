@@ -43,3 +43,50 @@ test("lost create response recovers only with original client secret",async()=>{
  assert.equal(first.statusCode,200);assert.equal(retry.statusCode,200);assert.equal(first.json().token,retry.json().token);assert.equal(first.json().orderId,retry.json().orderId);
  const attacker=await app.inject({...request,payload:{...request.payload,recoveryToken:'b'.repeat(43)}});assert.equal(attacker.statusCode,409);await app.close();
 });
+test("commerce readers list minimized orders while settlement staff see buyer and proof",async()=>{
+ const rows=[{orderId:"RP-ABC123",buyerId:"200000000000000001",sku:"membership",serviceName:"Membership",amountMinor:70000,method:"upi",status:"claimed",createdAt:new Date(),expiresAt:new Date(Date.now()+60000),proofRef:"upi:UTR-9"}];
+ let admin=false;const app=Fastify();
+ registerCommerceRoutes(app,{env,query:async()=>rows,transaction:async(work)=>work(async()=>[]),authorize:async()=>({userId:guild,isAdmin:admin})});
+ const reader=await app.inject({url:`/api/guilds/${guild}/commerce/orders`});assert.equal(reader.statusCode,200);
+ const view=reader.json().orders[0];assert.equal(view.orderId,"RP-ABC123");assert.equal("buyerId" in view,false);assert.equal("proofRef" in view,false);assert.equal(view.status,"claimed");
+ admin=true;const staff=await app.inject({url:`/api/guilds/${guild}/commerce/orders`});assert.equal(staff.statusCode,200);
+ assert.equal(staff.json().orders[0].buyerId,"200000000000000001");assert.equal(staff.json().orders[0].proofRef,"upi:UTR-9");await app.close();
+});
+test("commerce readers cannot settle or reject orders",async()=>{
+ const app=fixture(env);
+ for(const action of ["settle","reject"])assert.equal((await app.inject({method:"POST",url:`/api/guilds/${guild}/commerce/orders/RP-ABC123/${action}`,payload:{}})).statusCode,403);
+ await app.close();
+});
+test("public payment reads throttle per client address so one abuser fails alone",async()=>{
+ const buckets=new Map(),row={public_id:"RP-ABC123",status:"claimed",amount_minor:"70000",method:"upi",name:"Membership",expires_at:new Date(Date.now()+100000)};
+ const app=fixture(env,async(sql,p)=>{if(sql.includes("checkout_rate_limits")){const k=String(p![0]),n=(buckets.get(k)??0)+1;buckets.set(k,n);return [{requests:n}];}return sql.includes("commerce.orders")?[row]:[];});
+ for(let i=1;i<=31;i++)assert.equal((await app.inject({url:"/api/payments/status/RP-ABC123",remoteAddress:`203.0.113.${i}`})).statusCode,200);
+ let last=0;for(let i=0;i<31;i++)last=(await app.inject({url:"/api/payments/status/RP-ABC123",remoteAddress:"198.51.100.7"})).statusCode;
+ assert.equal(last,429);assert.equal(buckets.size,32);await app.close();
+});
+test("internal verification requires the service token and answers by token or order id",async()=>{
+ const token="s".repeat(48),rows=[{status:"claimed",amount_minor:"70000",method:"upi",sku_name:"Membership",expires_at:new Date(Date.now()+600000)}],seen:string[]=[];
+ const app=fixture({...env,INTERNAL_SERVICE_TOKEN:token},async(sql,p)=>{if(sql.includes("checkout_rate_limits"))return [{requests:1}];if(sql.includes("commerce.orders")){seen.push(sql);const key=String(p![0]).toLowerCase();return key.includes("nope")?[]:key.includes("expird")?[{...rows[0],status:"pending",expires_at:new Date(Date.now()-1000)}]:rows;}return [];});
+ assert.equal((await app.inject({url:"/api/internal/payments/verify?token="+"t".repeat(24)})).statusCode,403);
+ assert.equal((await app.inject({url:"/api/internal/payments/verify?token="+"t".repeat(24),headers:{authorization:"Bearer "+"x".repeat(48)}})).statusCode,403);
+ assert.equal((await app.inject({url:"/api/internal/payments/verify",headers:{authorization:`Bearer ${token}`}})).statusCode,400);
+ assert.equal((await app.inject({url:"/api/internal/payments/verify?id=not-an-order",headers:{authorization:`Bearer ${token}`}})).statusCode,400);
+ const byToken=await app.inject({url:"/api/internal/payments/verify?token="+"t".repeat(24),headers:{authorization:`Bearer ${token}`}});
+ assert.equal(byToken.statusCode,200);assert.deepEqual(byToken.json(),{skuName:"Membership",amountMinor:70000,status:"claimed",currency:"INR"});
+ assert.equal(byToken.headers["cache-control"],"no-store");
+ const byId=await app.inject({url:"/api/internal/payments/verify?id=RP-ABC123",headers:{authorization:`Bearer ${token}`}});assert.equal(byId.statusCode,200);
+ assert.equal(byId.json().status,"claimed");
+ const expired=await app.inject({url:"/api/internal/payments/verify?id=RP-EXPIRD",headers:{authorization:`Bearer ${token}`}});assert.equal(expired.statusCode,200);assert.equal(expired.json().status,"expired");
+ assert.equal((await app.inject({url:"/api/internal/payments/verify?id=RP-NOPE99",headers:{authorization:`Bearer ${token}`}})).statusCode,404);
+ assert.ok(seen[0]!.includes("order_token_hash"));assert.ok(seen[1]!.includes("public_id"));await app.close();
+});
+test("internal verification throttles the forwarded visitor rather than the shared server",async()=>{
+ const token="s".repeat(48),buckets=new Map(),row={status:"claimed",amount_minor:"70000",method:"upi",sku_name:"Membership",expires_at:new Date(Date.now()+600000)};
+ const app=fixture({...env,INTERNAL_SERVICE_TOKEN:token},async(sql,p)=>{if(sql.includes("checkout_rate_limits")){const k=String(p![0]),n=(buckets.get(k)??0)+1;buckets.set(k,n);return [{requests:n}];}return sql.includes("commerce.orders")?[row]:[];});
+ const verify=(ip:string)=>app.inject({url:"/api/internal/payments/verify?id=RP-ABC123",headers:{authorization:`Bearer ${token}`,"x-ei-client-ip":ip}});
+ for(let i=1;i<=31;i++)assert.equal((await verify(`203.0.113.${i}`)).statusCode,200);
+ let last=0;for(let i=0;i<31;i++)last=(await verify("198.51.100.7")).statusCode;assert.equal(last,429);
+ for(let i=0;i<30;i++)assert.equal((await verify("198.51.100.7, 203.0.113.99")).statusCode,200);
+ for(let i=0;i<31;i++)last=(await verify("garbage; drop table")).statusCode;assert.equal(last,429);
+ await app.close();
+});
