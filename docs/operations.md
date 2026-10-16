@@ -42,6 +42,10 @@ Never auto-delete financial data or WAL.
 
 Liveness ≠ gateway ≠ DB readiness ≠ provider availability. Compose healthchecks + host watchdog (`infra/systemd/`) with startup grace, consecutive-failure threshold, bounded restarts, alerts. Watchdog restarts only approved project services; never mounts docker socket into web app.
 
+## Operator surface (§9C)
+
+`DATABASE_URL=... node scripts/ops-report.mjs [--backup-root DIR] [--json]` surfaces what authorized operators need in one report, failing (exit 1) on any breach: durable **queue lag** (oldest pending/leased job, dead jobs), **delivery failures** (unpublished outbox events past their age threshold), **service heartbeats** (stale or degraded `ops.service_status` rows) and **backup freshness/restore age** (latest snapshot verified with `verifyBackup`, including integrity). Model-service health stays with the host watchdog and `health-fleet.sh` — model containers have no database route by design. Startup order, bounded restarts, disk holds and release rollback are covered by `scripts/deploy.sh`/`rollback.sh` with hermetic tests in `tests/operations/`.
+
 ## Deploy / rollback (§12)
 
 1. Test-guild credentials + isolated data first. Never run legacy + replacement fleets unrestricted simultaneously.
