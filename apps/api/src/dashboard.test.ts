@@ -217,6 +217,49 @@ test("OAuth callback requires the same-browser state cookie before any provider 
   );
   await app.close();
 });
+test("sign-in returns to the local page it started from and rejects off-site targets", async () => {
+  const { app } = fixture();
+  const local = await app.inject({ url: "/api/auth/login?returnTo=%2Fservices%3Fref%3DABC234" });
+  assert.equal(local.statusCode, 302);
+  assert.match(String(local.headers["set-cookie"]), /ei_oauth_return=%2Fservices%3Fref%3DABC234/);
+  for (const target of ["https%3A%2F%2Fevil.example%2Fsteal", "%2F%2Fevil.example%2Fsteal", "%2Fservices%5C..%2F%2Fevil"]) {
+    const res = await app.inject({ url: `/api/auth/login?returnTo=${target}` });
+    assert.equal(res.statusCode, 302);
+    assert.ok(!String(res.headers["set-cookie"]).includes("evil"), target);
+  }
+  await app.close();
+});
+test("OAuth callback mirrors the validated return target and never an off-site one", async () => {
+  const response = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  const app = createApp({
+    env,
+    query: async () => [],
+    fetchFn: (async (input: any) =>
+      String(input).includes("/oauth2/token")
+        ? response({ access_token: "access", token_type: "Bearer", expires_in: 3600 })
+        : response({ id: user, username: "Test" })) as typeof fetch,
+  });
+  const start = async (returnTo: string) => {
+    const { state } = buildAuthorizeUrl({
+      clientId: "client",
+      clientSecret: "private",
+      redirectUrl: env.OAUTH_REDIRECT_URL,
+      stateSecret: secret,
+    });
+    return app.inject({
+      url: `/api/auth/callback?code=abc&state=${state}`,
+      headers: { cookie: `ei_oauth_state=${state}; ei_oauth_return=${encodeURIComponent(returnTo)}` },
+    });
+  };
+  assert.equal((await start("/services?ref=ABC234")).headers.location, "/services?ref=ABC234");
+  assert.equal((await start("https://evil.example/steal")).headers.location, "/dashboard");
+  assert.equal((await start("//evil.example/steal")).headers.location, "/dashboard");
+  await app.close();
+});
 test("logout requires CSRF and revokes the server-side session", async () => {
   const { app, calls } = fixture();
   const headers = { cookie: cookie() };

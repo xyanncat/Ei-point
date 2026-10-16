@@ -1,8 +1,8 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {respondToCommerceCommand,type CommerceCommandRequest} from "./commands.js";
+import {respondToCommerceCommand,catalogChoices,type CommerceCommandRequest} from "./commands.js";
 import {canSettleCommerce} from "./authorization.js";
-import {executeClaim,executeSettle} from "@ei-point/module-commerce";
+import {executeClaim,executeReject,executeSettle} from "@ei-point/module-commerce";
 const guild="100000000000000001",buyer="200000000000000001";
 test("status scopes target guild and buyer; staff privilege stays within guild",async()=>{
  for(const canManage of [false,true]){let checked=false;let reply="";const pool={query:async(sql:string,p:unknown[])=>{assert.match(sql,/guild_id=\$2/);assert.match(sql,/buyer_id=\$3/);assert.deepEqual(p,["foreign-order",guild,buyer,canManage]);checked=true;return {rows:[]};}};
@@ -62,4 +62,43 @@ test("a redeemed referral is attached to one order and consumed in the same tran
  assert.equal(orderNumber, 2);
  assert.deepEqual(attachedCodes, ["EI-REFERRAL", null]);
  assert.equal(savedCode, null);
+});
+test("orders list pages the caller's own history instead of the catalog",async()=>{
+ let reply="";const seen:string[]=[];
+ const pool={query:async(sql:string,p:unknown[])=>{seen.push(sql);if(/count\(\*\)/.test(sql)){assert.deepEqual(p,[guild,buyer]);return {rows:[{total:7}]};}assert.match(sql,/WHERE guild_id=\$1 AND buyer_id=\$2/);assert.match(sql,/ORDER BY created_at DESC LIMIT \$3 OFFSET \$4/);assert.deepEqual(p,[guild,buyer,5,5]);return {rows:[{order_id:"11111111-2222-4333-8444-555555555555",public_id:"RP-AAA111",sku:"membership",service_name:"Membership",amount_minor:"70000",status:"claimed",created_at:new Date("2026-10-01T00:00:00Z")}]};}};
+ await respondToCommerceCommand({name:"orders",subcommand:"list",options:{page:2},guildId:guild,userId:buyer,isOwner:false,canManage:false,userScopes:[],reply:async(s:string)=>{reply=s;}} as unknown as CommerceCommandRequest,pool as any);
+ assert.equal(seen.length,2);assert.ok(!seen.some((sql)=>sql.includes("commerce.catalog")));
+ assert.match(reply,/Membership/);assert.match(reply,/RP-AAA111/);assert.match(reply,/CLAIMED/);assert.match(reply,/page 2 of 2/i);
+});
+test("orders list reports an empty history honestly",async()=>{
+ let reply="";
+ const pool={query:async(sql:string)=> /count\(\*\)/.test(sql)?{rows:[{total:0}]}:{rows:[]}};
+ await respondToCommerceCommand({name:"orders",subcommand:"list",options:{},guildId:guild,userId:buyer,isOwner:false,canManage:false,userScopes:[],reply:async(s:string)=>{reply=s;}} as unknown as CommerceCommandRequest,pool as any);
+ assert.match(reply,/no orders/i);
+});
+test("staff review lists claimed orders with proof; non-staff are denied before any query",async()=>{
+ let reply="";let queries=0;
+ await respondToCommerceCommand({name:"orders",subcommand:"review",options:{},guildId:guild,userId:buyer,isOwner:false,canManage:false,userScopes:[],reply:async(s:string)=>{reply=s;}} as unknown as CommerceCommandRequest,{query:async()=>{queries++;return {rows:[]};}} as any);
+ assert.equal(queries,0);assert.match(reply,/Permission denied/);
+ const seen:string[]=[];
+ const pool={query:async(sql:string,p:unknown[])=>{seen.push(sql);if(/count\(\*\)/.test(sql)){assert.deepEqual(p,[guild]);return {rows:[{total:1}]};}assert.match(sql,/status='claimed'/);assert.match(sql,/LEFT JOIN commerce\.claims/);assert.deepEqual(p,[guild,5,0]);return {rows:[{order_id:"11111111-2222-4333-8444-555555555555",public_id:"RP-REV123",service_name:"Membership",amount_minor:"70000",status:"claimed",proof_ref:"upi:123456789012",created_at:new Date("2026-10-02T00:00:00Z")}]};}};
+ reply="";
+ await respondToCommerceCommand({name:"orders",subcommand:"review",options:{},guildId:guild,userId:"300000000000000009",isOwner:false,canManage:true,userScopes:[],reply:async(s:string)=>{reply=s;}} as unknown as CommerceCommandRequest,pool as any);
+ assert.equal(seen.length,2);assert.match(reply,/RP-REV123/);assert.match(reply,/11111111-2222-4333-8444-555555555555/);assert.match(reply,/upi:123456789012/);
+});
+test("staff rejection transitions once and refuses non-staff before any database work",async()=>{
+ let reply="";let touched=0;
+ await respondToCommerceCommand({name:"orders",subcommand:"reject",options:{order_id:"uuid-1"},guildId:guild,userId:buyer,isOwner:false,canManage:false,userScopes:[],reply:async(s:string)=>{reply=s;}} as unknown as CommerceCommandRequest,{query:async()=>{touched++;return {rows:[]};},connect:async()=>{touched++;throw Error("must not connect");}} as any);
+ assert.equal(touched,0);assert.match(reply,/Permission denied/);
+ const statements:string[]=[];let committed=false;
+ const client={query:async(sql:string)=>{statements.push(sql);if(sql==="BEGIN"||sql==="ROLLBACK")return {rows:[],rowCount:null};if(sql==="COMMIT"){committed=true;return {rows:[],rowCount:null};}if(/FOR UPDATE/.test(sql))return {rows:[{order_id:"uuid-1",status:"claimed"}],rowCount:1};if(/UPDATE commerce\.orders SET status = 'rejected'/.test(sql))return {rows:[],rowCount:1};if(/UPDATE commerce\.claims SET status = 'rejected'/.test(sql))return {rows:[],rowCount:1};throw Error(`Unexpected query: ${sql}`);},release:()=>{}};
+ reply="";
+ await respondToCommerceCommand({name:"orders",subcommand:"reject",options:{order_id:"uuid-1"},guildId:guild,userId:"300000000000000009",isOwner:false,canManage:true,userScopes:[],reply:async(s:string)=>{reply=s;}} as unknown as CommerceCommandRequest,{connect:async()=>client} as any);
+ assert.equal(committed,true);assert.ok(statements.some((sql)=>/UPDATE commerce\.orders SET status = 'rejected'/.test(sql)));assert.ok(statements.some((sql)=>/UPDATE commerce\.claims SET status = 'rejected'/.test(sql)));assert.match(reply,/rejected/i);
+});
+test("catalog autocomplete offers active services for the sku option",async()=>{
+ const seen:Array<{sql:string;params:unknown[]}>=[];const pool={query:async(sql:string,params:unknown[])=>{seen.push({sql,params});return {rows:[{sku:"membership",name:"Membership"},{sku:"genshin-main-event",name:"Genshin Main Event"}]};}};
+ const choices=await catalogChoices(pool as any,"mem");
+ assert.equal(seen.length,1);assert.match(seen[0]!.sql,/FROM commerce\.catalog/);assert.match(seen[0]!.sql,/active=true/);assert.match(seen[0]!.sql,/LIMIT 25/);assert.deepEqual(seen[0]!.params,["mem"]);
+ assert.deepEqual(choices,[{name:"Membership (membership)",value:"membership"},{name:"Genshin Main Event (genshin-main-event)",value:"genshin-main-event"}]);
 });

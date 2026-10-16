@@ -10,6 +10,7 @@ import Fastify from '../../apps/api/node_modules/fastify/fastify.js';
 import {registerCommerceRoutes,maintainCommerce} from '../../apps/api/dist/commerce-routes.js';
 let server,pool,app;
 const guild='100000000000000001',buyer='200000000000000001',referrer='300000000000000001';
+let sessionUser=buyer;
 const origin='https://checkout.example.test';
 before(async()=>{
  const probe=createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
@@ -18,7 +19,7 @@ before(async()=>{
  const dir=new URL('../../infra/postgres/migrations/',import.meta.url);for(const f of (await readdir(dir)).filter(f=>f.endsWith('.sql')).sort())await pool.query(await readFile(new URL(f,dir),'utf8'));
  await pool.query("INSERT INTO access.guilds(guild_id,name,owner_id,approved) VALUES($1,'Commerce',$2,true)",[guild,buyer]);
  await pool.query("INSERT INTO commerce.referrals(code,guild_id,referrer_id,cycle) VALUES('ABC234',$1,$2,$3)",[guild,referrer,new Date().toISOString().slice(0,7)]);
- app=Fastify();registerCommerceRoutes(app,{env:{COMMERCE_GUILD_ID:guild,PAYMENT_ORIGIN:origin,UPI_PAYEE_VPA:'merchant@bank',UPI_PAYEE_NAME:'Studio',USDT_TRC20_ADDRESS:'T'+'A'.repeat(33),INR_PER_USDT:'87.5',COMMERCE_REFERRAL_REWARD_MINOR:'5000'},query:async(sql,p)=>(await pool.query(sql,p)).rows,transaction:async(work)=>{const c=await pool.connect();try{await c.query('BEGIN');const v=await work(async(sql,p)=>(await c.query(sql,p)).rows);await c.query('COMMIT');return v;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}},authorize:async()=>({userId:buyer,isAdmin:true})});
+ app=Fastify();registerCommerceRoutes(app,{env:{COMMERCE_GUILD_ID:guild,PAYMENT_ORIGIN:origin,UPI_PAYEE_VPA:'merchant@bank',UPI_PAYEE_NAME:'Studio',USDT_TRC20_ADDRESS:'T'+'A'.repeat(33),INR_PER_USDT:'87.5',COMMERCE_REFERRAL_REWARD_MINOR:'5000'},query:async(sql,p)=>(await pool.query(sql,p)).rows,transaction:async(work)=>{const c=await pool.connect();try{await c.query('BEGIN');const v=await work(async(sql,p)=>(await c.query(sql,p)).rows);await c.query('COMMIT');return v;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}},session:async()=>(sessionUser?{discordUserId:sessionUser}:null),authorize:async()=>({userId:buyer,isAdmin:true})});
 },{timeout:120000});
 after(async()=>{await app?.close();await pool?.end();await server?.stop();});
 async function create(key,referralCode){const r=await app.inject({method:'POST',url:'/api/payments/upi-qr',headers:{origin},payload:{serviceId:'account-management-membership',discordId:buyer,paymentMethod:'upi',idempotencyKey:key,...(referralCode?{referralCode}:{})}});assert.equal(r.statusCode,200,r.body);return r.json();}
@@ -115,4 +116,32 @@ test('Discord-created membership captures immutable service and duration snapsho
  await respondToCommerceCommand({name:'orders',subcommand:'create',userId:buyer,guildId:guild,isOwner:false,canManage:false,userScopes:[],key:'discord-create-membership',options:{sku:'account-management-membership'},paymentOrigin:origin,payeeVpa:'merchant@bank',payeeName:'Studio',usdtAddress:'',reply:async(s)=>{reply=s;}},pool);
  assert.match(reply,/Successfully/);
  const row=(await pool.query("SELECT * FROM commerce.orders WHERE idempotency_key='ord-discord-create-membership'")).rows[0];assert.equal(row.membership_days,30);assert.ok(row.service_name);assert.match(row.public_id,/^RP-[A-Z0-9]{6}$/);assert.match(reply,new RegExp(`verify\\?id=${row.public_id}`));
+});
+test('web checkout ownership: sessions own orders, strangers cannot claim, Discord staff rejection is final',async()=>{
+ sessionUser=null;
+ const anonymous=await app.inject({method:'POST',url:'/api/payments/upi-qr',headers:{origin},payload:{serviceId:'account-management-membership',paymentMethod:'upi',idempotencyKey:'phase4-anon-key',recoveryToken:'a'.repeat(43)}});
+ assert.equal(anonymous.statusCode,401);
+ sessionUser=buyer;
+ const forged=await app.inject({method:'POST',url:'/api/payments/upi-qr',headers:{origin},payload:{serviceId:'account-management-membership',discordId:referrer,paymentMethod:'upi',idempotencyKey:'phase4-forge-key',recoveryToken:'a'.repeat(43)}});
+ assert.equal(forged.statusCode,400);
+ const created=await app.inject({method:'POST',url:'/api/payments/upi-qr',headers:{origin},payload:{serviceId:'account-management-membership',paymentMethod:'upi',idempotencyKey:'phase4-session-key',recoveryToken:'e'.repeat(43)}});
+ assert.equal(created.statusCode,200,created.body);
+ const order=(await pool.query("SELECT * FROM commerce.orders WHERE idempotency_key='phase4-session-key'")).rows[0];
+ assert.equal(order.buyer_id,buyer);
+ const cookie=`ei_checkout=${encodeURIComponent([order.sku,order.public_id,'e'.repeat(43)].join('|'))}`;
+ sessionUser=referrer;
+ assert.equal((await app.inject({url:`/api/payments/resume?serviceId=${encodeURIComponent(order.sku)}`,headers:{cookie}})).json().resumed,false);
+ assert.equal((await app.inject({method:'POST',url:'/api/payments/claim',headers:{origin},payload:{orderId:order.public_id,token:'e'.repeat(43),utr:'777777777777',idempotencyKey:'phase4-stolen-key'}})).statusCode,403);
+ sessionUser=buyer;
+ assert.equal((await app.inject({method:'POST',url:'/api/payments/claim',headers:{origin},payload:{orderId:order.public_id,token:'e'.repeat(43),utr:'777777777777',idempotencyKey:'phase4-owner-key'}})).statusCode,200);
+ const {respondToCommerceCommand}=await import('../../apps/bots/commerce/dist/commands.js');
+ const staffCommand=async(subcommand,options={})=>{let reply='';await respondToCommerceCommand({name:'orders',subcommand,userId:referrer,guildId:guild,isOwner:false,canManage:true,userScopes:[],key:`phase4-${subcommand}-${order.order_id}`,options:{order_id:order.order_id,...options},reply:async(s)=>{reply=s;}},pool);return reply;};
+ assert.match(await staffCommand('reject'),/rejected/i);
+ assert.equal((await pool.query('SELECT status FROM commerce.orders WHERE order_id=$1',[order.order_id])).rows[0].status,'rejected');
+ assert.equal((await pool.query('SELECT status FROM commerce.claims WHERE order_id=$1',[order.order_id])).rows[0].status,'rejected');
+ assert.match(await staffCommand('reject'),/failed/i);
+ assert.match(await staffCommand('settle'),/failed/i);
+ assert.equal((await pool.query('SELECT count(*)::int AS n FROM commerce.settlements WHERE order_id=$1',[order.order_id])).rows[0].n,0);
+ assert.doesNotMatch(await staffCommand('review'),new RegExp(order.public_id));
+ sessionUser=buyer;
 });

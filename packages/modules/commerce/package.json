@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
-  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc --noEmit" },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "tsc -p tsconfig.json && node --test dist/*.test.js", "typecheck": "tsc --noEmit" },
   "devDependencies": { "typescript": "5.6.3" }
 }

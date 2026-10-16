@@ -120,6 +120,24 @@ test("checkout validates inputs, shows the QR, submits proof and reflects status
   const creates: Array<Record<string, unknown>> = [];
   const claims: Array<Record<string, unknown>> = [];
   let status = "claimed";
+  await page.route("**/api/auth/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user: { id: "123456789012345678", name: "QA buyer" },
+        isAdmin: false,
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+    });
+  });
+  await page.route("**/api/auth/csrf", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ csrfToken: "qa-csrf" }),
+    });
+  });
   await page.route("**/api/payments/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -131,7 +149,8 @@ test("checkout validates inputs, shows the QR, submits proof and reflects status
     } else if (path.endsWith("/upi-qr")) {
       const body = request.postDataJSON() as Record<string, unknown>;
       creates.push(body);
-      expect(body.discordId).toBe("123456789012345678");
+      expect(request.headers()["x-csrf-token"]).toBe("qa-csrf");
+      expect(body.discordId).toBeUndefined();
       expect(body.referralCode).toBe("ABC234");
       expect(body.idempotencyKey).toBeTruthy();
       expect(body.amount).toBeUndefined();
@@ -161,6 +180,7 @@ test("checkout validates inputs, shows the QR, submits proof and reflects status
     } else if (path.endsWith("/claim")) {
       const body = request.postDataJSON() as Record<string, unknown>;
       claims.push(body);
+      expect(request.headers()["x-csrf-token"]).toBe("qa-csrf");
       expect(body.token).toBe("q".repeat(43));
       if (body.utr !== undefined) expect(body.utr).toBe("123456789012");
       else expect(body.txid).toBe("a".repeat(64));
@@ -187,7 +207,7 @@ test("checkout validates inputs, shows the QR, submits proof and reflects status
   await button.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await page.getByLabel("Discord user ID").fill("123456789012345678");
+  await expect(page.getByText("Ordering as QA buyer")).toBeVisible();
   expect(await page.getByLabel("Referral code").inputValue()).toBe("ABC234");
   await page.getByRole("button", { name: "Show payment instructions" }).click();
   await expect(page.locator(".ei-checkout-qr")).toBeVisible();
@@ -235,7 +255,7 @@ test("checkout validates inputs, shows the QR, submits proof and reflects status
   expect(creates.length).toBe(1);
   await page.goto("/services?ref=ABC234");
   await page.getByRole("button", { name: "Checkout" }).first().click();
-  await page.getByLabel("Discord user ID").fill("123456789012345678");
+  await expect(page.getByText("Ordering as QA buyer")).toBeVisible();
   await page.getByLabel("Payment method").selectOption("usdt");
   await page.getByRole("button", { name: "Show payment instructions" }).click();
   await page.getByLabel("64-character TRON transaction hash").waitFor();

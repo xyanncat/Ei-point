@@ -126,7 +126,7 @@ test("service filters narrow the catalog and the empty state explains the search
   expect(await page.getByRole("link", { name: /Discord profile/ }).count()).toBeGreaterThan(0);
   await page.getByText("How do payments work?").click();
   await expect(
-    page.getByText("Choose a service, enter your Discord user ID"),
+    page.getByText("Choose a service, sign in with Discord"),
   ).toBeVisible();
   expect(await fitsViewport(page)).toBe(true);
 });

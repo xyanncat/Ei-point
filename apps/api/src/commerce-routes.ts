@@ -7,6 +7,7 @@ export interface CommerceDeps {
  query: CommerceQuery;
  transaction: <T>(work:(query:CommerceQuery)=>Promise<T>)=>Promise<T>;
  authorize: (req:FastifyRequest,guildId:string,module:"commerce")=>Promise<{userId:string,isAdmin:boolean}>;
+ session: (req:FastifyRequest)=>Promise<{discordUserId:string}|null>;
 }
 class PaymentError extends Error {constructor(readonly status:number,readonly code:string,message:string){super(message);}}
 const fail=(status:number,code:string,message:string):never=>{throw new PaymentError(status,code,message)};
@@ -40,6 +41,7 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
  const forwardedClient=(req:FastifyRequest)=>{const raw=req.headers["x-ei-client-ip"];if(typeof raw!=="string")return undefined;const v=raw.split(",").map(part=>part.trim()).filter(Boolean).pop()??"";return /^[0-9a-fA-F:.]{3,45}$/.test(v)?v:undefined;};
  const publicWrite=async(req:FastifyRequest)=>{guard();if(req.headers.origin!==origin)fail(403,"origin-denied","Payment requests require the configured website Origin.");await limit(req);const approved=(await query("SELECT guild_id FROM access.guilds WHERE guild_id=$1 AND approved",[guild]))[0];if(!approved)fail(403,"guild-not-approved","Commerce guild is not approved.");};
  const body=(req:FastifyRequest)=>req.body as Record<string,unknown>??{};
+ const identity=async(req:FastifyRequest):Promise<string>=>{const s=await deps.session(req);if(s&&snowflake(s.discordUserId))return s.discordUserId;return fail(401,"auth-required","Sign in with Discord to continue.");};
  // HttpOnly recovery cookie: reloads and lost responses resume the same order without
  // privileged secrets in localStorage or URLs. One checkout at a time is intentional.
  const recoveryCookie=(serviceId:string,orderId:string,token:string)=>{
@@ -63,8 +65,9 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
  app.get("/api/payments/options",run(async()=>{const configured=snowflake(guild)&&!!origin&&(methods().upi||methods().usdt);const approved=configured&&(await query("SELECT guild_id FROM access.guilds WHERE guild_id=$1 AND approved",[guild])).length>0;return {enabled:!!approved,methods:methods(),notificationStatus:"not-configured"};}));
  app.get("/api/payments/catalog",run(async()=>{guard();return {services:await query("SELECT sku AS id,name,price_minor AS \"priceMinor\",currency,membership_days AS \"membershipDays\" FROM commerce.catalog WHERE active ORDER BY sku"),methods:methods()};}));
  app.post("/api/payments/upi-qr",run(async(req,reply)=>{
-  await publicWrite(req);const b=body(req),method=b.paymentMethod??b.method??"upi",buyer=b.discordId??b.discordUserId,sku=b.serviceId;
-  if(!snowflake(buyer)||typeof sku!=="string"||sku.length>100||!['upi','usdt'].includes(String(method)))fail(400,"invalid-checkout","Provide a valid service, Discord user ID and payment method.");
+  await publicWrite(req);const buyer=await identity(req),b=body(req),method=b.paymentMethod??b.method??"upi",sku=b.serviceId,typed=b.discordId??b.discordUserId;
+  if(typed!==undefined&&String(typed).trim()!==buyer)fail(400,"invalid-checkout","Checkout is bound to your signed-in Discord account.");
+  if(typeof sku!=="string"||sku.length>100||!['upi','usdt'].includes(String(method)))fail(400,"invalid-checkout","Provide a valid service and payment method.");
   if(b.amount!==undefined||b.price!==undefined)fail(400,"invalid-checkout","Prices are selected by the server.");
   const vpa=env.UPI_PAYEE_VPA,name=env.UPI_PAYEE_NAME,wallet=env.USDT_TRC20_ADDRESS;
   if(method==="upi"&&(!vpa||!name||!/^[-\w.]{2,}@[A-Za-z]{2,}$/.test(vpa)))fail(503,"payments-not-configured","UPI payments are not configured.");
@@ -91,13 +94,14 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
   }));
   app.get("/api/payments/resume",run(async(req)=>{
    guard();await limit(req);
+   const buyer=await identity(req);
    const serviceId=String((req.query as Record<string,unknown>)?.serviceId??"");
    if(!serviceId||serviceId.length>100)fail(400,"invalid-service","A service id is required.");
    const cookie=readRecoveryCookie(req);
    if(!cookie||cookie[0]!==serviceId)return {resumed:false};
    const [,orderId,token]=cookie;
    const o=(await query("SELECT * FROM commerce.orders WHERE public_id=$1 AND guild_id=$2",[orderId,guild]))[0];
-   if(!o||o.order_token_hash!==hash(token))return {resumed:false};
+   if(!o||o.order_token_hash!==hash(token)||String(o.buyer_id)!==buyer)return {resumed:false};
    return {...orderResponse(o,token),resumed:true};
   }));
   app.get<{Params:{orderId:string}}>("/api/payments/status/:orderId",run(async(req)=>{guard();await limit(req);const id=(req.params as any).orderId;if(!publicId(id))fail(400,"invalid-order","Order IDs look like RP-XXXXXX.");const o=(await query("SELECT o.*,c.name FROM commerce.orders o JOIN commerce.catalog c USING(sku) WHERE public_id=$1 AND guild_id=$2",[id,guild]))[0];if(!o)fail(404,"order-not-found","Order was not found.");return view(o!);}));
@@ -115,12 +119,13 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
   return {skuName:o!.sku_name,amountMinor:Number(o!.amount_minor),status:o!.status==="settled"?"confirmed":o!.status==="pending"&&new Date(o!.expires_at).getTime()<Date.now()?"expired":o!.status,currency:o!.method==="upi"?"INR":"USDT"};
  }));
  app.post("/api/payments/claim",run(async(req)=>{
-  await publicWrite(req);const b=body(req),id=b.orderId,token=b.token??b.orderToken;
+  await publicWrite(req);const buyer=await identity(req),b=body(req),id=b.orderId,token=b.token??b.orderToken;
   if(!publicId(id)||typeof token!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(token))fail(400,"invalid-claim","Supply the order ID and original order token.");
   const idem=key(req);return transaction(async(q)=>{
    const o=(await q("SELECT * FROM commerce.orders WHERE public_id=$1 AND guild_id=$2 FOR UPDATE",[id,guild]))[0];
    const expBuf=Buffer.from(hash(token as string)),actBuf=Buffer.from(String(o?.order_token_hash??""));
    if(!o||expBuf.length!==actBuf.length||!timingSafeEqual(expBuf,actBuf))fail(403,"invalid-order-token","Order token is invalid.");
+   if(String(o!.buyer_id)!==buyer)fail(403,"invalid-order-owner","This order belongs to another Discord account.");
    const proof=o!.method==="usdt"?b.txid:b.utr;
    if(typeof proof!=="string"||!(o!.method==="usdt"?/^[a-fA-F0-9]{64}$/:/^\d{12}$/).test(proof))fail(400,"invalid-proof","Supply a 12-digit UTR or 64-character TRON transaction hash for this method.");
    const proofRef=`${o!.method}:${String(proof).toLowerCase()}`;

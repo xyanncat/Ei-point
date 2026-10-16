@@ -5,6 +5,7 @@ import { canSettleCommerce } from "./authorization.js";
 import {
   buildUpiPayload,
   executeClaim,
+  executeReject,
   executeSettle,
   newOrderToken,
   newReferralCode,
@@ -36,12 +37,13 @@ export const commerceCommandDefinitions = [
     .setName("orders")
     .setDescription("Manage orders and payments")
     .setDMPermission(false)
-    .addSubcommand((sub) => sub.setName("list").setDescription("List services available for orders"))
+    .addSubcommand((sub) => sub.setName("list").setDescription("List your orders in this server")
+      .addIntegerOption((opt) => opt.setName("page").setDescription("Page number").setMinValue(1).setMaxValue(99)))
     .addSubcommand((sub) =>
       sub
         .setName("create")
         .setDescription("Create a new service order")
-        .addStringOption((opt) => opt.setName("sku").setDescription("Item SKU from catalog").setRequired(true)),
+        .addStringOption((opt) => opt.setName("sku").setDescription("Item SKU from catalog").setRequired(true).setAutocomplete(true)),
     )
     .addSubcommand((sub) =>
       sub
@@ -61,7 +63,15 @@ export const commerceCommandDefinitions = [
     .addSubcommand((sub) => sub
       .setName("settle")
       .setDescription("Staff settlement for a claimed order")
-      .addStringOption((opt) => opt.setName("order_id").setDescription("Order UUID to settle").setRequired(true))),
+      .addStringOption((opt) => opt.setName("order_id").setDescription("Order UUID to settle").setRequired(true)))
+    .addSubcommand((sub) => sub
+      .setName("review")
+      .setDescription("Staff: list claimed orders awaiting review")
+      .addIntegerOption((opt) => opt.setName("page").setDescription("Page number").setMinValue(1).setMaxValue(99)))
+    .addSubcommand((sub) => sub
+      .setName("reject")
+      .setDescription("Staff: reject a pending or claimed order")
+      .addStringOption((opt) => opt.setName("order_id").setDescription("Order UUID to reject").setRequired(true))),
 
   new SlashCommandBuilder()
     .setName("referral")
@@ -86,12 +96,24 @@ export async function respondToCommerceCommand(
 
   if (name === "orders") {
     if (subcommand === "list") {
-      const catalog = await pool.query<{ sku: string; name: string; price_minor: string; currency: string }>(
-        "SELECT sku,name,price_minor,currency FROM commerce.catalog WHERE active=true ORDER BY price_minor",
+      const size = 5, page = Math.max(1, Math.min(99, Number(options.page ?? 1) || 1));
+      const total = Number((await pool.query<{ total: number }>(
+        "SELECT count(*)::int AS total FROM commerce.orders WHERE guild_id=$1 AND buyer_id=$2",
+        [guildId, userId],
+      )).rows[0]?.total ?? 0);
+      if (total === 0) {
+        await req.reply("📦 You have no orders in this server yet. Create one with `/orders create` or the website checkout.");
+        return;
+      }
+      const pages = Math.max(1, Math.ceil(total / size)), current = Math.min(page, pages);
+      const rows = (await pool.query<{ order_id: string; public_id: string; sku: string; service_name: string | null; amount_minor: string; status: OrderStatus; created_at: Date }>(
+        "SELECT order_id,public_id,sku,service_name,amount_minor,status,created_at FROM commerce.orders WHERE guild_id=$1 AND buyer_id=$2 ORDER BY created_at DESC LIMIT $3 OFFSET $4",
+        [guildId, userId, size, (current - 1) * size],
+      )).rows;
+      await req.reply(
+        `📦 **Your orders — page ${current} of ${pages}**\n` +
+          rows.map((o) => `• **${o.service_name ?? o.sku}** — ₹${(Number(o.amount_minor) / 100).toFixed(2)} — **${o.status.toUpperCase()}**\n  Order \`${o.order_id}\` (${o.public_id}) · ${new Date(o.created_at).toLocaleDateString()}`).join("\n"),
       );
-      await req.reply(catalog.rows.length
-        ? catalog.rows.map((item) => `• **${item.name}** (\`${item.sku}\`) — ${item.currency} ${(Number(item.price_minor) / 100).toFixed(2)}`).join("\n")
-        : "No services are currently available.");
       return;
     }
     if (subcommand === "create") {
@@ -105,7 +127,7 @@ export async function respondToCommerceCommand(
         [sku],
       );
       if (catRes.rows.length === 0) {
-        await req.reply("❌ Invalid SKU or service is inactive. Use `/orders list` to view active items.");
+        await req.reply("❌ Invalid SKU or service is inactive. Pick one of the suggested services or browse the website catalog.");
         return;
       }
 
@@ -299,6 +321,66 @@ export async function respondToCommerceCommand(
     return;
   }
 
+  if (name === "orders" && subcommand === "review") {
+    if (!isPrivileged) {
+      await req.reply("❌ Permission denied: `commerce-settle` role or Manage Server required.");
+      return;
+    }
+    const size = 5, page = Math.max(1, Math.min(99, Number(options.page ?? 1) || 1));
+    const total = Number((await pool.query<{ total: number }>(
+      "SELECT count(*)::int AS total FROM commerce.orders WHERE guild_id=$1 AND status='claimed'",
+      [guildId],
+    )).rows[0]?.total ?? 0);
+    if (total === 0) {
+      await req.reply("📭 No claimed orders await review.");
+      return;
+    }
+    const pages = Math.max(1, Math.ceil(total / size)), current = Math.min(page, pages);
+    const rows = (await pool.query<{ order_id: string; public_id: string; service_name: string | null; sku: string; amount_minor: string; proof_ref: string | null; created_at: Date }>(
+      "SELECT o.order_id,o.public_id,o.service_name,o.sku,o.amount_minor,c.proof_ref,o.created_at FROM commerce.orders o LEFT JOIN commerce.claims c USING(order_id) WHERE o.status='claimed' AND o.guild_id=$1 ORDER BY o.created_at ASC LIMIT $2 OFFSET $3",
+      [guildId, size, (current - 1) * size],
+    )).rows;
+    await req.reply(
+      `🕵️ **Claimed orders awaiting review — page ${current} of ${pages}**\n` +
+        rows.map((o) => `• **${o.service_name ?? o.sku}** — ₹${(Number(o.amount_minor) / 100).toFixed(2)} — proof \`${o.proof_ref ?? "unavailable"}\`\n  Order \`${o.order_id}\` (${o.public_id}) — settle with \`/orders settle\` or reject with \`/orders reject\``).join("\n"),
+    );
+    return;
+  }
+
+  if (name === "orders" && subcommand === "reject") {
+    if (!isPrivileged) {
+      await req.reply("❌ Permission denied: `commerce-settle` role or Manage Server required.");
+      return;
+    }
+    const orderId = String(options.order_id).trim();
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const rejectResult = await executeReject(
+        {
+          query: async (sql: string, params: unknown[]) => {
+            const r = await client.query(sql, params);
+            return { rows: r.rows, rowCount: r.rowCount ?? 0 };
+          },
+        },
+        { orderId, guildId },
+      );
+      if (!rejectResult.ok) {
+        await client.query("ROLLBACK");
+        await req.reply(`❌ Rejection failed: order is ${rejectResult.reason}.`);
+        return;
+      }
+      await client.query("COMMIT");
+      await req.reply(`🚫 **Order \`${orderId}\` rejected** by <@${userId}>.`);
+    } catch (err) {
+      await client.query("ROLLBACK");
+      await req.reply("❌ Rejection failed safely. Please retry.");
+    } finally {
+      client.release();
+    }
+    return;
+  }
+
   if (name === "referral") {
     const currentCycle = cycleFor(new Date());
 
@@ -390,4 +472,15 @@ export async function respondToCommerceCommand(
   }
 
   await req.reply("Unknown commerce command.");
+}
+
+// Autocomplete for `/orders create sku`: published catalog only, capped and
+// shaped to Discord limits (25 choices, 100-char labels).
+export async function catalogChoices(pool: Pool, term: string): Promise<Array<{ name: string; value: string }>> {
+  const clean = term.trim().slice(0, 100);
+  const rows = (await pool.query<{ sku: string; name: string }>(
+    "SELECT sku,name FROM commerce.catalog WHERE active=true AND ($1='' OR name ILIKE '%'||$1||'%' OR sku ILIKE '%'||$1||'%') ORDER BY price_minor LIMIT 25",
+    [clean],
+  )).rows;
+  return rows.map((r) => ({ name: `${r.name} (${r.sku})`.slice(0, 100), value: r.sku }));
 }

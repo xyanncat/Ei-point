@@ -9,7 +9,7 @@ import {
   Routes,
 } from "discord.js";
 import pg from "pg";
-import { commerceCommandDefinitions, respondToCommerceCommand } from "./commands.js";
+import { catalogChoices, commerceCommandDefinitions, respondToCommerceCommand } from "./commands.js";
 import { canSettleCommerce } from "./authorization.js";
 import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 
@@ -69,6 +69,16 @@ async function loadStaffScopes(guildId: string, roleIds: string[]): Promise<stri
 
 // --- Interaction Handler ---
 client.on(Events.InteractionCreate, (rawInteraction) => {
+  if (rawInteraction.isAutocomplete()) {
+    if (rawInteraction.commandName === "orders" && rawInteraction.options.getFocused(true).name === "sku") {
+      guarded("autocomplete", async () => {
+        await rawInteraction.respond(await catalogChoices(pool, String(rawInteraction.options.getFocused() ?? "")));
+      });
+      return;
+    }
+    guarded("autocomplete", () => rawInteraction.respond([]));
+    return;
+  }
   if (!rawInteraction.isChatInputCommand()) return;
   const interaction = withEiEmbedReplies(rawInteraction, responsePolicy(botKey, rawInteraction.commandName).imageKey);
   if (!identityVerified) {
@@ -102,7 +112,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
           const identity = (await pool.query("SELECT application_id FROM config.bots WHERE bot_key=$1", [botKey])).rows[0];
           if (identity?.application_id !== client.user!.id) return { content: "Registered bot identity is unavailable." };
           userScopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
-          if (interaction.commandName === "orders" && interaction.options.getSubcommand(false) === "settle" && !canSettleCommerce({ isOwner, canManage, userScopes })) {
+          if (interaction.commandName === "orders" && ["settle", "review", "reject"].includes(interaction.options.getSubcommand(false) ?? "") && !canSettleCommerce({ isOwner, canManage, userScopes })) {
             return { content: "❌ Permission denied: `commerce-settle` role or Manage Server required." };
           }
           return undefined;

@@ -166,6 +166,31 @@ export async function executeSettle(
   return { ok: true };
 }
 
+export type RejectFailure = "not-rejectable" | "already-rejected";
+
+export const REJECT_ORDER_SQL = `
+  UPDATE commerce.orders SET status = 'rejected' WHERE order_id = $1 AND status IN ('pending', 'claimed')`;
+
+export const REJECT_CLAIMS_SQL = `
+  UPDATE commerce.claims SET status = 'rejected' WHERE order_id = $1`;
+
+// Rejection: pending|claimed -> rejected (staff decision). Mirrors executeSettle:
+// row lock, status-guarded update, 0 rows touched -> already-rejected.
+export async function executeReject(
+  db: DbTx,
+  args: { orderId: string; guildId: string },
+): Promise<{ ok: true } | { ok: false; reason: RejectFailure }> {
+  const found = await db.query(LOCK_ORDER_SQL, [args.orderId, args.guildId ?? null, null]);
+  const status = (found.rows[0] as { status: string } | undefined)?.status;
+  if (status == null || (status !== "pending" && status !== "claimed")) {
+    return { ok: false, reason: status === "rejected" ? "already-rejected" : "not-rejectable" };
+  }
+  const marked = await db.query(REJECT_ORDER_SQL, [args.orderId]);
+  if (marked.rowCount !== 1) return { ok: false, reason: "already-rejected" };
+  await db.query(REJECT_CLAIMS_SQL, [args.orderId]);
+  return { ok: true };
+}
+
 // Called only while holding the order row lock, in the settlement transaction.
 export async function fulfillOrder(q:(sql:string,params?:unknown[])=>Promise<Record<string,any>[]>,o:Record<string,any>,reward:number):Promise<void>{
  const guild=o.guild_id,cycle=cycleFor(new Date());

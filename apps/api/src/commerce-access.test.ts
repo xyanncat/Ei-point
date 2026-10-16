@@ -116,3 +116,15 @@ test("commerce readers see minimized orders while staff and owners see buyer and
     await app.close();
   }
 });
+test("payment writes require the session and CSRF like every other dashboard write", async () => {
+  const app = createApp({
+    env,
+    query: async () => {
+      throw Error("must not query");
+    },
+  });
+  const res = await app.inject({ method: "POST", url: "/api/payments/upi-qr", payload: {} });
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.json().code, "csrf-invalid");
+  await app.close();
+});

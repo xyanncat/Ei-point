@@ -4,6 +4,7 @@ import {
   buildUpiPayload,
   cycleFor,
   executeClaim,
+  executeReject,
   executeSettle,
   hashToken,
   isRewardExpired,
@@ -133,6 +134,16 @@ describe("claims + settlement", () => {
       await executeSettle(fake("claimed", false).db, { orderId: "o", guildId:"guild", settledBy: "s", idempotencyKey: "k4" }),
       { ok: false, reason: "already-settled" },
     );
+  });
+
+  it("rejects a pending or claimed order once; terminal states refuse", async () => {
+    assert.deepEqual(await executeReject(fake("pending").db, { orderId: "o", guildId: "guild" }), { ok: true });
+    assert.deepEqual(await executeReject(fake("claimed").db, { orderId: "o", guildId: "guild" }), { ok: true });
+    assert.deepEqual(await executeReject(fake("rejected").db, { orderId: "o", guildId: "guild" }), { ok: false, reason: "already-rejected" });
+    assert.deepEqual(await executeReject(fake("settled").db, { orderId: "o", guildId: "guild" }), { ok: false, reason: "not-rejectable" });
+    assert.deepEqual(await executeReject(fake(null).db, { orderId: "o", guildId: "guild" }), { ok: false, reason: "not-rejectable" });
+    // Lost update race: the guarded update affects 0 rows -> already-rejected, never a second transition.
+    assert.deepEqual(await executeReject(fake("claimed", false).db, { orderId: "o", guildId: "guild" }), { ok: false, reason: "already-rejected" });
   });
 });
 

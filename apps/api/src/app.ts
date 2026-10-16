@@ -56,6 +56,18 @@ const state = (s: unknown): ServiceState =>
   STATES.has(String(s)) ? (s as ServiceState) : "unknown";
 const snowflake = (id: unknown): id is string =>
   typeof id === "string" && /^\d{17,20}$/.test(id);
+// Sign-in return targets must stay local: one leading slash, no scheme-relative
+// "//", no backslashes, bounded length. Applied at login and again at callback.
+const localReturn = (value: unknown): string | null =>
+  typeof value === "string" &&
+  value.length > 0 &&
+  value.length <= 300 &&
+  value.startsWith("/") &&
+  !value.startsWith("//") &&
+  !value.includes("\\") &&
+  !/[\r\n]/.test(value)
+    ? value
+    : null;
 export function createApp(options: AppOptions = {}) {
   const env = options.env ?? process.env,
     fetchFn = options.fetchFn ?? fetch;
@@ -153,7 +165,7 @@ export function createApp(options: AppOptions = {}) {
     )
       return;
     const path = req.url.split("?")[0] ?? "";
-    if ((req.method === "POST" && ["/api/payments/upi-qr", "/api/payments/claim"].includes(path)) || path.startsWith("/api/internal/")) return;
+    if (path.startsWith("/api/internal/")) return;
     const raw = cookies(req.headers.cookie).ei_session ?? "",
       token = req.headers["x-csrf-token"];
     if (
@@ -356,7 +368,7 @@ export function createApp(options: AppOptions = {}) {
       return reply.code(503).send({ dbReady: false, status: "degraded" });
     }
   });
-  app.get("/api/auth/login", async (_req, reply) => {
+  app.get<{ Querystring: { returnTo?: string } }>("/api/auth/login", async (req, reply) => {
     if (
       !configured() ||
       !env.DISCORD_CLIENT_ID ||
@@ -374,10 +386,14 @@ export function createApp(options: AppOptions = {}) {
       redirectUrl: env.OAUTH_REDIRECT_URL,
       stateSecret: csrfSecret,
     });
+    const target = localReturn(req.query.returnTo);
+    const stateCookie = `ei_oauth_state=${state}; ${cookieAttrs} Max-Age=300`;
     return reply
       .header(
         "Set-Cookie",
-        `ei_oauth_state=${state}; ${cookieAttrs} Max-Age=300`,
+        target
+          ? [stateCookie, `ei_oauth_return=${encodeURIComponent(target)}; ${cookieAttrs} Max-Age=300`]
+          : stateCookie,
       )
       .redirect(url);
   });
@@ -438,12 +454,15 @@ export function createApp(options: AppOptions = {}) {
         secret,
         ttl,
       );
+      const target =
+        localReturn(cookies(req.headers.cookie).ei_oauth_return) ?? "/dashboard";
       return reply
         .header("Set-Cookie", [
           `ei_oauth_state=; ${cookieAttrs} Max-Age=0`,
+          `ei_oauth_return=; ${cookieAttrs} Max-Age=0`,
           `ei_session=${signed}; ${cookieAttrs} Max-Age=${Math.floor(ttl / 1000)}`,
         ])
-        .redirect("/dashboard");
+        .redirect(target);
     },
   );
   app.get("/api/auth/me", async (req) => {
@@ -566,7 +585,10 @@ export function createApp(options: AppOptions = {}) {
       throw new HttpError(403,"admin-required","This action requires a configured Ei point administrator.");
     return {userId:String(s.discord_user_id)};
   };
-  registerCommerceRoutes(app,{env,query,transaction,authorize:async(req,guildId) => {
+  registerCommerceRoutes(app,{env,query,transaction,session:async(req) => {
+    try{const s=await session(req.headers.cookie);return {discordUserId:String(s.discord_user_id)};}
+    catch(e){if(e instanceof HttpError)return null;throw e;}
+  },authorize:async(req,guildId) => {
     const s=await session(req.headers.cookie),g=await scoped(req.headers.cookie,guildId);
     if(!g.scopes?.some(scope=>scope==="*"||scope==="commerce"||scope==="commerce-settle")) throw new HttpError(403,"scope-denied","Your role cannot manage orders for this server.");
     return {userId:String(s.discord_user_id),isAdmin:g.scopes.includes("*")||g.scopes.includes("commerce-settle")};

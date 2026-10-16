@@ -125,7 +125,7 @@ export default async function VerifyPage({
             contact staff on your game server.
           </p>
           <p>
-            You can also enter the RP order ID shown during checkout (try <strong>RP-DEMO01</strong> in preview). Staff review submitted payment proofs before confirming an order.
+            You can also enter the RP order ID shown during checkout (try <strong>RP-DEMO01</strong> in preview). This page shows order status only — submit payment proof from the checkout session that created the order. Staff review submitted payment proofs before confirming an order.
           </p>
         </div>
       </div>
