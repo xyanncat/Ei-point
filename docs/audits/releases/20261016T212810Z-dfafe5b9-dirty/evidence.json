@@ -1,0 +1,143 @@
+{
+  "releaseId": "20261016T212810Z-dfafe5b9-dirty",
+  "generatedAt": "2026-10-16T21:32:27.170Z",
+  "plan": "EI_POINT_COMPLETION_BUILD_PLAN §10A",
+  "scope": "all verifier gates",
+  "revision": "dfafe5b96d6189076bc4fc83ef0f8de5e20fe616",
+  "branch": "feat/completion-plan",
+  "dirtyState": [
+    "M apps/dashboard/lib/project-assets.json",
+    "?? docs/audits/2026-10-15-project-audit-1000.md",
+    "?? docs/audits/releases/"
+  ],
+  "dirtyStateNote": "Working tree entries above were present at capture time; docs/audits/2026-10-15-project-audit-1000.md is the owner-supplied audit copy and apps/dashboard/lib/project-assets.json is a known line-ending-only artifact.",
+  "toolchain": {
+    "node": "v24.21.0",
+    "pnpm": "9.12.0",
+    "python": "Python 3.14.7",
+    "pinnedNode": "24.8.0"
+  },
+  "command": "node scripts/verify-project.mjs --json",
+  "startedAt": "2026-10-16T21:28:10.859Z",
+  "finishedAt": "2026-10-16T21:32:27.170Z",
+  "durationMs": 256311,
+  "verifierExitCode": 0,
+  "verifierLogSha256": "d748b0dab87c01ff202d73e041ee5f7d7cf28d7503efed51d24892f5419af909",
+  "gates": [
+    {
+      "id": "node-runtime",
+      "label": "pinned Node runtime (.nvmrc)",
+      "status": "passed",
+      "mandatory": true,
+      "detail": "running 24.21.0; pinned 24.8.0 (same major; CI uses setup-node .nvmrc)",
+      "detailSha256": "970713bd87f7d46ce4c29dbdcdd052ee860d494cca7edb9b8349016d536f0c16"
+    },
+    {
+      "id": "pnpm-toolchain",
+      "label": "pnpm toolchain",
+      "status": "passed",
+      "mandatory": true,
+      "detail": "9.12.0",
+      "detailSha256": "2cf2029f9613cf25004377eabcae6cac56e8b28ada3fec127055dccf29673d8e"
+    },
+    {
+      "id": "python-music",
+      "label": "music bot unit tests",
+      "status": "passed",
+      "mandatory": true,
+      "detail": "............................ | ---------------------------------------------------------------------- | Ran 28 tests in 0.724s | OK",
+      "detailSha256": "34c382d560c97c7844bdcba2b72a820c4adeadfae88201dac964c445e90b5bb3"
+    },
+    {
+      "id": "feature-coverage",
+      "label": "legacy feature coverage (structural)",
+      "status": "passed",
+      "mandatory": true,
+      "detail": "Feature coverage structure is valid (structural mode): 179 rows; all rows map to existing targets and tests.",
+      "detailSha256": "88418cc92af2f1efac072704f1715e6461de15e18bd0d72199275266def0a86c"
+    },
+    {
+      "id": "openapi-sync",
+      "label": "dashboard API contract sync",
+      "status": "passed",
+      "mandatory": true,
+      "detail": "Dashboard API contract matches apps/api/src/openapi.json (content compared, line endings ignored).",
+      "detailSha256": "160f4c57212f210be0f7dff1d196750edbda6601dfa6df919041df6578c96475"
+    },
+    {
+      "id": "root-suites",
+      "label": "root suites + phase gates + resource budget",
+      "status": "passed",
+      "mandatory": true,
+      "detail": "ℹ suites 0 | ℹ pass 94 | ℹ fail 0 | ℹ cancelled 0 | ℹ skipped 0 | ℹ todo 0 | ℹ duration_ms 51750.8383 | Resource budget ok: runtime 7.45 CPU / 32.5 GiB; concurrent 7.95 CPU / 33.75 GiB.",
+      "detailSha256": "8597b1b1cb6e9d9ab7d0880124f88d81186dab6a958fc6977d7d29704f00b97d"
+    },
+    {
+      "id": "typecheck",
+      "label": "workspace typecheck",
+      "status": "passed",
+      "mandatory": true,
+      "detail": "packages/modules/games typecheck: Done | apps/dashboard typecheck: Done | apps/bots/community typecheck$ tsc --noEmit | apps/bots/himiko typecheck$ tsc --noEmit | apps/bots/kafka typecheck$ tsc --noEmit | apps/bots/community typecheck: Done | apps/bots/kafka typecheck: Done | apps/bots/himiko typecheck: Done",
+      "detailSha256": "60c8e9f855c753eec84372ff22ce1076f913a504619aab60e932f6751d547984"
+    },
+    {
+      "id": "browser",
+      "label": "browser acceptance",
+      "status": "passed",
+      "mandatory": true,
+      "detail": "  ok 10 tests\\browser\\public-pages.spec.ts:14:7 › renders /verify on desktop and mobile without overflow (2.2s) |   ok 11 tests\\browser\\public-pages.spec.ts:14:7 › renders /missing-kafka-page on desktop and mobile without overflow (2.5s) |   ok 12 tests\\browser\\public-pages.spec.ts:35:5 › ambient and artwork motion pause and respect reduced motion (2.4s) |   ok 13 tests\\browser\\public-pages.spec.ts:64:5 › homepage and dashboard heroes load, pause and respect reduced motion (4.6s) |   ok 14 tests\\browser\\public-pages.spec.ts:101:5 › service filters narrow the catalog and the empty state explains the search (3.1s) |   ok 15 tests\\browser\\public-pages.spec.ts:134:5 › verification page covers empty, short, unknown and matching states (4.0s) |   ok 16 tests\\browser\\public-pages.spec.ts:166:5 › services page navigates to verification (1.7s) |   16 passed (53.0s)",
+      "detailSha256": "56030a66be98938e6f4856282d0f350f023d9d7a0a47e2649bbf16ebf558cbf9"
+    },
+    {
+      "id": "npm-audit",
+      "label": "npm production advisories (recorded, triaged)",
+      "status": "passed",
+      "mandatory": false,
+      "detail": "    \"dependencies\": 198, |     \"devDependencies\": 0, |     \"optionalDependencies\": 0, |     \"totalDependencies\": 198 |   } | } | (node:15764) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities. | (Use `node --trace-deprecation ...` to show where the warning was created)",
+      "detailSha256": "cda3b2f9225e2742b6a7d3e4bf71bee5ebd9b16ddf1345893c74d73f42aaae85"
+    },
+    {
+      "id": "python-audit",
+      "label": "python dependency advisories (recorded, triaged)",
+      "status": "failed",
+      "mandatory": false,
+      "detail": "exit 1: C:\\Python314\\python.exe: No module named pip_audit",
+      "detailSha256": "46ba118da95f631dbc98f41feca35905d88af8a323334d8fee91a0eac10ef796"
+    },
+    {
+      "id": "container-scan",
+      "label": "container/OS image scan",
+      "status": "blocked",
+      "mandatory": false,
+      "detail": "no local runner; executed by the Linux CI workflow",
+      "detailSha256": "718a472af08bcd6fb5085c17181e0ea13e143b272820ac09ebc43a3041fc41ab"
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "exitCode": 0,
+    "passed": 9,
+    "failed": [
+      {
+        "id": "python-audit",
+        "label": "python dependency advisories (recorded, triaged)",
+        "status": "failed",
+        "mandatory": false,
+        "detail": "exit 1: C:\\Python314\\python.exe: No module named pip_audit"
+      }
+    ],
+    "blocked": [
+      {
+        "id": "container-scan",
+        "label": "container/OS image scan",
+        "status": "blocked",
+        "mandatory": false,
+        "detail": "no local runner; executed by the Linux CI workflow"
+      }
+    ]
+  },
+  "images": {
+    "status": "blocked",
+    "note": "Linux image build and container/OS scans require Docker on a Linux host; recorded as BLOCKED, never passed (§2B/§10A)."
+  }
+}

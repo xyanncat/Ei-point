@@ -130,6 +130,7 @@
 
 - [x] Complete six-bot fleet applications implemented with health checks, least-privilege permissions, and graceful shutdown:
       `bot-security` (3101), `bot-moderation` (3102), `bot-community` (3103), `bot-ai` (3104), `bot-music` (3105), `bot-commerce` (3106).
-- [x] Compose resource limits and networking strictly enforce the 8.00 CPU / 30 GB RAM envelope, explicit DNS, and internal database isolation.
+- [x] Evidence bundle (§10A, local scope): `scripts/evidence-bundle.mjs` runs the aggregate verifier and retains proof under `docs/audits/releases/<release-id>/` — revision/dirty state, toolchain versions, command, timestamps, exits/counts, per-gate results and sanitized log SHA-256 hashes; the Linux image build and container/OS scan are recorded as BLOCKED (never passed) pending a Linux host. New mandatory `openapi-sync` gate regenerates the dashboard API contract and fails on drift (`scripts/check-openapi-sync.mjs`). Recorded npm audit triaged to a fix: `@playwright/test` 1.51.1 → 1.64.1 clears GHSA-7mvr-c777-76hp (CI-reachable install path; production images use `deploy --prod`); browser gate re-run 16/16. Retained bundles: `docs/audits/releases/20261016T211613Z-38b1fe28-dirty` and `20261016T212810Z-dfafe5b9-dirty` (all mandatory gates passed; python-audit scanner absent locally, recorded for CI).
+- [x] Compose resource limits and networking strictly enforce the 9.00 CPU project ceiling (owner decision 2026-10-16; RAM/disk uncapped on the single-project host), explicit DNS, and internal database isolation.
 - [ ] Staging Gate: deploy release in test guild on Debian VPS with target-CPU validation.
 - [ ] Launch Gate: two-guild load test, 72-hour soak test, and verified off-host backup restore drill before main-guild cutover.
