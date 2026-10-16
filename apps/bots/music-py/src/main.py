@@ -19,6 +19,7 @@ import threading
 import time
 import uuid
 from media_cache import AudioCache
+from response_contract import embed_reply_helper
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import discord
@@ -568,7 +569,7 @@ class SearchPickerSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.member.id:
-            await interaction.response.send_message("❌ Only the person who searched can pick a track.", ephemeral=True)
+            await respond(interaction, "❌ Only the person who searched can pick a track.", ephemeral=True)
             return
 
         await interaction.response.defer()
@@ -592,10 +593,7 @@ class SearchPickerSelect(discord.ui.Select):
         if not vc.is_playing() and not vc.is_paused():
             await start_playback(self.guild_id)
 
-        await interaction.edit_original_response(
-            content=f"🎵 **Added to queue** (#{pos}): `{track.title}`",
-            view=None,
-        )
+        await respond(interaction, f"🎵 **Added to queue** (#{pos}): `{track.title}`", title="Robin · Queue", view=None)
 
 
 class SearchPickerView(discord.ui.View):
@@ -683,11 +681,7 @@ bot.tree.interaction_check = global_interaction_check
 async def ensure_voice_connection(interaction: discord.Interaction, member: discord.Member) -> discord.VoiceClient | None:
     """Connect to or relocate to member voice channel while enforcing MAX_VOICE_SESSIONS."""
     if not member.voice or not member.voice.channel:
-        msg = "❌ You must be connected to a voice channel to play music."
-        if interaction.response.is_done():
-            await interaction.followup.send(msg)
-        else:
-            await interaction.response.send_message(msg, ephemeral=True)
+        await respond(interaction, "❌ You must be connected to a voice channel to play music.", ephemeral=True)
         return None
 
     if not await runtime_allowed(interaction):
@@ -698,11 +692,7 @@ async def ensure_voice_connection(interaction: discord.Interaction, member: disc
 
     # Enforce voice session budget (§5: max 2 simultaneous sessions across bot voice clients)
     if not voice_client and len(bot.voice_clients) >= MAX_VOICE_SESSIONS:
-        msg = "❌ Voice capacity limit reached (max 2 simultaneous server sessions on VPS envelope). Please try again later."
-        if interaction.response.is_done():
-            await interaction.followup.send(msg)
-        else:
-            await interaction.response.send_message(msg, ephemeral=True)
+        await respond(interaction, "❌ Voice capacity limit reached (max 2 simultaneous server sessions on VPS envelope). Please try again later.", ephemeral=True)
         return None
 
     if not voice_client:
@@ -713,11 +703,7 @@ async def ensure_voice_connection(interaction: discord.Interaction, member: disc
             voice_client = await voice_channel.connect(timeout=10.0, reconnect=True)
         except Exception as exc:
             log.error("Failed to connect to voice channel: %s", exc)
-            msg = "❌ Failed to connect to voice channel. Please check bot permissions and try again."
-            if interaction.response.is_done():
-                await interaction.followup.send(msg)
-            else:
-                await interaction.response.send_message(msg, ephemeral=True)
+            await respond(interaction, "❌ Failed to connect to voice channel. Please check bot permissions and try again.", ephemeral=True)
             return None
     elif voice_client.channel != voice_channel:
         await voice_client.move_to(voice_channel)
@@ -780,9 +766,19 @@ async def respond(interaction: discord.Interaction, message: str, ephemeral: boo
 
 def make_ei_embed(message: str, title: str = "Ei Point") -> discord.Embed:
     embed = discord.Embed(title=title[:256], description=(message or " ")[:4096], color=0x8F2938)
-    embed.set_image(url=os.getenv("EI_POINT_EMBED_IMAGE_URL", "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif"))
+    image_url = (
+        os.getenv("EI_POINT_EMBED_IMAGE_ROBIN")
+        or os.getenv("EI_POINT_EMBED_IMAGE_URL")
+        or "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif"
+    )
+    embed.set_image(url=image_url.strip())
     embed.set_footer(text="Ei Point · powered by Ei-Flow")
     return embed
+
+
+# Every Robin reply (success, error, empty state and component callback) routes
+# through this helper so the configured embed/image is always applied (A18/§8C).
+respond = embed_reply_helper(respond)
 
 
 @bot.tree.command(name="ping", description="Check Robin's Discord gateway latency")
@@ -809,14 +805,14 @@ async def common_about(interaction: discord.Interaction):
 async def cmd_play(interaction: discord.Interaction, query: str):
     guild_id = str(interaction.guild_id)
     if ALLOWED_GUILDS and guild_id not in ALLOWED_GUILDS:
-        await interaction.response.send_message("❌ This server is not approved for Ei Point.", ephemeral=True)
+        await respond(interaction, "❌ This server is not approved for Ei Point.", ephemeral=True)
         return
 
     await interaction.response.defer()
 
     member = interaction.user
     if not isinstance(member, discord.Member):
-        await interaction.followup.send("❌ Could not verify member.")
+        await respond(interaction, "❌ Could not verify member.", ephemeral=True)
         return
 
     voice_client = await ensure_voice_connection(interaction, member)
@@ -826,7 +822,7 @@ async def cmd_play(interaction: discord.Interaction, query: str):
     # Extract metadata using yt-dlp
     tracks_info = await extract_tracks(query, max_results=1)
     if not tracks_info:
-        await interaction.followup.send("❌ Could not resolve audio for that query. Please try another search.")
+        await respond(interaction, "❌ Could not resolve audio for that query. Please try another search.", ephemeral=True)
         return
 
     info = tracks_info[0]
@@ -845,7 +841,7 @@ async def cmd_play(interaction: discord.Interaction, query: str):
     if not voice_client.is_playing() and not voice_client.is_paused():
         await start_playback(guild_id)
 
-    await interaction.followup.send(f"🎵 **Added to queue** (#{pos}): `{track.title}`")
+    await respond(interaction, f"🎵 **Added to queue** (#{pos}): `{track.title}`", title="Robin · Queue")
 
 
 @bot.tree.command(name="search", description="Search tracks and pick from a 5-item menu (Matrix #54)")
@@ -853,23 +849,23 @@ async def cmd_play(interaction: discord.Interaction, query: str):
 async def cmd_search(interaction: discord.Interaction, query: str):
     guild_id = str(interaction.guild_id)
     if ALLOWED_GUILDS and guild_id not in ALLOWED_GUILDS:
-        await interaction.response.send_message("❌ This server is not approved for Ei Point.", ephemeral=True)
+        await respond(interaction, "❌ This server is not approved for Ei Point.", ephemeral=True)
         return
 
     await interaction.response.defer()
 
     member = interaction.user
     if not isinstance(member, discord.Member) or not member.voice or not member.voice.channel:
-        await interaction.followup.send("❌ You must be connected to a voice channel to search music.")
+        await respond(interaction, "❌ You must be connected to a voice channel to search music.", ephemeral=True)
         return
 
     tracks = await extract_tracks(query, max_results=5)
     if not tracks:
-        await interaction.followup.send("❌ No search results found for that query.")
+        await respond(interaction, "❌ No search results found for that query.", ephemeral=True)
         return
 
     view = SearchPickerView(tracks, guild_id, member)
-    await interaction.followup.send(f"🔍 **Search Results for:** `{query}` (expires in 60s)", view=view)
+    await respond(interaction, f"🔍 **Search Results for:** `{query}` (expires in 60s)", title="Robin · Search", view=view)
 
 
 @bot.tree.command(name="pause", description="Pause current playback")
@@ -937,10 +933,10 @@ async def cmd_skip(interaction: discord.Interaction):
 
     if next_track:
         await start_playback(guild_id)
-        await interaction.followup.send(f"⏭️ Skipped to: `{next_track.title}`")
+        await respond(interaction, f"⏭️ Skipped to: `{next_track.title}`", title="Robin · Playback")
     else:
         active_sessions.discard(guild_id)
-        await interaction.followup.send("⏭️ Skipped. Queue is now empty.")
+        await respond(interaction, "⏭️ Skipped. Queue is now empty.", title="Robin · Playback")
 
 
 @bot.tree.command(name="stop", description="Stop music and clear the queue")
@@ -990,7 +986,7 @@ async def cmd_seek(interaction: discord.Interaction, seconds: int):
         await interaction.response.defer()
     await start_playback(guild_id, start_sec=seconds)
     mins, secs = divmod(seconds, 60)
-    await interaction.followup.send(f"⏩ Seeked to `{mins}:{secs:02d}`.")
+    await respond(interaction, f"⏩ Seeked to `{mins}:{secs:02d}`.", title="Robin · Playback")
 
 
 @bot.tree.command(name="autoplay", description="Toggle autoplay recommendations when queue drains (§2, Matrix #52)")
@@ -1011,7 +1007,7 @@ async def cmd_queue(interaction: discord.Interaction):
     guild_id = str(interaction.guild_id)
     q = get_or_create_queue(guild_id)
     if not q.tracks:
-        await interaction.response.send_message("📭 The music queue is currently empty.")
+        await respond(interaction, "📭 The music queue is currently empty.", title="Robin · Queue")
         return
 
     lines = []
@@ -1023,7 +1019,7 @@ async def cmd_queue(interaction: discord.Interaction):
     more = f"\n*...and {len(q.tracks) - 15} more*" if len(q.tracks) > 15 else ""
     ap = "on" if guild_autoplay.get(guild_id, False) else "off"
     status = f"\n\n**Loop**: `{q.loop_mode}` | **Volume**: `{q.volume}%` | **Autoplay**: `{ap}`"
-    await interaction.response.send_message(f"📜 **Music Queue ({len(q.tracks)} tracks):**\n" + "\n".join(lines) + more + status)
+    await respond(interaction, f"📜 **Music Queue ({len(q.tracks)} tracks):**\n" + "\n".join(lines) + more + status, title="Robin · Queue")
 
 
 @bot.tree.command(name="nowplaying", description="Show details about the currently playing song")
@@ -1031,7 +1027,7 @@ async def cmd_nowplaying(interaction: discord.Interaction):
     guild_id = str(interaction.guild_id)
     q = get_or_create_queue(guild_id)
     if not q.tracks or q.position >= len(q.tracks):
-        await interaction.response.send_message("❌ Nothing is currently playing.", ephemeral=True)
+        await respond(interaction, "❌ Nothing is currently playing.", ephemeral=True)
         return
 
     curr = q.tracks[q.position]
@@ -1048,10 +1044,12 @@ async def cmd_nowplaying(interaction: discord.Interaction):
 
     mins, secs = divmod(total_sec, 60)
     pos_mins, pos_secs = divmod(elapsed_sec, 60)
-    await interaction.response.send_message(
+    await respond(
+        interaction,
         f"🎧 **Now Playing:** `{curr.title}`\n"
         f"`[{bar}]` `{pos_mins}:{pos_secs:02d}` / `{mins}:{secs:02d}`\n"
-        f"🔄 Loop: `{q.loop_mode}` | 🔊 Volume: `{q.volume}%`"
+        f"🔄 Loop: `{q.loop_mode}` | 🔊 Volume: `{q.volume}%`",
+        title="Robin · Now Playing",
     )
 
 

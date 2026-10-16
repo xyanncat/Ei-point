@@ -100,6 +100,7 @@
 - [x] Music commands & UI parity: 13 slash commands including /seek, /autoplay, /claimmaster, /masters, and Search Track Picker Select menu component (Matrix #54)
 - [x] Periodic 15s snapshots persist real elapsed position_ms to music.queue_snapshots; queue restoration on restart
 - [x] HTTP healthcheck on port 3105 distinguishing liveness and gateway/DB readiness; ops.service_status heartbeats
+- [x] Robin response contract (A18, §8C): every success/error/empty path and the search-picker callback route through the configured embed/image helper (`embed_reply_helper`/`respond`, per-identity `EI_POINT_EMBED_IMAGE_ROBIN`); the approved-root surface, FFmpeg reconnect/failure routing, queue persistence and bounded cache are covered dependency-free (`apps/bots/music-py/tests/test_response_embeds.py`, `test_ffmpeg_playback.py`) — 28/28 Python. Cyrene `/search`/`/tts`/`/speak`/`/leave` contracts 19/19 TS (fake inference; audible Discord audio and model provisioning remain open).
 
 # Website — public site (done, self-audited; per @frontend-design)
 
