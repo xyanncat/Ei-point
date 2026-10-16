@@ -3,6 +3,8 @@ import { PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import type { Pool } from "pg";
 import { canSettleCommerce } from "./authorization.js";
 import {
+  QUOTE_REWARD_CREDIT_SQL,
+  RESERVE_REWARDS_SQL,
   buildUpiPayload,
   executeClaim,
   executeReject,
@@ -10,6 +12,7 @@ import {
   newOrderToken,
   newReferralCode,
   cycleFor,
+  rewardCreditFor,
   type OrderStatus,
 } from "@ei-point/module-commerce";
 
@@ -141,6 +144,8 @@ export async function respondToCommerceCommand(
       const client = await pool.connect();
       let orderId: string | undefined;
       let referralInvalid = false;
+      let credit: { appliedMinor: number; rewardIds: string[] } = { appliedMinor: 0, rewardIds: [] };
+      let payableMinor = priceMinor;
       try {
         await client.query("BEGIN");
         const referralScope = `guild:${guildId}:user:${userId}`;
@@ -150,6 +155,12 @@ export async function respondToCommerceCommand(
           [referralScope],
         );
         const referralCode = typeof setting.rows[0]?.value?.code === "string" ? setting.rows[0].value.code : null;
+        // Earned referral credit applies to this INR order as whole reserved reward rows.
+        credit = rewardCreditFor(
+          (await client.query(QUOTE_REWARD_CREDIT_SQL, [guildId, userId, cycleFor(new Date())])).rows,
+          priceMinor,
+        );
+        payableMinor = priceMinor - credit.appliedMinor;
         if (referralCode) {
           const validReferral = await client.query<{ referrer_id: string }>(
             "SELECT referrer_id FROM commerce.referrals WHERE code=$1 AND guild_id=$2 AND cycle=$3",
@@ -164,12 +175,13 @@ export async function respondToCommerceCommand(
             await client.query("COMMIT");
           } else {
             const orderRes = await client.query<{ order_id: string }>(
-              `INSERT INTO commerce.orders (guild_id, buyer_id, sku, amount_minor, order_token_hash, idempotency_key, service_name, membership_days,public_id,referral_code)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9,$10)
+              `INSERT INTO commerce.orders (guild_id, buyer_id, sku, amount_minor, order_token_hash, idempotency_key, service_name, membership_days,public_id,referral_code,credit_applied_minor)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9,$10,$11)
                RETURNING order_id`,
-              [guildId, userId, sku, priceMinor, hash, idempotencyKey, item.name, item.membership_days, publicId, referralCode],
+              [guildId, userId, sku, payableMinor, hash, idempotencyKey, item.name, item.membership_days, publicId, referralCode, credit.appliedMinor],
             );
             orderId = orderRes.rows[0]!.order_id;
+            if (credit.rewardIds.length) await client.query(RESERVE_REWARDS_SQL, [credit.rewardIds, orderId]);
             await client.query(
               "INSERT INTO config.settings(scope,key,version,value,updated_by) VALUES($1,'commerce.referral-code',$2,$3,$4)",
               [referralScope, setting.rows[0]!.version + 1, { code: null }, userId],
@@ -178,12 +190,13 @@ export async function respondToCommerceCommand(
           }
         } else {
           const orderRes = await client.query<{ order_id: string }>(
-            `INSERT INTO commerce.orders (guild_id, buyer_id, sku, amount_minor, order_token_hash, idempotency_key, service_name, membership_days,public_id,referral_code)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9,NULL)
+            `INSERT INTO commerce.orders (guild_id, buyer_id, sku, amount_minor, order_token_hash, idempotency_key, service_name, membership_days,public_id,referral_code,credit_applied_minor)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9,NULL,$10)
              RETURNING order_id`,
-            [guildId, userId, sku, priceMinor, hash, idempotencyKey, item.name, item.membership_days, publicId],
+            [guildId, userId, sku, payableMinor, hash, idempotencyKey, item.name, item.membership_days, publicId, credit.appliedMinor],
           );
           orderId = orderRes.rows[0]!.order_id;
+          if (credit.rewardIds.length) await client.query(RESERVE_REWARDS_SQL, [credit.rewardIds, orderId]);
           await client.query("COMMIT");
         }
       } catch (error) {
@@ -201,7 +214,7 @@ export async function respondToCommerceCommand(
       const upiUrl = buildUpiPayload({
         payeeVpa: req.payeeVpa,
         payeeName: req.payeeName,
-        amountMinor: priceMinor,
+        amountMinor: payableMinor,
         note: `Ei-${orderId.slice(0, 8)}`,
       });
 
@@ -211,7 +224,8 @@ export async function respondToCommerceCommand(
         `🧾 **Order Placed Successfully!**\n` +
           `• Order ID: \`${orderId}\`\n` +
           `• Item: **${item.name}** (\`${item.sku}\`)\n` +
-          `• Amount: **₹${(priceMinor / 100).toFixed(2)}**\n` +
+          `• Amount: **₹${(payableMinor / 100).toFixed(2)}**\n` +
+          (credit.appliedMinor > 0 ? `• Referral credit applied: **₹${(credit.appliedMinor / 100).toFixed(2)}**\n` : "") +
           `• Status: **Pending Payment**\n\n` +
           (upiUrl ? `📲 **UPI Pay Link:** <${upiUrl}>\n` : "") +
           `🔗 **Verification & Claim Page:** <${verifyUrl}>\n\n` +

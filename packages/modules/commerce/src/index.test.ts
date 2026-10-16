@@ -6,11 +6,13 @@ import {
   executeClaim,
   executeReject,
   executeSettle,
+  fulfillOrder,
   hashToken,
   isRewardExpired,
   newOrderToken,
   newReferralCode,
   orderTransition,
+  rewardCreditFor,
   validAmountMinor,
   validateUsdtAddress,
 } from "./index.js";
@@ -183,5 +185,65 @@ describe("razorpay hosted-page claims", () => {
     };
     assert.deepEqual(await executeClaim(db, { orderId: "o", guildId: "g", buyerId: "b", proofRef: "abc", idempotencyKey: "rzp-3" }), { ok: false, reason: "invalid-proof" });
     assert.equal(calls, 1);
+  });
+});
+
+describe("settlement-month referral attribution", () => {
+  const q = (calls: Array<{ sql: string; params: unknown[] | undefined }>) =>
+    async (sql: string, params?: unknown[]): Promise<Array<Record<string, any>>> => {
+      calls.push({ sql, params });
+      return sql.includes("UPDATE commerce.referrals") ? [{ referrer_id: "referrer-1" }] : [];
+    };
+
+  it("consumes the code's own row across the month boundary and credits the settlement cycle", async () => {
+    const calls: Array<{ sql: string; params: unknown[] | undefined }> = [];
+    await fulfillOrder(
+      q(calls),
+      { guild_id: "g1", buyer_id: "b1", membership_days: 0, referral_code: "ABC234", order_id: "o1" },
+      5000,
+      new Date(Date.UTC(2026, 1, 1, 12, 0, 0)),
+    );
+    const consume = calls.find((c) => c.sql.includes("UPDATE commerce.referrals"))!;
+    assert.deepEqual(consume.params, ["ABC234", "g1"]);
+    const reward = calls.find((c) => c.sql.includes("INSERT INTO commerce.rewards"))!;
+    assert.equal(reward.params![2], "2026-02");
+    assert.equal(reward.params![4], "checkout:o1");
+    assert.ok(calls.some((c) => c.sql.includes("UPDATE commerce.rewards SET status='paid'") && c.params?.[0] === "o1"));
+  });
+
+  it("attributes the exact month boundary to the settlement instant", async () => {
+    const cycleAt = async (now: Date) => {
+      const calls: Array<{ sql: string; params: unknown[] | undefined }> = [];
+      await fulfillOrder(
+        q(calls),
+        { guild_id: "g1", buyer_id: "b1", membership_days: 0, referral_code: "C", order_id: "o" },
+        1,
+        now,
+      );
+      return calls.find((c) => c.sql.includes("INSERT INTO commerce.rewards"))!.params![2];
+    };
+    assert.equal(await cycleAt(new Date(Date.UTC(2026, 0, 31, 23, 59, 59))), "2026-01");
+    assert.equal(await cycleAt(new Date(Date.UTC(2026, 1, 1, 0, 0, 0))), "2026-02");
+  });
+
+  it("skips the reward row when the code no longer resolves", async () => {
+    const calls: Array<{ sql: string; params: unknown[] | undefined }> = [];
+    await fulfillOrder(async (sql, params) => { calls.push({ sql, params }); return []; }, { guild_id: "g1", buyer_id: "b1", membership_days: 0, referral_code: "GONE", order_id: "o2" }, 5000);
+    assert.equal(calls.some((c) => c.sql.includes("INSERT INTO commerce.rewards")), false);
+  });
+});
+
+describe("reward credit application", () => {
+  it("applies whole reserved rewards oldest-first while keeping the order floor", () => {
+    const rows = [
+      { reward_id: "r1", amount_minor: "2000" },
+      { reward_id: "r2", amount_minor: "3000" },
+      { reward_id: "r3", amount_minor: "100000" },
+    ];
+    assert.deepEqual(rewardCreditFor(rows, 10000), { appliedMinor: 5000, rewardIds: ["r1", "r2"] });
+    assert.deepEqual(rewardCreditFor([{ reward_id: "r1", amount_minor: "9900" }], 10000), { appliedMinor: 9900, rewardIds: ["r1"] });
+    assert.deepEqual(rewardCreditFor([{ reward_id: "r1", amount_minor: "9901" }], 10000), { appliedMinor: 0, rewardIds: [] });
+    assert.deepEqual(rewardCreditFor([{ reward_id: "r1", amount_minor: "5000" }], 5000), { appliedMinor: 0, rewardIds: [] });
+    assert.deepEqual(rewardCreditFor([{ reward_id: "r1", amount_minor: "garbage" }], 10000), { appliedMinor: 0, rewardIds: [] });
   });
 });

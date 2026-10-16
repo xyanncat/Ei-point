@@ -177,7 +177,7 @@ The complete annotated list is in [`.env.example`](.env.example). Common configu
 | Discord | `DISCORD_*_BOT_TOKEN`, `DISCORD_TEST_GUILD_ID`, `DISCORD_MAIN_GUILD_ID`, `DISCORD_CLIENT_*` | Bot identities, guild allowlist, and OAuth |
 | Web/API | `SESSION_SECRET`, `CSRF_SECRET`, `VAULT_SECRET`, `INTERNAL_SERVICE_TOKEN`, `DASHBOARD_ORIGIN`, `API_PORT` | Session protection, service trust, and local routing |
 | AI/TTS/translation | `AI_PROVIDER_PRIMARY*`, `AI_PROVIDER_FALLBACK*`, `AI_DEADLINE_MS`, `AI_DAILY_BUDGET_TOKENS`, `TTS_*`, `HY_MT2_*`, `CYRENE_PERSONA_MEMORY_FILE` | Chat provider settings; offline local Qwen/Hy-MT2 model paths and bounded inference; persona memory mount |
-| Commerce | `UPI_PAYEE_*`, `COMMERCE_GUILD_ID`, `PAYMENT_ORIGIN`, `COMMERCE_REFERRAL_REWARD_MINOR` | Payment presentation and guild/referral configuration |
+| Commerce | `UPI_PAYEE_*`, `RAZORPAY_PAYMENT_PAGE`, `COMMERCE_GUILD_ID`, `PAYMENT_ORIGIN`, `COMMERCE_REFERRAL_REWARD_MINOR`, `COMMERCE_STAFF_CHANNEL_ID` | Payment presentation, guild/referral configuration, and the staff channel that receives claim notifications |
 | Backup/ingress | `DEPLOY_BACKUP_MAX_AGE_HOURS`, `RESTIC_*`, tunnel variables | Release backup-age bound and optional external backup/ingress configuration |
 
 Production secrets belong in a protected host-side environment file. Do not put credentials in issues, logs, screenshots, or release manifests.

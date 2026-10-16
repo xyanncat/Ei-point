@@ -113,6 +113,57 @@ export const EXPIRE_REWARDS_SQL = `
   UPDATE commerce.rewards SET status = 'expired'
   WHERE status = 'reserved' AND cycle < $1`;
 
+// --- Reward credit redemption: reserved rewards are spent on an order. ---
+// Reward rows are whole units; the order always keeps at least the floor amount.
+export const REWARD_CREDIT_FLOOR_MINOR = 100;
+
+export const QUOTE_REWARD_CREDIT_SQL = `
+  SELECT reward_id, amount_minor FROM commerce.rewards
+  WHERE guild_id=$1 AND user_id=$2 AND status='reserved' AND cycle=$3
+  ORDER BY created_at, reward_id FOR UPDATE`;
+
+export const RESERVE_REWARDS_SQL = `
+  UPDATE commerce.rewards SET status='redeemed', order_id=$2
+  WHERE reward_id=ANY($1::uuid[]) AND status='reserved'`;
+
+export const RELEASE_ORDER_REWARDS_SQL = `
+  UPDATE commerce.rewards SET status=CASE WHEN cycle<$2 THEN 'expired' ELSE 'reserved' END, order_id=NULL
+  WHERE order_id=$1 AND status='redeemed'`;
+
+export const RELEASE_EXPIRED_ORDER_REWARDS_SQL = `
+  UPDATE commerce.rewards r SET status=CASE WHEN r.cycle<$1 THEN 'expired' ELSE 'reserved' END, order_id=NULL
+  FROM commerce.orders o
+  WHERE r.order_id=o.order_id AND r.status='redeemed' AND o.status='pending' AND o.expires_at<now()`;
+
+export const PAID_ORDER_REWARDS_SQL = `
+  UPDATE commerce.rewards SET status='paid' WHERE order_id=$1 AND status='redeemed'`;
+
+// --- Membership revocation (staff review control): keeps the row for audit. ---
+export const REVOKE_MEMBERSHIP_SQL = `
+  UPDATE commerce.memberships SET expires_at=now(), revoked_at=now(), updated_at=now()
+  WHERE guild_id=$1 AND user_id=$2 AND expires_at>now()`;
+
+/** Greedy whole-row application, oldest first, keeping the order amount at or above the floor. */
+export function rewardCreditFor(
+  rows: Array<{ reward_id?: unknown; amount_minor?: unknown }>,
+  priceMinor: number,
+  floorMinor = REWARD_CREDIT_FLOOR_MINOR,
+): { appliedMinor: number; rewardIds: string[] } {
+  if (!Number.isSafeInteger(priceMinor) || priceMinor <= 0 || !Number.isSafeInteger(floorMinor)) {
+    return { appliedMinor: 0, rewardIds: [] };
+  }
+  const rewardIds: string[] = [];
+  let appliedMinor = 0;
+  for (const row of rows) {
+    const amountMinor = Number(row.amount_minor);
+    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) continue;
+    if (appliedMinor + amountMinor > priceMinor - floorMinor) continue;
+    appliedMinor += amountMinor;
+    rewardIds.push(String(row.reward_id));
+  }
+  return { appliedMinor, rewardIds };
+}
+
 export interface DbTx {
   query: (sql: string, params: unknown[]) => Promise<{ rows: Array<Record<string, unknown>>; rowCount: number }>;
 }
@@ -188,14 +239,22 @@ export async function executeReject(
   const marked = await db.query(REJECT_ORDER_SQL, [args.orderId]);
   if (marked.rowCount !== 1) return { ok: false, reason: "already-rejected" };
   await db.query(REJECT_CLAIMS_SQL, [args.orderId]);
+  // A rejected order releases its reserved reward credit (past-cycle rows expire honestly).
+  await db.query(RELEASE_ORDER_REWARDS_SQL, [args.orderId, cycleFor(new Date())]);
   return { ok: true };
 }
 
-// Called only while holding the order row lock, in the settlement transaction.
-export async function fulfillOrder(q:(sql:string,params?:unknown[])=>Promise<Record<string,any>[]>,o:Record<string,any>,reward:number):Promise<void>{
- const guild=o.guild_id,cycle=cycleFor(new Date());
+/**
+ * Called only while holding the order row lock, in the settlement transaction.
+ * Referrals are attributed to the **settlement** cycle ("confirmed" = settled):
+ * the code's own row is consumed regardless of the cycle the order was created
+ * in, and the reward credits the cycle the settlement happened in.
+ */
+export async function fulfillOrder(q:(sql:string,params?:unknown[])=>Promise<Record<string,any>[]>,o:Record<string,any>,reward:number,now=new Date()):Promise<void>{
+ const guild=o.guild_id,cycle=cycleFor(now);
  if(Number(o.membership_days)>0)await q(`INSERT INTO commerce.memberships(guild_id,user_id,expires_at) VALUES($1,$2,now()+$3*interval '1 day') ON CONFLICT(guild_id,user_id) DO UPDATE SET expires_at=greatest(commerce.memberships.expires_at,now())+$3*interval '1 day',updated_at=now()`,[guild,o.buyer_id,o.membership_days]);
  await q("UPDATE commerce.rewards SET status='expired' WHERE guild_id=$1 AND status='reserved' AND cycle<$2",[guild,cycle]);
- if(o.referral_code){const r=(await q("UPDATE commerce.referrals SET uses=uses+1 WHERE code=$1 AND guild_id=$2 AND cycle=$3 RETURNING referrer_id",[o.referral_code,guild,cycle]))[0];if(r&&Number.isSafeInteger(reward)&&reward>0)await q("INSERT INTO commerce.rewards(guild_id,user_id,cycle,amount_minor,idempotency_key) VALUES($1,$2,$3,$4,$5)",[guild,r.referrer_id,cycle,reward,`checkout:${o.order_id}`]);}
+ if(o.referral_code){const r=(await q("UPDATE commerce.referrals SET uses=uses+1 WHERE code=$1 AND guild_id=$2 RETURNING referrer_id",[o.referral_code,guild]))[0];if(r&&Number.isSafeInteger(reward)&&reward>0)await q("INSERT INTO commerce.rewards(guild_id,user_id,cycle,amount_minor,idempotency_key) VALUES($1,$2,$3,$4,$5)",[guild,r.referrer_id,cycle,reward,`checkout:${o.order_id}`]);}
+ await q(PAID_ORDER_REWARDS_SQL,[o.order_id]);
  await q("UPDATE commerce.claims SET status='confirmed' WHERE order_id=$1",[o.order_id]);
 }

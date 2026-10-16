@@ -19,7 +19,7 @@ After validating assets, `node scripts/import-project-assets.mjs` is a read-only
 | Studio/team, game vault, FAQ, service plans | public website | Service plans, game filters, archived team profiles and ordering FAQ restored |
 | UPI exact-amount QR, USDT TRC-20 QR | commerce | Checkout API and local QR generation implemented; requires operator payment configuration |
 | Discord buyer ID, referral capture and validation | commerce | Checkout buyer ID/referral capture and server validation implemented |
-| UTR/transaction-hash claims, staff confirmation/rejection | commerce | Claim and staff review API/UI implemented; automated staff notifications not configured |
+| UTR/transaction-hash claims, staff confirmation/rejection | commerce | Claim and staff review API/UI implemented; fresh claims enqueue durable staff-channel notifications delivered by Cipher (disabled/misconfigured reported honestly) |
 | Public RP-order-ID payment status | commerce | RP-order-ID status endpoint and verification page implemented; hashed token flow retained |
 | 30-day membership and monthly referrals | commerce | Persistent membership/reward settlement and periodic expiry implemented |
 | Discord OAuth, approved guild list, access denial | access | Current Phase 4 implemented, live rollout pending |

@@ -151,7 +151,7 @@ const buyer2='200000000000000002',buyer3='200000000000000003';
 const pageUrl='https://razorpay.me/@subrodluffy';
 const queryP=async(sql,p)=>(await pool.query(sql,p)).rows;
 const txP=async(work)=>{const c=await pool.connect();try{await c.query('BEGIN');const v=await work(async(sql,p)=>(await c.query(sql,p)).rows);await c.query('COMMIT');return v;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}};
-function pageApp(){const a=Fastify();registerCommerceRoutes(a,{env:{COMMERCE_GUILD_ID:guild,PAYMENT_ORIGIN:origin,UPI_PAYEE_VPA:'merchant@bank',UPI_PAYEE_NAME:'Studio',RAZORPAY_PAYMENT_PAGE:pageUrl,COMMERCE_REFERRAL_REWARD_MINOR:'5000'},query:queryP,transaction:txP,session:async()=>(sessionUser?{discordUserId:sessionUser}:null),authorize:async()=>({userId:buyer,isAdmin:true})});return a;}
+function pageApp(admin=true){const a=Fastify();registerCommerceRoutes(a,{env:{COMMERCE_GUILD_ID:guild,PAYMENT_ORIGIN:origin,UPI_PAYEE_VPA:'merchant@bank',UPI_PAYEE_NAME:'Studio',RAZORPAY_PAYMENT_PAGE:pageUrl,COMMERCE_REFERRAL_REWARD_MINOR:'5000'},query:queryP,transaction:txP,session:async()=>(sessionUser?{discordUserId:sessionUser}:null),authorize:async()=>({userId:buyer,isAdmin:admin})});return a;}
 const pageOrder=(app,token,key)=>app.inject({method:'POST',url:'/api/payments/upi-qr',headers:{origin},payload:{serviceId:'account-management-membership',paymentMethod:'razorpay',idempotencyKey:key,recoveryToken:token}});
 const pageClaim=(app,order,ref,key)=>app.inject({method:'POST',url:'/api/payments/claim',headers:{origin},payload:{orderId:order.orderId,token:order.token,reference:ref,idempotencyKey:key}});
 
@@ -208,4 +208,112 @@ test('razorpay page: resume hands back the same page and a deployment without on
  assert.equal(closed.statusCode,200);assert.equal(closed.json().resumed,false,'a deployment without the page must not resume a dead payment link');
  assert.equal(closed.json().paymentUri,undefined);
  await off.close();
+});
+
+// --- A12/7C: settlement-month attribution, reward redemption, membership revocation (real PostgreSQL) ---
+const {fulfillOrder}=await import('../../packages/modules/commerce/dist/index.js');
+const nowCycle=async()=>(await pool.query("SELECT to_char(now() AT TIME ZONE 'UTC','YYYY-MM') AS c")).rows[0].c;
+
+test('referral settlement months: an earlier cycle code still pays, credited to the settlement cycle',async()=>{
+ for(const [settleAt,expectedCycle] of [[new Date('2000-01-31T23:59:59.000Z'),'2000-01'],[new Date('2000-02-01T00:00:00.000Z'),'2000-02']]){
+  const code=`OLD${expectedCycle.replace('-','')}`;
+  await pool.query('INSERT INTO commerce.referrals(code,guild_id,referrer_id,cycle) VALUES($1,$2,$3,$4)',[code,guild,referrer,'2000-01']);
+  const order=(await pool.query(`INSERT INTO commerce.orders(guild_id,buyer_id,sku,amount_minor,order_token_hash,idempotency_key,public_id,method,referral_code,request_hash,service_name,membership_days,expires_at)
+   VALUES($1,$2,'account-management-membership',70000,$3,$4,$5,'upi',$6,'rh','Account Management Membership',0,now()+interval '1 day') RETURNING order_id,public_id,sku`,[guild,buyer,`tok-${code}`,`idem-${code}`,`RP-M${expectedCycle.slice(5)}010`,code])).rows[0];
+  await pool.query('INSERT INTO commerce.claims(order_id,proof_ref,idempotency_key) VALUES($1,$2,$3)',[order.order_id,`upi:${expectedCycle.slice(5)}0000000001`,code]);
+  const row=(await pool.query('SELECT * FROM commerce.orders WHERE order_id=$1',[order.order_id])).rows[0];
+  await fulfillOrder(queryP,row,5000,settleAt);
+  const reward=(await pool.query("SELECT cycle,amount_minor,status FROM commerce.rewards WHERE idempotency_key=$1",[`checkout:${order.order_id}`])).rows[0];
+  assert.equal(reward.cycle,expectedCycle,`settlement at ${settleAt.toISOString()} credits ${expectedCycle}`);
+  assert.equal(reward.amount_minor,'5000');assert.equal(reward.status,'reserved');
+  assert.equal((await pool.query('SELECT uses FROM commerce.referrals WHERE code=$1',[code])).rows[0].uses,1,'the code is consumed across the month boundary');
+  assert.equal((await pool.query('SELECT status FROM commerce.claims WHERE order_id=$1',[order.order_id])).rows[0].status,'confirmed');
+ }
+});
+
+test('reward redemption: credit applies at checkout, pays exactly once on settlement',async()=>{
+ await pool.query('DELETE FROM commerce.checkout_rate_limits');
+ await pool.query("INSERT INTO commerce.rewards(guild_id,user_id,cycle,amount_minor,idempotency_key) VALUES($1,$2,$3,2000,'seed-7c-1')",[guild,buyer3,await nowCycle()]);
+ sessionUser=buyer3;const app3=pageApp();
+ const created=await pageOrder(app3,'k'.repeat(43),'phase4-credit-key-1');
+ assert.equal(created.statusCode,200,created.body);const o=created.json();
+ assert.equal(o.amountMinor,68000,'the reward reduces the server-priced amount');assert.equal(o.creditAppliedMinor,2000);
+ const stored=(await pool.query("SELECT r.status,r.order_id,ord.amount_minor,ord.credit_applied_minor FROM commerce.rewards r JOIN commerce.orders ord ON ord.order_id=r.order_id WHERE r.idempotency_key='seed-7c-1'")).rows[0];
+ assert.equal(stored.status,'redeemed');assert.equal(stored.amount_minor,'68000');assert.equal(stored.credit_applied_minor,'2000');
+ const claim=await pageClaim(app3,o,'pay_PHASE4CREDIT','phase4-credit-claim');assert.equal(claim.statusCode,200,claim.body);
+ assert.ok((await pool.query("SELECT count(*)::int AS n FROM ops.outbox WHERE type='commerce.notification' AND aggregate_id=$1",[guild])).rows[0].n>=1,'a fresh claim enqueues a durable staff notification');
+ const settle=await app3.inject({method:'POST',url:`/api/guilds/${guild}/commerce/orders/${o.orderId}/settle`,payload:{idempotencyKey:'phase4-credit-settle-1'}});
+ assert.equal(settle.statusCode,200,settle.body);
+ assert.equal((await pool.query("SELECT status FROM commerce.rewards WHERE idempotency_key='seed-7c-1'")).rows[0].status,'paid');
+ const again=await app3.inject({method:'POST',url:`/api/guilds/${guild}/commerce/orders/${o.orderId}/settle`,payload:{idempotencyKey:'phase4-credit-settle-2'}});
+ assert.equal(again.statusCode,200);
+ assert.equal((await pool.query("SELECT status FROM commerce.rewards WHERE idempotency_key='seed-7c-1'")).rows[0].status,'paid','duplicate approval must not double-pay');
+ assert.equal((await pool.query('SELECT count(*)::int AS n FROM commerce.rewards WHERE user_id=$1',[buyer3])).rows[0].n,1);
+ await app3.close();
+});
+
+test('reward reservation survives response loss, releases on rejection and never double-spends',async()=>{
+ await pool.query('DELETE FROM commerce.checkout_rate_limits');
+ await pool.query("INSERT INTO commerce.rewards(guild_id,user_id,cycle,amount_minor,idempotency_key) VALUES($1,$2,$3,3000,'seed-7c-2')",[guild,buyer3,await nowCycle()]);
+ sessionUser=buyer3;const app3=pageApp();
+ const first=await pageOrder(app3,'m'.repeat(43),'phase4-credit-key-2');assert.equal(first.statusCode,200,first.body);
+ const o=first.json();assert.equal(o.amountMinor,67000);assert.equal(o.creditAppliedMinor,3000);
+ const replay=await pageOrder(app3,'m'.repeat(43),'phase4-credit-key-2');assert.equal(replay.statusCode,200,replay.body);assert.equal(replay.json().orderId,o.orderId);
+ assert.equal((await pool.query('SELECT count(*)::int AS n FROM commerce.orders WHERE idempotency_key=$1',['phase4-credit-key-2'])).rows[0].n,1);
+ assert.equal((await pool.query("SELECT status FROM commerce.rewards WHERE idempotency_key='seed-7c-2'")).rows[0].status,'redeemed');
+ const other=await pageOrder(app3,'n'.repeat(43),'phase4-credit-key-3');assert.equal(other.statusCode,200,other.body);
+ assert.equal(other.json().creditAppliedMinor,0,'a reserved reward cannot be spent on a second order');assert.equal(other.json().amountMinor,70000);
+ const rejection=await app3.inject({method:'POST',url:`/api/guilds/${guild}/commerce/orders/${o.orderId}/reject`,payload:{idempotencyKey:'phase4-credit-reject'}});
+ assert.equal(rejection.statusCode,200,rejection.body);
+ const released=(await pool.query("SELECT status,order_id FROM commerce.rewards WHERE idempotency_key='seed-7c-2'")).rows[0];
+ assert.equal(released.status,'reserved','a rejected order returns the credit to the buyer');assert.equal(released.order_id,null);
+ await app3.close();
+});
+
+test('order expiry releases reserved credit; past-cycle releases expire honestly',async()=>{
+ await pool.query('DELETE FROM commerce.checkout_rate_limits');
+ const expiryBuyer='200000000000000005';
+ await pool.query("INSERT INTO commerce.rewards(guild_id,user_id,cycle,amount_minor,idempotency_key) VALUES($1,$2,$3,4000,'seed-7c-3')",[guild,expiryBuyer,await nowCycle()]);
+ sessionUser=expiryBuyer;const app3=pageApp();
+ const o=(await pageOrder(app3,'p'.repeat(43),'phase4-credit-key-4')).json();assert.equal(o.creditAppliedMinor,4000);
+ await pool.query("UPDATE commerce.orders SET expires_at=now()-interval '1 minute' WHERE public_id=$1",[o.orderId]);
+ await maintainCommerce(queryP);
+ const released=(await pool.query("SELECT status,order_id FROM commerce.rewards WHERE idempotency_key='seed-7c-3'")).rows[0];
+ assert.equal(released.status,'reserved');assert.equal(released.order_id,null);
+ assert.equal((await pool.query('SELECT status FROM commerce.orders WHERE public_id=$1',[o.orderId])).rows[0].status,'expired');
+ const buyer4='200000000000000004';
+ await pool.query("INSERT INTO commerce.rewards(guild_id,user_id,cycle,amount_minor,idempotency_key) VALUES($1,$2,'2000-01',5000,'seed-7c-4')",[guild,buyer4]);
+ sessionUser=buyer4;
+ const second=(await pageOrder(app3,'q'.repeat(43),'phase4-credit-key-5')).json();
+ assert.equal(second.creditAppliedMinor,0,'past-cycle rewards are never quoted');
+ await pool.query("UPDATE commerce.rewards SET status='redeemed',order_id=(SELECT order_id FROM commerce.orders WHERE public_id=$1) WHERE idempotency_key='seed-7c-4'",[second.orderId]);
+ await pool.query("UPDATE commerce.orders SET expires_at=now()-interval '1 minute' WHERE public_id=$1",[second.orderId]);
+ await maintainCommerce(queryP);
+ assert.equal((await pool.query("SELECT status FROM commerce.rewards WHERE idempotency_key='seed-7c-4'")).rows[0].status,'expired','a past-cycle release expires instead of returning to the pool');
+ await app3.close();
+});
+
+test('membership revocation: admin-only, immediate, idempotent, and re-purchase restarts the term',async()=>{
+ const member=buyer2;
+ const before=(await pool.query('SELECT expires_at FROM commerce.memberships WHERE guild_id=$1 AND user_id=$2',[guild,member])).rows[0];
+ assert.ok(before,'fixture expects the razorpay settlement membership');
+ const app4=pageApp();
+ const revoke=await app4.inject({method:'POST',url:`/api/guilds/${guild}/commerce/memberships/${member}/revoke`});
+ assert.equal(revoke.statusCode,200,revoke.body);assert.deepEqual(revoke.json(),{userId:member,status:'revoked'});
+ const revoked=(await pool.query('SELECT expires_at,revoked_at FROM commerce.memberships WHERE guild_id=$1 AND user_id=$2',[guild,member])).rows[0];
+ assert.ok(revoked.revoked_at);assert.ok(new Date(revoked.expires_at).getTime()<=Date.now(),'revocation takes effect immediately');
+ assert.equal((await app4.inject({method:'POST',url:`/api/guilds/${guild}/commerce/memberships/${member}/revoke`})).statusCode,200,'repeat revocation stays idempotent');
+ assert.equal((await app4.inject({method:'POST',url:`/api/guilds/${guild}/commerce/memberships/900000000000000009/revoke`})).statusCode,404);
+ const denied=await pageApp(false).inject({method:'POST',url:`/api/guilds/${guild}/commerce/memberships/${member}/revoke`});
+ assert.equal(denied.statusCode,403);assert.equal(denied.json().code,'admin-required','losing staff permission loses the revoke control');
+ await pool.query('DELETE FROM commerce.checkout_rate_limits');
+ sessionUser=member;
+ const created=await pageOrder(app4,'r'.repeat(43),'phase4-credit-key-6');assert.equal(created.statusCode,200,created.body);
+ const o=created.json();
+ assert.equal((await pageClaim(app4,o,'pay_PHASE4RESTART','phase4-credit-claim-2')).statusCode,200);
+ assert.equal((await app4.inject({method:'POST',url:`/api/guilds/${guild}/commerce/orders/${o.orderId}/settle`,payload:{idempotencyKey:'phase4-credit-settle-3'}})).statusCode,200);
+ const after=(await pool.query('SELECT expires_at FROM commerce.memberships WHERE guild_id=$1 AND user_id=$2',[guild,member])).rows[0];
+ const remaining=new Date(after.expires_at).getTime()-Date.now();
+ assert.ok(remaining>29*86400000&&remaining<=30*86400000+120000,'a re-purchase restarts the membership from now instead of stacking on the revoked term');
+ await app4.close();
 });

@@ -47,7 +47,8 @@ test("a redeemed referral is attached to one order and consumed in the same tran
      if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
      if (/SELECT version, value FROM config\.settings/.test(sql)) return { rows: [{ version, value: { code: savedCode } }] };
      if (/FROM commerce\.referrals/.test(sql)) return { rows: [{ referrer_id: "another-user" }] };
-     if (/INSERT INTO commerce\.orders/.test(sql)) { orderNumber++; attachedCodes.push(params[9] ?? null); return { rows: [{ order_id: `order-${orderNumber}` }] }; }
+     if (/FROM commerce\.rewards/.test(sql)) return { rows: [] };
+     if (/INSERT INTO commerce\.orders/.test(sql)) { orderNumber++; attachedCodes.push(sql.includes("NULL,$10") ? null : (params[9] ?? null)); return { rows: [{ order_id: `order-${orderNumber}` }] }; }
      if (/INSERT INTO config\.settings/.test(sql)) { pendingCode = (params[2] as { code: string | null }).code; return { rows: [] }; }
      throw new Error(`Unexpected query: ${sql}`);
     },
@@ -91,7 +92,7 @@ test("staff rejection transitions once and refuses non-staff before any database
  await respondToCommerceCommand({name:"orders",subcommand:"reject",options:{order_id:"uuid-1"},guildId:guild,userId:buyer,isOwner:false,canManage:false,userScopes:[],reply:async(s:string)=>{reply=s;}} as unknown as CommerceCommandRequest,{query:async()=>{touched++;return {rows:[]};},connect:async()=>{touched++;throw Error("must not connect");}} as any);
  assert.equal(touched,0);assert.match(reply,/Permission denied/);
  const statements:string[]=[];let committed=false;
- const client={query:async(sql:string)=>{statements.push(sql);if(sql==="BEGIN"||sql==="ROLLBACK")return {rows:[],rowCount:null};if(sql==="COMMIT"){committed=true;return {rows:[],rowCount:null};}if(/FOR UPDATE/.test(sql))return {rows:[{order_id:"uuid-1",status:"claimed"}],rowCount:1};if(/UPDATE commerce\.orders SET status = 'rejected'/.test(sql))return {rows:[],rowCount:1};if(/UPDATE commerce\.claims SET status = 'rejected'/.test(sql))return {rows:[],rowCount:1};throw Error(`Unexpected query: ${sql}`);},release:()=>{}};
+ const client={query:async(sql:string)=>{statements.push(sql);if(sql==="BEGIN"||sql==="ROLLBACK")return {rows:[],rowCount:null};if(sql==="COMMIT"){committed=true;return {rows:[],rowCount:null};}if(/FOR UPDATE/.test(sql))return {rows:[{order_id:"uuid-1",status:"claimed"}],rowCount:1};if(/UPDATE commerce\.orders SET status = 'rejected'/.test(sql))return {rows:[],rowCount:1};if(/UPDATE commerce\.claims SET status = 'rejected'/.test(sql))return {rows:[],rowCount:1};if(/UPDATE commerce\.rewards SET status=CASE WHEN cycle</.test(sql))return {rows:[],rowCount:1};throw Error(`Unexpected query: ${sql}`);},release:()=>{}};
  reply="";
  await respondToCommerceCommand({name:"orders",subcommand:"reject",options:{order_id:"uuid-1"},guildId:guild,userId:"300000000000000009",isOwner:false,canManage:true,userScopes:[],reply:async(s:string)=>{reply=s;}} as unknown as CommerceCommandRequest,{connect:async()=>client} as any);
  assert.equal(committed,true);assert.ok(statements.some((sql)=>/UPDATE commerce\.orders SET status = 'rejected'/.test(sql)));assert.ok(statements.some((sql)=>/UPDATE commerce\.claims SET status = 'rejected'/.test(sql)));assert.match(reply,/rejected/i);
@@ -101,4 +102,28 @@ test("catalog autocomplete offers active services for the sku option",async()=>{
  const choices=await catalogChoices(pool as any,"mem");
  assert.equal(seen.length,1);assert.match(seen[0]!.sql,/FROM commerce\.catalog/);assert.match(seen[0]!.sql,/active=true/);assert.match(seen[0]!.sql,/LIMIT 25/);assert.deepEqual(seen[0]!.params,["mem"]);
  assert.deepEqual(choices,[{name:"Membership (membership)",value:"membership"},{name:"Genshin Main Event (genshin-main-event)",value:"genshin-main-event"}]);
+});
+test("earned rewards reduce the Discord order price and are reserved in the same transaction",async()=>{
+ let reply="";let inserted:unknown[]|null=null;const reserves:unknown[][]=[];
+ const pool={
+  query:async(sql:string)=>{assert.match(sql,/FROM commerce\.catalog/);return {rows:[{sku:"membership",name:"Membership",price_minor:"500",currency:"INR",membership_days:30}]};},
+  connect:async()=>({
+   query:async(sql:string,params:unknown[]=[])=>{
+    if(sql==="BEGIN"||sql==="COMMIT"||sql==="ROLLBACK")return {rows:[]};
+    if(/pg_advisory_xact_lock/.test(sql))return {rows:[]};
+    if(/SELECT version, value FROM config\.settings/.test(sql))return {rows:[]};
+    if(/FROM commerce\.rewards/.test(sql))return {rows:[{reward_id:"r1",amount_minor:"200"}]};
+    if(/INSERT INTO commerce\.orders/.test(sql)){inserted=params;return {rows:[{order_id:"order-credit-1"}]};}
+    if(/UPDATE commerce\.rewards SET status='redeemed'/.test(sql)){reserves.push(params);return {rows:[]};}
+    throw new Error(`Unexpected query: ${sql}`);
+   },
+   release:()=>{},
+  }),
+ };
+ await respondToCommerceCommand({name:"orders",subcommand:"create",options:{sku:"membership"},guildId:guild,userId:buyer,key:"credit-interaction",payeeVpa:"payee@bank",payeeName:"Studio",paymentOrigin:"https://checkout.example",canManage:false,isOwner:false,userScopes:[],defer:async()=>{},reply:async(s:string)=>{reply=s;}} as unknown as CommerceCommandRequest,pool as any);
+ assert.equal(inserted![3],300,"the buyer pays the credit-reduced price");
+ assert.equal(inserted![9],200,"the credit is recorded on the order");
+ assert.deepEqual(reserves[0],[["r1"],"order-credit-1"]);
+ assert.match(reply,/Amount: \*\*₹3\.00\*\*/);
+ assert.match(reply,/Referral credit applied: \*\*₹2\.00\*\*/);
 });

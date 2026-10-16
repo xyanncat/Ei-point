@@ -295,3 +295,47 @@ test('outbox delivery failures retain the event with bounded retry diagnostics',
   const r = (await pool.query('SELECT published,attempts,last_error FROM ops.outbox')).rows[0];
   assert.deepEqual(r, { published: false, attempts: 1, last_error: 'delivery-failed' });
 });
+
+// --- A12/7C: durable staff notifications for payment claims ---
+const claimNotification = (key, payload) =>
+  pool.query(
+    `INSERT INTO ops.outbox(aggregate,aggregate_id,type,payload,correlation_id) VALUES('commerce.claim',$1,'commerce.notification',$2,$3)`,
+    [guild, JSON.stringify({ category: 'orders', ...payload }), key],
+  );
+
+test('commerce staff notifications deliver durably and are never redelivered', async () => {
+  await registerDeliveryGuild();
+  const { deliverCommerceNotifications } = await import('../../packages/flow/dist/community-outbox.js');
+  await claimNotification('test-claim-1', { orderId: 'RP-TEST01', buyerId: alice, serviceName: 'Membership', amountMinor: 70000, method: 'upi', proofRef: 'upi:123456789012' });
+  const sent = [];
+  assert.equal(await deliverCommerceNotifications(pool, [guild], async (payload, nonce) => sent.push({ payload, nonce }), 'himiko'), 1);
+  assert.equal(sent[0].payload.orderId, 'RP-TEST01');
+  assert.equal(sent[0].payload.amountMinor, 70000);
+  assert.equal((await pool.query(`SELECT published FROM ops.outbox WHERE correlation_id='test-claim-1'`)).rows[0].published, true);
+  assert.equal(await deliverCommerceNotifications(pool, [guild], async () => sent.push('again'), 'himiko'), 0, 'a delivered notification is never redelivered');
+  assert.equal(sent.length, 1);
+});
+
+test('failed commerce notification delivery retries after restart and honors the orders preference', async () => {
+  await registerDeliveryGuild();
+  const { deliverCommerceNotifications } = await import('../../packages/flow/dist/community-outbox.js');
+  await claimNotification('test-claim-2', { orderId: 'RP-TEST02', buyerId: alice });
+  assert.equal(await deliverCommerceNotifications(pool, [guild], async () => { throw new Error('provider down'); }, 'himiko'), 0);
+  const failed = (await pool.query(`SELECT published,attempts,last_error FROM ops.outbox WHERE correlation_id='test-claim-2'`)).rows[0];
+  assert.equal(failed.published, false);
+  assert.equal(failed.attempts, 1);
+  assert.equal(failed.last_error, 'delivery-failed');
+  await pool.query(`UPDATE ops.outbox SET next_attempt_at=now() WHERE correlation_id='test-claim-2'`);
+  const sent = [];
+  assert.equal(await deliverCommerceNotifications(pool, [guild], async payload => sent.push(payload), 'himiko'), 1, 'a restarted consumer picks the event back up');
+  assert.equal(sent[0].orderId, 'RP-TEST02');
+  await pool.query(
+    `INSERT INTO config.guild_controls(guild_id, notifications_enabled, notification_preferences, updated_by) VALUES($1, true, '{"orders":false}'::jsonb, 'test')
+     ON CONFLICT(guild_id) DO UPDATE SET notifications_enabled=true, notification_preferences='{"orders":false}'::jsonb`,
+    [guild],
+  );
+  await claimNotification('test-claim-3', { orderId: 'RP-TEST03', buyerId: alice });
+  assert.equal(await deliverCommerceNotifications(pool, [guild], async () => sent.push('gated'), 'himiko'), 0, 'the orders preference stops delivery');
+  assert.equal(sent.length, 1);
+  await pool.query(`UPDATE config.guild_controls SET notification_preferences='{}'::jsonb WHERE guild_id=$1`, [guild]);
+});

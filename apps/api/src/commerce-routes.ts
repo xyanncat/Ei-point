@@ -1,4 +1,4 @@
-import { fulfillOrder } from "@ei-point/module-commerce";
+import { QUOTE_REWARD_CREDIT_SQL, RELEASE_EXPIRED_ORDER_REWARDS_SQL, RELEASE_ORDER_REWARDS_SQL, RESERVE_REWARDS_SQL, REVOKE_MEMBERSHIP_SQL, fulfillOrder, rewardCreditFor } from "@ei-point/module-commerce";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 export type CommerceQuery = (sql:string, params?:unknown[])=>Promise<Record<string,any>[]>;
@@ -17,6 +17,7 @@ const publicId=(s:unknown):s is string=>typeof s==="string"&&/^RP-[A-Z0-9]{6}$/.
 const cycle=()=>new Date().toISOString().slice(0,7);
 const amount=(n:unknown)=>(Number(n)/100).toFixed(2);
 export async function maintainCommerce(query:CommerceQuery):Promise<void>{
+ await query(RELEASE_EXPIRED_ORDER_REWARDS_SQL,[cycle()]);
  await query("UPDATE commerce.orders SET status='expired' WHERE status='pending' AND expires_at<now()");
  await query("UPDATE commerce.rewards SET status='expired' WHERE status='reserved' AND cycle<$1",[cycle()]);
 }
@@ -29,6 +30,15 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
  const pageUrl=()=>{const v=(env.RAZORPAY_PAYMENT_PAGE??"").trim().replace(/\/+$/,"");return /^https:\/\/razorpay\.me\/[A-Za-z0-9@._-]{2,64}$/.test(v)?v:"";};
  const methods=()=>({upi:!!env.UPI_PAYEE_NAME&&/^[-\w.]{2,}@[A-Za-z]{2,}$/.test(env.UPI_PAYEE_VPA??""),usdt:/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(env.USDT_TRC20_ADDRESS??"")&&Number.isFinite(usdtRate)&&usdtRate>0&&Number.isFinite(usdtFee)&&usdtFee>=0,razorpay:!!pageUrl()});
  const guard=()=>{if(!snowflake(guild)||!origin)fail(503,"payments-not-configured","Payments are not configured for this deployment.");};
+ // Honest staff-notification status: enabled only when a valid staff channel is configured and the guild's order notifications are on.
+ const notificationStatus=async():Promise<"enabled"|"disabled"|"misconfigured">=>{
+  const channel=(env.COMMERCE_STAFF_CHANNEL_ID??"").trim();
+  if(!channel)return "disabled";
+  if(!snowflake(channel))return "misconfigured";
+  const controls=(await query("SELECT notifications_enabled, notification_preferences FROM config.guild_controls WHERE guild_id=$1",[guild]))[0];
+  if(controls&&(controls.notifications_enabled===false||String(controls.notification_preferences?.orders)==="false"))return "disabled";
+  return "enabled";
+ };
  const run=(handler:(req:FastifyRequest,reply:any)=>Promise<unknown>)=>async(req:FastifyRequest,reply:any)=>{
   try{return await handler(req,reply);}catch(e){if(e instanceof PaymentError)return reply.code(e.status).send({code:e.code,error:e.message});
    if((e as any)?.code==="23505")return reply.code(409).send({code:"payment-conflict",error:"This payment proof or order already exists."});throw e;}
@@ -56,16 +66,16 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
   if(!match)return null;
   try{const [serviceId,orderId,token]=decodeURIComponent(match.slice("ei_checkout=".length)).split("|");if(!serviceId||!publicId(orderId)||!token)return null;return [serviceId,orderId,token];}catch{return null;}
  };
- const orderResponse=(order:Record<string,any>,token:string)=>{
+ const orderResponse=(order:Record<string,any>,token:string,status:string)=>{
   const vpa=env.UPI_PAYEE_VPA,name=env.UPI_PAYEE_NAME,wallet=env.USDT_TRC20_ADDRESS,method=order.method==="usdt"?"usdt":order.method==="razorpay"?"razorpay":"upi";
-  if(method==="razorpay")return {...view(order),token,orderToken:token,amountMinor:Number(order.amount_minor),currency:"INR",paymentMethod:"razorpay",paymentUri:pageUrl(),destination:pageUrl(),qrPayload:pageUrl(),expiresAt:order.expires_at,referralApplied:!!order.referral_code,notificationStatus:"not-configured"};
+  if(method==="razorpay")return {...view(order),token,orderToken:token,amountMinor:Number(order.amount_minor),currency:"INR",paymentMethod:"razorpay",paymentUri:pageUrl(),destination:pageUrl(),qrPayload:pageUrl(),expiresAt:order.expires_at,referralApplied:!!order.referral_code,notificationStatus:status};
   const note=`${order.public_id} Discord ${order.buyer_id}`,upiUri=`upi://pay?${new URLSearchParams({pa:vpa??"",pn:name??"",am:amount(order.amount_minor),cu:"INR",tn:note})}`;
   return {...view(order),token,orderToken:token,amountMinor:Number(order.amount_minor),currency:method==="upi"?"INR":"USDT",paymentMethod:method,paymentUri:method==="upi"?upiUri:wallet,destination:method==="upi"?vpa:wallet,expiresAt:order.expires_at,referralApplied:!!order.referral_code,qrPayload:method==="upi"?upiUri:wallet,
-   ...(method==="upi"?{upiUri,payeeVpa:vpa,payeeName:name,note}:{walletAddress:wallet,network:"TRC-20 (Tron)",usdAmount:amount(order.amount_minor)}),notificationStatus:"not-configured"};
+   ...(method==="upi"?{upiUri,payeeVpa:vpa,payeeName:name,note}:{walletAddress:wallet,network:"TRC-20 (Tron)",usdAmount:amount(order.amount_minor)}),notificationStatus:status};
  };
  const key=(req:FastifyRequest)=>{const v=req.headers["idempotency-key"]??body(req).idempotencyKey;if(typeof v!=="string"||!/^[A-Za-z0-9:_-]{8,128}$/.test(v))fail(400,"invalid-idempotency-key","Supply an 8–128 character Idempotency-Key.");return v as string;};
- const view=(o:Record<string,any>)=>({orderId:o.public_id,status:o.status==="settled"?"confirmed":o.status==="pending"&&new Date(o.expires_at).getTime()<Date.now()?"expired":o.status,amount:amount(o.amount_minor),method:o.method,paymentMethod:o.method,currency:o.method==="usdt"?"USDT":"INR",serviceName:o.service_name??o.name,name:o.service_name??o.name,expiresAt:o.expires_at});
- app.get("/api/payments/options",run(async()=>{const configured=snowflake(guild)&&!!origin&&(methods().upi||methods().usdt||methods().razorpay);const approved=configured&&(await query("SELECT guild_id FROM access.guilds WHERE guild_id=$1 AND approved",[guild])).length>0;return {enabled:!!approved,methods:methods(),notificationStatus:"not-configured"};}));
+ const view=(o:Record<string,any>)=>({orderId:o.public_id,status:o.status==="settled"?"confirmed":o.status==="pending"&&new Date(o.expires_at).getTime()<Date.now()?"expired":o.status,amount:amount(o.amount_minor),creditAppliedMinor:Number(o.credit_applied_minor??0),method:o.method,paymentMethod:o.method,currency:o.method==="usdt"?"USDT":"INR",serviceName:o.service_name??o.name,name:o.service_name??o.name,expiresAt:o.expires_at});
+ app.get("/api/payments/options",run(async()=>{const configured=snowflake(guild)&&!!origin&&(methods().upi||methods().usdt||methods().razorpay);const approved=configured&&(await query("SELECT guild_id FROM access.guilds WHERE guild_id=$1 AND approved",[guild])).length>0;return {enabled:!!approved,methods:methods(),notificationStatus:await notificationStatus()};}));
  app.get("/api/payments/catalog",run(async()=>{guard();return {services:await query("SELECT sku AS id,name,price_minor AS \"priceMinor\",currency,membership_days AS \"membershipDays\" FROM commerce.catalog WHERE active ORDER BY sku"),methods:methods()};}));
  app.post("/api/payments/upi-qr",run(async(req,reply)=>{
   await publicWrite(req);const buyer=await identity(req),b=body(req),method=b.paymentMethod??b.method??"upi",sku=b.serviceId,typed=b.discordId??b.discordUserId;
@@ -88,13 +98,17 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
    const item=(await q("SELECT * FROM commerce.catalog WHERE sku=$1 AND active FOR SHARE",[sku]))[0];
    if(!item||item.currency!=="INR")fail(400,"invalid-service","Service is unavailable.");
    if(ref){const r=(await q("SELECT * FROM commerce.referrals WHERE code=$1 AND guild_id=$2 AND cycle=$3 FOR UPDATE",[ref,guild,cycle()]))[0];if(!r||r.referrer_id===buyer)fail(400,"invalid-referral","Referral is expired, unknown or belongs to you.");}
-   const minor=method==="usdt"?Math.round(Number(item!.price_minor)/100/usdtRate+usdtFee)*100:Number(item!.price_minor);
+   // Earned referral credit applies to INR checkouts as whole reward rows (never USDT quotes).
+   const credit=method==="usdt"?{appliedMinor:0,rewardIds:[] as string[]}:rewardCreditFor(await q(QUOTE_REWARD_CREDIT_SQL,[guild,buyer,cycle()]),Number(item!.price_minor));
+   const minor=(method==="usdt"?Math.round(Number(item!.price_minor)/100/usdtRate+usdtFee)*100:Number(item!.price_minor))-credit.appliedMinor;
    if(!Number.isSafeInteger(minor)||minor<=0)fail(503,"invalid-catalog","Service pricing is unavailable.");
-   const rows=await q(`INSERT INTO commerce.orders(guild_id,buyer_id,sku,amount_minor,order_token_hash,idempotency_key,public_id,method,referral_code,request_hash,service_name,membership_days)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,[guild,buyer,sku,minor,hash(token),idem,id,method,ref,requestHash,item!.name,item!.membership_days]);return rows[0]!;
+   const rows=await q(`INSERT INTO commerce.orders(guild_id,buyer_id,sku,amount_minor,order_token_hash,idempotency_key,public_id,method,referral_code,request_hash,service_name,membership_days,credit_applied_minor)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,[guild,buyer,sku,minor,hash(token),idem,id,method,ref,requestHash,item!.name,item!.membership_days,credit.appliedMinor]);
+   if(credit.rewardIds.length)await q(RESERVE_REWARDS_SQL,[credit.rewardIds,rows[0]!.order_id]);
+   return rows[0]!;
   });
    reply.header("set-cookie",recoveryCookie(order.sku,order.public_id,token));
-   return orderResponse(order,token);
+   return orderResponse(order,token,await notificationStatus());
   }));
   app.get("/api/payments/resume",run(async(req)=>{
    guard();await limit(req);
@@ -107,7 +121,7 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
    const o=(await query("SELECT * FROM commerce.orders WHERE public_id=$1 AND guild_id=$2",[orderId,guild]))[0];
    if(!o||o.order_token_hash!==hash(token)||String(o.buyer_id)!==buyer)return {resumed:false};
    if(o.method==="razorpay"&&!methods().razorpay)return {resumed:false};
-   return {...orderResponse(o,token),resumed:true};
+   return {...orderResponse(o,token,await notificationStatus()),resumed:true};
   }));
   app.get<{Params:{orderId:string}}>("/api/payments/status/:orderId",run(async(req)=>{guard();await limit(req);const id=(req.params as any).orderId;if(!publicId(id))fail(400,"invalid-order","Order IDs look like RP-XXXXXX.");const o=(await query("SELECT o.*,c.name FROM commerce.orders o JOIN commerce.catalog c USING(sku) WHERE public_id=$1 AND guild_id=$2",[id,guild]))[0];if(!o)fail(404,"order-not-found","Order was not found.");return view(o!);}));
  // Trusted internal lookup for server-rendered verification (nginx blocks external /api/internal/). The public bucket is skipped only for the token-authenticated caller; the visitor address forwarded by the dashboard keeps throttling per client.
@@ -126,7 +140,7 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
  app.post("/api/payments/claim",run(async(req)=>{
   await publicWrite(req);const buyer=await identity(req),b=body(req),id=b.orderId,token=b.token??b.orderToken;
   if(!publicId(id)||typeof token!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(token))fail(400,"invalid-claim","Supply the order ID and original order token.");
-  const idem=key(req);return transaction(async(q)=>{
+  const idem=key(req);const ns=await notificationStatus();return transaction(async(q)=>{
    const o=(await q("SELECT * FROM commerce.orders WHERE public_id=$1 AND guild_id=$2 FOR UPDATE",[id,guild]))[0];
    const expBuf=Buffer.from(hash(token as string)),actBuf=Buffer.from(String(o?.order_token_hash??""));
    if(!o||expBuf.length!==actBuf.length||!timingSafeEqual(expBuf,actBuf))fail(403,"invalid-order-token","Order token is invalid.");
@@ -134,16 +148,25 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
    const proof=o!.method==="usdt"?b.txid:o!.method==="razorpay"?b.reference:b.utr;
    if(typeof proof!=="string"||!(o!.method==="usdt"?/^[a-fA-F0-9]{64}$/:o!.method==="razorpay"?/^[A-Za-z0-9_-]{6,64}$/:/^\d{12}$/).test(proof))fail(400,"invalid-proof",o!.method==="usdt"?"Supply the 64-character TRON transaction hash for this order.":o!.method==="razorpay"?"Supply the Razorpay payment ID or the 12-digit UTR from your receipt.":"Supply the 12-digit UPI UTR for this order.");
    const proofRef=`${o!.method}:${o!.method==="razorpay"?proof:String(proof).toLowerCase()}`;
-   if(o!.status==="claimed"){const c=(await q("SELECT * FROM commerce.claims WHERE order_id=$1",[o!.order_id]))[0];if(c?.proof_ref===proofRef)return {orderId:id,status:"claimed",notificationStatus:"not-configured"};}
+   if(o!.status==="claimed"){const c=(await q("SELECT * FROM commerce.claims WHERE order_id=$1",[o!.order_id]))[0];if(c?.proof_ref===proofRef)return {orderId:id,status:"claimed",notificationStatus:ns};}
    if(o!.status!=="pending")fail(409,"order-not-pending","Order cannot accept a claim.");
    if(new Date(o!.expires_at).getTime()<Date.now())fail(409,"order-expired","Order expired. Create a fresh checkout.");
    await q("INSERT INTO commerce.claims(order_id,proof_ref,idempotency_key) VALUES($1,$2,$3)",[o!.order_id,proofRef,idem]);
-   await q("UPDATE commerce.orders SET status='claimed' WHERE order_id=$1",[o!.order_id]);return {orderId:id,status:"claimed",notificationStatus:"not-configured"};
+   await q("UPDATE commerce.orders SET status='claimed' WHERE order_id=$1",[o!.order_id]);
+   // Durable staff notification (delivered by the commerce bot from ops.outbox; honest status reported above).
+   await q(`INSERT INTO ops.outbox(aggregate,aggregate_id,type,payload,correlation_id)
+    VALUES('commerce.claim',$1,'commerce.notification',$2,$3)
+    ON CONFLICT(aggregate,aggregate_id,type,correlation_id) DO NOTHING`,[guild,JSON.stringify({category:"orders",orderId:o!.public_id,buyerId:o!.buyer_id,serviceName:o!.service_name,amountMinor:Number(o!.amount_minor),method:o!.method,proofRef}),`claim:${idem}`]);
+   return {orderId:id,status:"claimed",notificationStatus:ns};
   });
  }));
  const reader=async(req:FastifyRequest)=>{const id=(req.params as any).guildId;if(!snowflake(id))fail(400,"invalid-guild","Guild is invalid.");return deps.authorize(req,id,"commerce");};
  const staff=async(req:FastifyRequest)=>{const s=await reader(req);if(!s.isAdmin)fail(403,"admin-required","Administrator access is required for payment operations.");return s;};
  app.get("/api/guilds/:guildId/commerce/orders",run(async(req)=>{const s=await reader(req);const orders=await query(`SELECT o.public_id AS "orderId",o.buyer_id AS "buyerId",o.sku,o.service_name AS "serviceName",o.amount_minor AS "amountMinor",o.method,o.status,o.created_at AS "createdAt",o.expires_at AS "expiresAt",c.proof_ref AS "proofRef" FROM commerce.orders o LEFT JOIN commerce.claims c USING(order_id) WHERE o.guild_id=$1 ORDER BY o.created_at DESC LIMIT 100`,[(req.params as any).guildId]);return {orders:s.isAdmin?orders:orders.map(o=>({orderId:o.orderId,sku:o.sku,serviceName:o.serviceName,amountMinor:o.amountMinor,method:o.method,status:o.status,createdAt:o.createdAt,expiresAt:o.expiresAt}))};}));
+ // Staff review control: revoke a membership immediately (audit kept in revoked_at); re-purchases restart from now.
+ app.post("/api/guilds/:guildId/commerce/memberships/:userId/revoke",run(async(req)=>{await staff(req);const p=req.params as any;if(!snowflake(p.userId))fail(400,"invalid-member","Member id is invalid.");
+  return transaction(async(q)=>{const row=(await q("SELECT user_id FROM commerce.memberships WHERE guild_id=$1 AND user_id=$2 FOR UPDATE",[p.guildId,p.userId]))[0];if(!row)fail(404,"membership-not-found","No membership record exists for this member.");await q(REVOKE_MEMBERSHIP_SQL,[p.guildId,p.userId]);return {userId:p.userId,status:"revoked"};});
+ }));
  for(const action of ["settle","reject"] as const)app.post(`/api/guilds/:guildId/commerce/orders/:orderId/${action}`,run(async(req)=>{
   const s=await staff(req),p=req.params as any;if(!publicId(p.orderId))fail(400,"invalid-order","Order is invalid.");const idem=key(req);
   return transaction(async(q)=>{const o=(await q("SELECT * FROM commerce.orders WHERE public_id=$1 AND guild_id=$2 FOR UPDATE",[p.orderId,p.guildId]))[0];if(!o)fail(404,"order-not-found","Order was not found.");
@@ -155,6 +178,7 @@ export function registerCommerceRoutes(app:FastifyInstance,deps:CommerceDeps){
    }
    await q("UPDATE commerce.orders SET status=$2 WHERE order_id=$1",[o!.order_id,target]);
    await q("UPDATE commerce.claims SET status=$2 WHERE order_id=$1",[o!.order_id,action==="settle"?"confirmed":"rejected"]);
+   if(action==="reject")await q(RELEASE_ORDER_REWARDS_SQL,[o!.order_id,cycle()]);
    return {orderId:p.orderId,status:target};
   });
  }));

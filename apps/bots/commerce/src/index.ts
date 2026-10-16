@@ -1,7 +1,8 @@
-import { createInteractionClaims, createWorkGate, dispatchGuildCommand, isControlEnabled, responsePolicy } from "@ei-point/flow";
+import { createInteractionClaims, createWorkGate, deliverCommerceNotifications, dispatchGuildCommand, isControlEnabled, responsePolicy, type CommerceNotificationPayload } from "@ei-point/flow";
 import { createServer } from "node:http";
 import {
   Client,
+  EmbedBuilder,
   Events,
   GatewayIntentBits,
   Options,
@@ -187,6 +188,45 @@ async function updateStatus(): Promise<void> {
 
 const statusTimer = setInterval(() => void updateStatus(), 5000);
 
+// --- Durable staff notifications (A12/7C): claims awaiting review are delivered
+// to the configured staff channel from ops.outbox; failures back off and are
+// retried by the next poll, including after a restart. The event's nonce keeps a
+// retried send from posting twice when Discord's response was lost.
+const staffChannelId = (process.env.COMMERCE_STAFF_CHANNEL_ID ?? "").trim();
+
+const staffNotificationEmbed = (n: CommerceNotificationPayload) =>
+  new EmbedBuilder()
+    .setTitle("New payment proof awaiting review")
+    .setColor(0xf1c40f)
+    .addFields(
+      { name: "Order", value: String(n.orderId ?? "—"), inline: true },
+      { name: "Service", value: String(n.serviceName ?? "—"), inline: true },
+      { name: "Amount", value: `₹${(Number(n.amountMinor ?? 0) / 100).toFixed(2)}`, inline: true },
+      { name: "Method", value: String(n.method ?? "—"), inline: true },
+      { name: "Buyer", value: String(n.buyerId ?? "—"), inline: true },
+      { name: "Reference", value: String(n.proofRef ?? "—") },
+    )
+    .setTimestamp();
+
+async function deliverStaffNotifications(): Promise<void> {
+  if (stopping || !identityVerified || !client.isReady() || !/^\d{17,20}$/.test(staffChannelId)) return;
+  const channel = await client.channels.fetch(staffChannelId).catch(() => null);
+  if (!channel?.isSendable()) return;
+  await deliverCommerceNotifications(
+    pool,
+    allowed,
+    async (payload, nonce) => {
+      await channel.send({ embeds: [staffNotificationEmbed(payload)], nonce, enforceNonce: true });
+    },
+    botKey,
+  );
+}
+
+const notificationTimer = setInterval(
+  () => void deliverStaffNotifications().catch(() => console.error("commerce staff notification delivery failed")),
+  5000,
+);
+
 // HTTP Health Check
 const health = createServer((req, res) => {
   if (req.url === "/health/live") {
@@ -209,6 +249,7 @@ async function shutdown(): Promise<void> {
   if (stopping) return;
   stopping = true;
   clearInterval(statusTimer);
+  clearInterval(notificationTimer);
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();
   try {

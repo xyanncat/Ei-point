@@ -184,7 +184,7 @@ test("checkout validates inputs, shows the QR, submits proof and reflects status
       expect(body.token).toBe("q".repeat(43));
       if (body.utr !== undefined) expect(body.utr).toBe("123456789012");
       else expect(body.txid).toBe("a".repeat(64));
-      result = { orderId: "RP-ABC123", status: "claimed", notificationStatus: "not-configured" };
+      result = { orderId: "RP-ABC123", status: "claimed", notificationStatus: "disabled" };
     } else if (path.endsWith("/status/RP-ABC123")) {
       result = {
         orderId: "RP-ABC123",

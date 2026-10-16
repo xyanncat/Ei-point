@@ -6,9 +6,9 @@ import { registerCommerceRoutes, type CommerceDeps } from "./commerce-routes.js"
 const guild = "123456789012345678";
 const session = (discordUserId: string | null = guild): CommerceDeps["session"] =>
   async () => (discordUserId === null ? null : { discordUserId });
-function fixture(env: Record<string,string> = {}, query: CommerceDeps["query"] = async () => [], who: CommerceDeps["session"] = session()) {
+function fixture(env: Record<string,string> = {}, query: CommerceDeps["query"] = async () => [], who: CommerceDeps["session"] = session(), admin = false) {
   const app = Fastify();
-  registerCommerceRoutes(app, { env, query, session: who, transaction: async (work) => work(query), authorize: async () => ({userId:guild,isAdmin:false}) });
+  registerCommerceRoutes(app, { env, query, session: who, transaction: async (work) => work(query), authorize: async () => ({userId:guild,isAdmin:admin}) });
   return app;
 }
 test("checkout fails truthfully when payment deployment is not configured", async () => {
@@ -230,4 +230,78 @@ test("razorpay order resumes the hosted page and fails closed without one",async
  const closed=await off.inject({url:"/api/payments/resume?serviceId=membership",headers:{cookie:recovery}});
  assert.equal(closed.statusCode,200);assert.equal(closed.json().resumed,false,"a deployment without the page must not hand out a dead payment link");
  await off.close();
+});
+
+// --- A12/7C: staff notifications, reward redemption and membership revocation ---
+const staffChannel="300000000000000001",notifyEnv={...env,COMMERCE_STAFF_CHANNEL_ID:staffChannel};
+
+test("staff notification status reports the real deployment state",async()=>{
+ const options=(e:Record<string,string>,q:CommerceDeps["query"]=async(sql)=>sql.includes("access.guilds")?[{guild_id:guild}]:[])=>fixture(e,q).inject({url:"/api/payments/options"});
+ assert.equal((await options(env)).json().notificationStatus,"disabled","no staff channel means notifications are off, honestly");
+ assert.equal((await options({...env,COMMERCE_STAFF_CHANNEL_ID:"staff"})).json().notificationStatus,"misconfigured","a channel id that is not a snowflake is misconfiguration");
+ const controls=(pref:Record<string,unknown>,enabled=true):CommerceDeps["query"]=>async(sql)=>sql.includes("guild_controls")?[{notifications_enabled:enabled,notification_preferences:pref}]:sql.includes("access.guilds")?[{guild_id:guild}]:[];
+ assert.equal((await options(notifyEnv,controls({}))).json().notificationStatus,"enabled");
+ assert.equal((await options(notifyEnv,controls({},false))).json().notificationStatus,"disabled","the guild control can switch order notifications off");
+ assert.equal((await options(notifyEnv,controls({orders:false}))).json().notificationStatus,"disabled","the per-category preference can switch order notifications off");
+});
+
+test("a fresh claim enqueues exactly one durable staff notification",async()=>{
+ const token="t".repeat(43),outbox:unknown[][]=[];
+ const row={order_id:"11111111-2222-4333-8444-555555555555",public_id:"RP-ABC123",buyer_id:guild,sku:"membership",service_name:"Membership",amount_minor:"70000",method:"upi",status:"pending",order_token_hash:createHash("sha256").update(token).digest("hex"),expires_at:new Date(Date.now()+3600000),referral_code:null};
+ const app=fixture(notifyEnv,async(sql,p)=>{
+  if(sql.includes("guild_controls"))return [{notifications_enabled:true,notification_preferences:{}}];
+  if(sql.includes("checkout_rate_limits"))return [{requests:1}];
+  if(sql.includes("access.guilds"))return [{guild_id:guild}];
+  if(sql.includes("INSERT INTO ops.outbox")){outbox.push(p!);return [];}
+  if(sql.includes("INSERT INTO commerce.claims")||sql.includes("UPDATE commerce.orders"))return [];
+  if(sql.includes("commerce.orders"))return [row];
+  if(sql.includes("commerce.claims"))return [];
+  return [];
+ });
+ const res=await app.inject({method:"POST",url:"/api/payments/claim",headers:{origin:env.PAYMENT_ORIGIN},payload:{orderId:"RP-ABC123",token,utr:"123456789012",idempotencyKey:"notify-claim-key"}});
+ assert.equal(res.statusCode,200,res.body);
+ assert.equal(res.json().notificationStatus,"enabled");
+ assert.equal(outbox.length,1,"one outbox event per fresh claim");
+ const [guildParam,payload,correlation]=outbox[0]!;
+ assert.equal(guildParam,guild);
+ assert.deepEqual(JSON.parse(String(payload)),{category:"orders",orderId:"RP-ABC123",buyerId:guild,serviceName:"Membership",amountMinor:70000,method:"upi",proofRef:"upi:123456789012"});
+ assert.equal(correlation,"claim:notify-claim-key");
+ await app.close();
+});
+
+test("a buyer's reserved rewards reduce the server-side price and are reserved on the order",async()=>{
+ const token="c".repeat(43);let inserted:unknown[]|null=null;const reserves:unknown[][]=[];
+ const app=fixture(env,async(sql,p)=>{
+  if(sql.includes("checkout_rate_limits"))return [{requests:1}];
+  if(sql.includes("access.guilds"))return [{guild_id:guild}];
+  if(sql.includes("WHERE idempotency_key"))return [];
+  if(sql.includes("commerce.catalog"))return [{sku:"membership",name:"Membership",price_minor:70000,currency:"INR",membership_days:30}];
+  if(sql.includes("FROM commerce.rewards"))return [{reward_id:"r1",amount_minor:"2000"},{reward_id:"r2",amount_minor:"3000"}];
+  if(sql.includes("INSERT INTO commerce.orders")){inserted=p!;return [{guild_id:p![0],buyer_id:p![1],sku:p![2],amount_minor:p![3],order_token_hash:p![4],public_id:p![6],method:p![7],referral_code:p![8],request_hash:p![9],service_name:p![10],membership_days:p![11],credit_applied_minor:p![12],order_id:"11111111-2222-4333-8444-555555555555",status:"pending",expires_at:new Date(Date.now()+60000)}];}
+  if(sql.includes("UPDATE commerce.rewards SET status='redeemed'")){reserves.push(p!);return [];}
+  return [];
+ });
+ const res=await app.inject({method:"POST",url:"/api/payments/upi-qr",headers:{origin:env.PAYMENT_ORIGIN},payload:{serviceId:"membership",paymentMethod:"upi",idempotencyKey:"credit-key-1234",recoveryToken:token}});
+ assert.equal(res.statusCode,200,res.body);
+ assert.equal(inserted![3],65000,"the buyer pays the credit-reduced price");
+ assert.equal(inserted![12],5000);
+ assert.equal(res.json().creditAppliedMinor,5000);
+ assert.deepEqual(reserves[0],[["r1","r2"],"11111111-2222-4333-8444-555555555555"]);
+ await app.close();
+});
+
+test("membership revocation is an admin review control with honest outcomes",async()=>{
+ const member="200000000000000001",base=`/api/guilds/${guild}/commerce/memberships/${member}/revoke`;
+ const denied=await fixture(env,async()=>[],session(),false).inject({method:"POST",url:base});
+ assert.equal(denied.statusCode,403);assert.equal(denied.json().code,"admin-required");
+ const revokes:unknown[][]=[];
+ const app=fixture(env,async(sql,p)=>{if(sql.includes("commerce.memberships")){if(sql.includes("SELECT"))return [{user_id:member}];revokes.push(p!);return [];}return [];},session(),true);
+ const res=await app.inject({method:"POST",url:base});
+ assert.equal(res.statusCode,200,res.body);assert.deepEqual(res.json(),{userId:member,status:"revoked"});
+ assert.deepEqual(revokes[0],[guild,member]);
+ assert.equal((await app.inject({method:"POST",url:`/api/guilds/${guild}/commerce/memberships/123/revoke`})).statusCode,400);
+ await app.close();
+ const missing=fixture(env,async()=>[],session(),true);
+ assert.equal((await missing.inject({method:"POST",url:base})).statusCode,404);
+ await missing.close();
 });
