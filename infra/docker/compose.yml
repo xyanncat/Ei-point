@@ -312,6 +312,8 @@ services:
       QWEN_TTS_QUEUE_MAX: ${QWEN_TTS_QUEUE_MAX:-2}
       QWEN_TTS_REQUEST_TIMEOUT_SECONDS: ${QWEN_TTS_REQUEST_TIMEOUT_SECONDS:-75}
       QWEN_TTS_PORT: 3120
+      # The rootfs is read-only, so numba (via librosa) needs a writable JIT cache.
+      NUMBA_CACHE_DIR: /tmp
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
       OMP_NUM_THREADS: ${QWEN_TTS_TORCH_THREADS:-1}
