@@ -26,11 +26,12 @@ export function gatePlan(pinned) {
     { id: "node-runtime", label: "pinned Node runtime (.nvmrc)", kind: "runtime", mandatory: true, pinned },
     { id: "pnpm-toolchain", label: "pnpm toolchain", command: "pnpm", args: ["--version"], mandatory: true, tool: "pnpm", expectStdout: /^9\./ },
     { id: "python-music", label: "music bot unit tests", command: "python", args: ["-m", "unittest", "discover", "-s", "apps/bots/music-py/tests", "-p", "test_*.py"], mandatory: true, tool: "python" },
+    { id: "python-qwen", label: "qwen TTS service unit tests", command: "python", args: ["-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], cwd: "apps/services/qwen-tts", mandatory: true, tool: "python" },
     { id: "feature-coverage", label: "legacy feature coverage (structural)", command: "node", args: ["scripts/check-feature-coverage.mjs", "--mode", "structural"], mandatory: true },
-    // §10A lists strict coverage as a release requirement; §1B (release-mode
-    // reconciliation) has not run yet, so this gate is recorded and expected
-    // to stay red until then — never silently absent from the bundle.
-    { id: "feature-coverage-release", label: "legacy feature coverage (release mode; recorded pending §1B)", command: "node", args: ["scripts/check-feature-coverage.mjs", "--mode", "release"], mandatory: false },
+    // §10A: strict release coverage. The legacy map is fully reconciled
+    // (86 verified + 93 approved replacements) and this gate passes; it is
+    // mandatory so a regression in the map blocks the release verdict.
+    { id: "feature-coverage-release", label: "legacy feature coverage (release mode)", command: "node", args: ["scripts/check-feature-coverage.mjs", "--mode", "release"], mandatory: true },
     { id: "openapi-sync", label: "dashboard API contract sync", command: "node", args: ["scripts/check-openapi-sync.mjs"], mandatory: true },
     { id: "root-suites", label: "root suites + phase gates + resource budget", command: "pnpm", args: ["test"], mandatory: true, timeoutMs: 1_500_000 },
     { id: "typecheck", label: "workspace typecheck", command: "pnpm", args: ["typecheck"], mandatory: true, timeoutMs: 1_500_000 },
@@ -112,7 +113,7 @@ export async function runGate(gate, ctx = {}) {
   const exec = ctx.exec ?? spawnCapture;
   let outcome;
   try {
-    outcome = await exec(gate.command, gate.args ?? [], { cwd: ctx.root ?? root, timeoutMs: gate.timeoutMs });
+    outcome = await exec(gate.command, gate.args ?? [], { cwd: gate.cwd ? resolve(root, gate.cwd) : (ctx.root ?? root), timeoutMs: gate.timeoutMs });
   } catch (error) {
     if (gate.tool && error?.code === "ENOENT") return result(gate, "blocked", `${gate.tool} is not installed`);
     return result(gate, "failed", error?.message ?? String(error));

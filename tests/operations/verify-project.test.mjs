@@ -15,18 +15,19 @@ test("the gate plan keeps required and recorded gates distinct", () => {
     "node-runtime",
     "pnpm-toolchain",
     "python-music",
+    "python-qwen",
     "feature-coverage",
+    "feature-coverage-release",
     "openapi-sync",
     "root-suites",
     "typecheck",
     "browser",
   ])
     assert.ok(mandatory.includes(required), `${required} must be a mandatory gate`);
-  // Scans are recorded/triaged, not release-blocking (§10A wording); the
-  // release-mode coverage gate stays recorded and red until §1B completes.
-  for (const recorded of ["npm-audit", "python-audit", "container-scan", "feature-coverage-release"])
+  // Scans are recorded/triaged, not release-blocking (§10A wording).
+  for (const recorded of ["npm-audit", "python-audit", "container-scan"])
     assert.ok(!mandatory.includes(recorded), `${recorded} must be recorded, not mandatory`);
-  assert.ok(plan.some((gate) => gate.id === "feature-coverage-release" && gate.args?.includes("release")), "strict coverage must be a recorded gate");
+  assert.ok(plan.some((gate) => gate.id === "feature-coverage-release" && gate.args?.includes("release")), "strict coverage must be a mandatory gate");
 });
 
 test("a blocked mandatory gate is not a pass; exit codes separate fail from blocked", () => {
