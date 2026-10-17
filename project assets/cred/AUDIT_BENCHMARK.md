@@ -60,7 +60,7 @@ Aggregate evidence bundle: `docs/audits/releases/20261017T000749Z-82cf98e3-dirty
 | Bot/module suites (this branch) | api 71/71, bot-commerce 12/12, module-commerce 17/17, bot-ai 19/19 |
 | pip-audit / container+OS scan | recorded **blocked** — scanner absent locally; pip-audit installs in CI; no container scanner configured yet |
 | All tracked shell entrypoints (`bash -n`) | pass (backup scripts, restore drill, restic) |
-| GitHub Actions `verify` (Linux) | observed 5× success; `images` job failure fixed this round, re-run pending |
+| GitHub Actions `verify` (Linux) | observed 6× success including both jobs: `verify` (all gates, 3m54s) and `images` (every service image built, 3m18s) on the branch head |
 
 ## A01–A20 remediation status
 
@@ -106,7 +106,7 @@ Aggregate evidence bundle: `docs/audits/releases/20261017T000749Z-82cf98e3-dirty
 
 | ID | Priority | Finding | Disposition |
 |---|---|---|---|
-| B01 | P1 | `yt-dlp==2025.10.5` does not exist on PyPI — caught by the first real Linux `images` build (`ERROR: No matching distribution`); the pin had never been resolvable anywhere | **Fixed this round**: pinned `2025.10.22`; images job re-run pending on next push |
+| B01 | P1 | `yt-dlp==2025.10.5` does not exist on PyPI — caught by the first real Linux `images` build (`ERROR: No matching distribution`); the pin had never been resolvable anywhere | **Fixed and re-verified**: pinned `2025.10.22`; the `images` job built every service image green on Linux CI (run 38988460403, 3m18s) |
 | B02 | P2 | §14 requires the qwen-tts suite separately, but it was absent from the verifier and CI; first gate wiring also ran it from the wrong cwd | **Fixed this round**: mandatory `python-qwen` gate with per-gate cwd support + CI step |
 | B03 | P2 | One transient qwen-tts suite failure observed (1-in-10 runs), unreproduced since; timing-sensitive supervision tests are the likely class | Open — CI now runs the suite on every push; watch for recurrence |
 | B04 | — | Strict release coverage was assumed still red (my reviewer's and my own stale assumption from the 2026-10-15 numbers) | Resolved: map fully reconciled; gate promoted to **mandatory** and green |
@@ -114,7 +114,7 @@ Aggregate evidence bundle: `docs/audits/releases/20261017T000749Z-82cf98e3-dirty
 
 ## Deferred to deployment (not claimable locally)
 
-Live model execution and voice intelligibility on the no-AVX host; live Discord audio/command/visibility acceptance; owner-manual real payment + staff verification; `COMMERCE_STAFF_CHANNEL_ID` live delivery; OAuth staging return; peak and 2×-peak load, failure-injection campaign and 72-hour soak within the 9-CPU envelope; measured off-host/PITR restore drills (proposed RPO 15 min DB / 6 h unique / 24 h off-host, RTO 2 h — targets only); cold reboot/DNS/credential/model-startup drills; live cgroup membership; images-job green confirmation; authorized cutover (10C).
+Live model execution and voice intelligibility on the no-AVX host; live Discord audio/command/visibility acceptance; owner-manual real payment + staff verification; `COMMERCE_STAFF_CHANNEL_ID` live delivery; OAuth staging return; peak and 2×-peak load, failure-injection campaign and 72-hour soak within the 9-CPU envelope; measured off-host/PITR restore drills (proposed RPO 15 min DB / 6 h unique / 24 h off-host, RTO 2 h — targets only); cold reboot/DNS/credential/model-startup drills; live cgroup membership; authorized cutover (10C).
 
 ## Limitations
 
