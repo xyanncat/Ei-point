@@ -2,7 +2,7 @@ FROM node:24.8.0-bookworm-slim AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 COPY . .
-RUN pnpm install --frozen-lockfile && pnpm --filter @ei-point/flow build && pnpm --filter @ei-point/contracts build && pnpm --filter @ei-point/module-logging build && pnpm --filter @ei-point/module-moderation build && pnpm --filter @ei-point/bot-moderation build
+RUN --mount=type=cache,id=ei-pnpm,target=/pnpm/store pnpm install --frozen-lockfile --store-dir=/pnpm/store && pnpm --filter @ei-point/flow build && pnpm --filter @ei-point/contracts build && pnpm --filter @ei-point/module-logging build && pnpm --filter @ei-point/module-moderation build && pnpm --filter @ei-point/bot-moderation build
 RUN pnpm --filter @ei-point/bot-moderation deploy --prod /release
 
 FROM node:24.8.0-bookworm-slim
