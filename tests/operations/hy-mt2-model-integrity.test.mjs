@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,11 +13,12 @@ const BASH = ["bash", "C:/Program Files/Git/usr/bin/bash.exe", "C:/Program Files
   try { return spawnSync(candidate, ["-c", "exit 0"], { windowsHide: true }).status === 0; } catch { return false; }
 });
 
+const GIT_USR_BIN = "C:\\Program Files\\Git\\usr\\bin";
+
 function run(dir) {
-  const gitUsrBin = "C:\\Program Files\\Git\\usr\\bin";
   const result = spawnSync(BASH, [script], {
     cwd: dir, encoding: "utf8", windowsHide: true,
-    env: { ...process.env, PATH: `${gitUsrBin};${process.env.PATH}`, MODEL_DIR: ".", MODEL_NAME, MODEL_EXEC: "true" },
+    env: { ...process.env, PATH: `${GIT_USR_BIN};${process.env.PATH}`, MODEL_DIR: ".", MODEL_NAME, MODEL_EXEC: "true" },
   });
   return { status: result.status, stderr: result.stderr ?? "", stdout: result.stdout ?? "" };
 }
@@ -93,4 +94,25 @@ test("a missing model file is rejected before any execution", () => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /missing/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// The upstream llama.cpp image loads its shared libraries relative to the
+// process working directory; the model exec must therefore run from the
+// directory the entrypoint was started in, not from the read-only model mount.
+test("the model exec starts from the original working directory", () => {
+  const dir = fixture({});
+  const workdir = mkdtempSync(join(tmpdir(), "ei-hymt2-cwd-"));
+  const out = join(workdir, "exec-cwd.txt").replace(/\\/g, "/");
+  try {
+    const result = spawnSync(BASH, [script, "-c", `pwd > "${out}"`], {
+      cwd: workdir, encoding: "utf8", windowsHide: true,
+      env: { ...process.env, PATH: `${GIT_USR_BIN};${process.env.PATH}`, MODEL_DIR: dir.replace(/\\/g, "/"), MODEL_NAME, MODEL_EXEC: BASH },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const expected = spawnSync(BASH, ["-c", "pwd"], { cwd: workdir, encoding: "utf8", windowsHide: true });
+    assert.equal(readFileSync(out, "utf8").trim(), expected.stdout.trim());
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(workdir, { recursive: true, force: true });
+  }
 });
