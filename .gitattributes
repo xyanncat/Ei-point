@@ -1,5 +1,6 @@
 # Keep shell scripts + systemd units LF so Debian checkouts never get CRLF.
 *.sh text eol=lf
+.npmrc text eol=lf
 *.service text eol=lf
 *.timer text eol=lf
 *.sql text eol=lf
