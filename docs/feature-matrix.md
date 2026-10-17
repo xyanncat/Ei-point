@@ -66,7 +66,7 @@ Rule: adding/removing a bot = one registry row + deploy. No hard-coded bot lists
 | 43 | Ei Paradise (cipher) | route | `GET /api/orders/verify` | commerce → web/api | `commerce.orders` | Public token lookup exposes safe status without leaking PII |
 | 44 | Ei Paradise (hu-tao) | command | `/embed` | community → community | outbox | Embed composer validates fields, colors, links; delivered via worker |
 | 45 | Ei Paradise (hu-tao) | command | `/userinfo` | community → community | none | Member profile, badges, roles, and join timestamps formatted |
-| 46 | swish | command | `/play` | music → music | `music.queue_snapshots` | Resolves query/URL via yt-dlp, enqueues track, starts player |
+| 46 | swish | command | `/play` | music → music | `music.queue_snapshots` | Resolves a song/playlist link via yt-dlp (--flat-playlist; no search), enqueues bounded tracks, starts player |
 | 47 | swish | command | `/pause` & `/resume` | music → music | none | Voice playback state paused/resumed immediately |
 | 48 | swish | command | `/skip` & `/stop` | music → music | `music.queue_snapshots` | Skip advances queue; stop flushes queue and leaves voice |
 | 49 | swish | command | `/queue` & `/nowplaying` | music → music | `music.queue_snapshots` | Queue paginated; nowplaying renders elapsed progress bar |

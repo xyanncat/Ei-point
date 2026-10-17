@@ -176,7 +176,7 @@ All Kafka rows above are owner-or-Administrator only. Temporary actions need ret
 
 | Command | Function |
 |---|---|
-| `/play` | Resolve a track and add it to the guild queue. |
+| `/play` | Require a link of the song or playlist. A song link enqueues one track; a playlist link enqueues its tracks bounded by `PLAYLIST_MAX_TRACKS` (default 50, 1–100 validated at startup), each resolved lazily at playback. |
 | `/pause` | Pause current playback. |
 | `/resume` | Resume paused playback. |
 | `/skip` | Skip the current track and start the next eligible track. |

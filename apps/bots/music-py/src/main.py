@@ -56,6 +56,9 @@ RAW_ALLOWLIST = (
 ALLOWED_GUILDS = set(x.strip() for x in RAW_ALLOWLIST.split(",") if x.strip())
 HEALTH_PORT = int(os.environ.get("MUSIC_HEALTH_PORT") or 3105)
 MAX_VOICE_SESSIONS = 2
+# Owner requirement (2026-10-17): playback is link-driven. A playlist link
+# enqueues at most PLAYLIST_MAX_TRACKS tracks (validated at startup, 1..100).
+PLAYLIST_MAX_TRACKS = int(os.environ.get("PLAYLIST_MAX_TRACKS") or "50")
 VOICE_OWNER_PREFIX = f"music:{uuid.uuid4()}:"
 MUSIC_CACHE = AudioCache(os.environ.get('CACHE_DIR', '/srv/music-cache'),
     max_bytes=int(os.environ.get('CACHE_MAX_BYTES', 10*1024**3)),
@@ -293,6 +296,77 @@ async def extract_tracks(query: str, max_results: int = 1) -> list[dict]:
                         return []
                     data = json.loads(output)
                     return [e for e in data.get("entries", [data]) if e][:max_results]
+                except (asyncio.TimeoutError, ValueError):
+                    return []
+                finally:
+                    if process.returncode is None:
+                        process.kill()
+                        await process.wait()
+    except asyncio.TimeoutError:
+        return []
+
+
+def tracks_from_dump(data, limit: int) -> list[dict]:
+    """Normalize a yt-dlp dump into queueable track dicts.
+
+    A single-video dump keeps its direct stream URL; flat-playlist entries do
+    not carry one, so their `url` stays empty and playback resolves each track
+    lazily through its webpage URL (bounded by the existing metadata
+    semaphore). Malformed data fails closed to an empty list.
+    """
+    if not isinstance(data, dict) or not isinstance(limit, int) or limit < 1:
+        return []
+    single = data.get("entries") is None
+    entries = [data] if single else data.get("entries")
+    if not isinstance(entries, list):
+        return []
+    resolved: list[dict] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        page = entry.get("webpage_url") or entry.get("url") or ""
+        if not isinstance(page, str) or page == "":
+            continue
+        direct = ""
+        if single and isinstance(entry.get("url"), str):
+            direct = entry["url"]
+        resolved.append({
+            "title": (entry.get("title") or "Playlist track")[:100],
+            "duration": int(entry.get("duration") or 0) * 1000 or 180_000,
+            "url": direct,
+            "webpage_url": page,
+        })
+        if len(resolved) >= limit:
+            break
+    return resolved
+
+
+async def extract_link(url: str) -> list[dict]:
+    """Resolve a song or playlist link via yt-dlp.
+
+    --flat-playlist keeps large playlists cheap (no per-entry page fetch);
+    --no-playlist is deliberately absent so playlist links expand, while lazy
+    per-track resolution during playback keeps the single-track semantics.
+    """
+    if not yt_dlp:
+        log.warning("yt_dlp is not installed; audio extraction unavailable.")
+        return []
+    if not url.startswith(("http://", "https://")) or not is_safe_url(url):
+        return []
+    try:
+        async with asyncio.timeout(30):
+            async with metadata_semaphore:
+                process = await asyncio.create_subprocess_exec(
+                    sys.executable, "-m", "yt_dlp", "--dump-single-json", "--skip-download",
+                    "--flat-playlist", "--socket-timeout", "10", "--retries", "1",
+                    "--extractor-retries", "1", "--format", "bestaudio/best", "--", url,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+                )
+                try:
+                    output, _ = await asyncio.wait_for(process.communicate(), timeout=30)
+                    if process.returncode != 0 or len(output) > 4_000_000:
+                        return []
+                    return tracks_from_dump(json.loads(output), PLAYLIST_MAX_TRACKS)
                 except (asyncio.TimeoutError, ValueError):
                     return []
                 finally:
@@ -807,9 +881,9 @@ async def common_about(interaction: discord.Interaction):
 
 
 # --- Music Slash Commands (§2, §8, Feature Matrix #46–54) ---
-@bot.tree.command(name="play", description="Play or enqueue a song from a URL or search query")
-@app_commands.describe(query="Song title, artist, or streaming URL")
-async def cmd_play(interaction: discord.Interaction, query: str):
+@bot.tree.command(name="play", description="Play or enqueue a song or playlist from a link")
+@app_commands.describe(link="Link of the song or playlist to play")
+async def cmd_play(interaction: discord.Interaction, link: str):
     guild_id = str(interaction.guild_id)
     if ALLOWED_GUILDS and guild_id not in ALLOWED_GUILDS:
         await respond(interaction, "❌ This server is not approved for Ei Point.", ephemeral=True)
@@ -822,33 +896,46 @@ async def cmd_play(interaction: discord.Interaction, query: str):
         await respond(interaction, "❌ Could not verify member.", ephemeral=True)
         return
 
+    # Owner requirement (2026-10-17): playback is link-driven. A song link
+    # enqueues one track; a playlist link enqueues its tracks, bounded.
+    if not (link.startswith(("http://", "https://")) and is_safe_url(link)):
+        await respond(interaction, "❌ Give me a link of the song or playlist to play.", ephemeral=True)
+        return
+
     voice_client = await ensure_voice_connection(interaction, member)
     if not voice_client:
         return
 
-    # Extract metadata using yt-dlp
-    tracks_info = await extract_tracks(query, max_results=1)
+    tracks_info = await extract_link(link)
+    # Defense in depth: the extractor bounds flat playlists, but the enqueue
+    # site enforces the cap too so no extractor regression can flood the queue.
+    tracks_info = tracks_info[:PLAYLIST_MAX_TRACKS]
     if not tracks_info:
-        await respond(interaction, "❌ Could not resolve audio for that query. Please try another search.", ephemeral=True)
+        await respond(interaction, "❌ Could not resolve audio from that link. Give me a direct song or playlist link.", ephemeral=True)
         return
 
-    info = tracks_info[0]
     q = get_or_create_queue(guild_id)
-    track_id = f"t-{len(q.tracks) + 1}-{abs(hash(query)) % 10000}"
-    track = Track(
-        track_id=track_id,
-        title=info.get("title", query[:80]),
-        duration_ms=int(info.get("duration", 180) or 180) * 1000,
-        url=info.get("url", ""),
-        webpage_url=info.get("webpage_url", query),
-    )
-    pos = q.add(track)
+    first_position = None
+    for index, info in enumerate(tracks_info):
+        position = q.add(Track(
+            track_id=f"t-{len(q.tracks) + 1}-{abs(hash((link, index))) % 10000}",
+            title=info["title"],
+            duration_ms=info["duration"],
+            url=info["url"],
+            webpage_url=info["webpage_url"],
+        ))
+        if first_position is None:
+            first_position = position
 
     # If voice client is idle, immediately start playback
     if not voice_client.is_playing() and not voice_client.is_paused():
         await start_playback(guild_id)
 
-    await respond(interaction, f"🎵 **Added to queue** (#{pos}): `{track.title}`", title="Robin · Queue")
+    if len(tracks_info) == 1:
+        await respond(interaction, f"🎵 **Added to queue** (#{first_position}): `{tracks_info[0]['title']}`", title="Robin · Queue")
+    else:
+        bounded = "" if len(tracks_info) < PLAYLIST_MAX_TRACKS else f" (first {PLAYLIST_MAX_TRACKS})"
+        await respond(interaction, f"🎵 **Added {len(tracks_info)} tracks** from the playlist{bounded}.", title="Robin · Queue")
 
 
 @bot.tree.command(name="search", description="Search tracks and pick from a 5-item menu (Matrix #54)")
@@ -1280,6 +1367,10 @@ def main():
 
     if len(ALLOWED_GUILDS) != 2:
         log.error("GUILD_ALLOWLIST must contain exactly two guild IDs to run the music bot.")
+        sys.exit(1)
+
+    if not 1 <= PLAYLIST_MAX_TRACKS <= 100:
+        log.error("PLAYLIST_MAX_TRACKS must be between 1 and 100 to run the music bot.")
         sys.exit(1)
 
     init_db()

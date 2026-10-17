@@ -76,6 +76,35 @@ else echo '${unix(physical)}'; fi`);
   assert.match(log,/label=com\.docker\.compose\.volume=pgbackrest/);
  }finally{await f.cleanup();}
 });
+test('a healthy restic run backs up exactly the inventory set: private paths, env, artwork and pgbackrest volumes',async()=>{
+  const f=await fixture();try{
+    const artwork=join(f.directory,'artwork'),physical=join(f.directory,'physical');await mkdir(artwork);await mkdir(physical);
+    await mkdir(join(physical,'backup','ei-point','20261014-120000F'),{recursive:true});await writeFile(join(physical,'backup','ei-point','backup.info'),'fixture');await writeFile(join(physical,'backup','ei-point','20261014-120000F','backup.manifest'),'fixture');
+    const reference=join(f.directory,'cyrene-reference.mp3'),persona=join(f.directory,'persona.md');
+    await writeFile(reference,'reference-bytes');await writeFile(persona,'persona-bytes');
+    await appendFile(f.envFile,`CYRENE_REFERENCE_AUDIO_PATH=${unix(reference)}\nCYRENE_PERSONA_MEMORY_FILE=${unix(persona)}\n`);
+    await f.mock('docker',`printf '%s\n' "$*" >> "$MOCK_LOG"
+if [[ "$*" == *'volume ls'* ]]; then [[ "$*" == *'=artwork'* ]] && echo artwork-id || echo pgbackrest-id
+elif [[ "$*" == *artwork-id* ]]; then echo '${unix(artwork)}'
+else echo '${unix(physical)}'; fi`);
+    await f.mock('restic','printf "restic %s\\n" "$*" >> "$MOCK_LOG"; exit 0');
+    const r=f.run('infra/backup/restic-backup.sh',{RESTIC_REPOSITORY:'s3:https://example.invalid/bucket',RESTIC_PASSWORD:'test-secret'});
+    assert.equal(r.status,0,r.stderr);
+    assert.match(r.stdout,/Off-host encrypted backup completed/);
+    const log=await readFile(f.log,'utf8');
+    // The exact durable set: private host paths from the inventory, the env file,
+    // and both private volumes' mountpoints (artwork + physical backup/WAL).
+    // MSYS path conversion means the log may carry Windows or POSIX forms.
+    const normalize=(p)=>String(p).replace(/\\/g,'/').replace(/([A-Za-z]):(?=\/)/gu,(s,c)=>'/'+c.toLowerCase()).toLowerCase();
+    const backupLine=log.split('\n').find(l=>l.includes('restic backup'));
+    assert.ok(backupLine,'restic backup must run after a healthy snapshots check');
+    for(const path of [f.envFile,reference,persona,artwork,physical])
+      assert.ok(normalize(backupLine).includes(normalize(path)),`backup must include ${path}: ${backupLine}`);
+    assert.match(backupLine,/--tag ei-point/);
+    assert.match(backupLine,/--tag physical-and-private/);
+    assert.match(log,/restic forget --tag ei-point --keep-hourly 24 --keep-daily 7 --keep-weekly 4 --prune/);
+  }finally{await f.cleanup();}
+});
 test('local backup fails closed on lock contention before Docker and does not prune unrelated directories',async()=>{
  const f=await fixture();try{
   await mkdir(join(f.directory,'snapshots','operator-data'),{recursive:true});

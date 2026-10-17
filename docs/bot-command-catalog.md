@@ -92,7 +92,7 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 | `/botinfo` | Show Robin's identity and status. |
 | `/ping` | Show Discord gateway latency. |
 | `/about` | Describe Ei Point and Ei-Flow and mention the configured owner. |
-| `/play <query>` | Resolve a URL or search query and enqueue/start playback. |
+| `/play <link>` | Play or enqueue a song or playlist link (owner requirement 2026-10-17): non-links are refused; a playlist link enqueues up to 50 tracks (bounded), each resolved lazily in order. |
 | `/pause` | Pause current playback. |
 | `/resume` | Resume paused playback. |
 | `/skip` | Advance past the current track. |
