@@ -4,8 +4,21 @@ import {validateRelease} from './lib/operations.mjs';
 const [source,output]=process.argv.slice(2);
 if(!source||!output)throw Error('Usage: node scripts/release-manifest.mjs release.json output.compose.json');
 const release=validateRelease(JSON.parse(await readFile(source,'utf8')),{allowMissingTts:process.argv.includes('--allow-missing-tts'),allowMissingHyMt2:process.argv.includes('--allow-missing-hy-mt2')});
-const services=Object.fromEntries(Object.entries(release.images).map(([name,image])=>[name,{image,build:null}]));
-services.migrate={image:release.images.api,build:null};
+// Compose rejects `build: null` on a service whose base definition declares no build
+// ("services.<name>.build must be a string"), so only neutralise builds that
+// infra/docker/compose.yml actually defines.
+const buildable=new Set();
+{
+  let service=null;
+  for(const line of (await readFile(new URL('../infra/docker/compose.yml',import.meta.url),'utf8')).split('\n')){
+    const start=/^ {2}([\w.-]+):\r?$/.exec(line);
+    if(start){service=start[1];continue;}
+    if(service&&/^ {4}build:/.test(line))buildable.add(service);
+  }
+}
+const pinned=(name,image)=>({image,...(buildable.has(name)?{build:null}:{})});
+const services=Object.fromEntries(Object.entries(release.images).map(([name,image])=>[name,pinned(name,image)]));
+services.migrate=pinned('migrate',release.images.api);
 // Wire only client keys the bot consumes, and only for bot services actually in this release.
 if(services['bot-ai']){
  const aiEnvironment={};

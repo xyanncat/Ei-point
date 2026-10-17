@@ -71,6 +71,25 @@ test('release manifest generation survives an empty roster without inventing bot
   assert.equal(await readFile(`${output}.tts`,'utf8'),'1\n');
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+test('release overrides neutralise only builds the base compose declares',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'ei-release-buildless-'));
+ try{
+  const script=fileURLToPath(new URL('../../scripts/release-manifest.mjs',import.meta.url));
+  const images=Object.fromEntries(['postgres','nginx','api','web','workers','tts-qwen','hy-mt2'].map(s=>[s,`example/${s}@sha256:${'9'.repeat(64)}`]));
+  const source=join(dir,'buildless.json');await writeFile(source,JSON.stringify({id:'buildless',bots:[],images}));
+  const output=join(dir,'buildless.compose.json');
+  const result=spawnSync(process.execPath,[script,source,output],{encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);
+  const compose=JSON.parse(await readFile(output,'utf8'));
+  // Compose rejects an explicit `build: null` where the base defines no build
+  // ("services.nginx.build must be a string"), so the override must omit it there
+  // while still neutralising the builds that do exist.
+  assert.equal(compose.services.nginx.build,undefined);
+  assert.equal(compose.services.nginx.image,images.nginx);
+  assert.equal(compose.services.postgres.build,null);
+  assert.equal(compose.services.migrate.build,null);
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
 test('Kafka-only and Robin-only rosters render without attempting a Cyrene environment',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'ei-release-single-'));
  try{
