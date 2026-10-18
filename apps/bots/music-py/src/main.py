@@ -539,8 +539,8 @@ async def start_playback(guild_id: str, start_sec: int = 0):
     if download_url and is_safe_url(download_url):
         try:
             current_track.url = await MUSIC_CACHE.fetch(cache_key, lambda path: download_media(download_url, path))
-        except (OSError, ValueError, asyncio.TimeoutError):
-            log.info('Optional audio cache unavailable; using the resolved stream')
+        except (OSError, ValueError, asyncio.TimeoutError) as exc:
+            log.info('Optional audio cache unavailable (%s); using the resolved stream', exc)
     play_track(guild_id, start_sec=start_sec)
 
 
