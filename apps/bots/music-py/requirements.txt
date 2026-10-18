@@ -1,5 +1,7 @@
 # discord.py 2.7.1+ is required: Discord voice enforces DAVE E2EE (close code 4017
 # without it), and the voice extra pulls the `davey` dependency that implements DAVE.
 discord.py[voice]==2.7.1
-yt-dlp==2025.10.22
+# Keep current: stream URLs produced by stale extractors are rejected (HTTP 403)
+# by YouTube's CDN; 2026.8.19 verified against YouTube Music and licensed tracks.
+yt-dlp==2026.8.19
 psycopg[binary]==3.2.9
