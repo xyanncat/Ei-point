@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 import { PublicNav } from "./public-nav";
 export function SiteFrame({ children }: { children: ReactNode }) {
   const path = usePathname();
-  // The staff workspace and the login composition carry their own chrome.
-  const bare = path.startsWith("/dashboard") || path === "/login";
+  // The staff workspace, the login composition and dev previews carry their
+  // own chrome.
+  const bare = path.startsWith("/dashboard") || path === "/login" || path.startsWith("/dev");
   const [paused, setPaused] = useState(false);
   return (
     <div
