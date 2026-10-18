@@ -538,6 +538,42 @@ def play_track(guild_id: str, start_sec: int = 0):
         _fail_and_advance()
 
 
+async def prefetch_next(guild_id: str):
+    """Warm the next queued track while the current one plays (owner feedback
+    2026-10-18): resolution and the cache download used to start only after the
+    previous track ended, leaving a long silent gap. This bounded background
+    warm-up reuses the metadata semaphore and the 50 MiB cache item cap; any
+    failure falls back silently to the normal on-demand path."""
+    q = guild_queues.get(guild_id)
+    if not q or not q.tracks or q.loop_mode == "track":
+        return
+    if q.position + 1 < len(q.tracks):
+        nxt = q.tracks[q.position + 1]
+    elif q.loop_mode == "queue":
+        nxt = q.tracks[0]
+    else:
+        return
+    cache_key = nxt.webpage_url or nxt.track_id
+    if MUSIC_CACHE.lookup(cache_key):
+        return
+    if not nxt.url:
+        target = nxt.webpage_url or nxt.title
+        if not target:
+            return
+        resolved = await extract_tracks(target, max_results=1)
+        if not resolved:
+            return
+        nxt.url = resolved[0].get("url", "")
+        if not nxt.title and resolved[0].get("title"):
+            nxt.title = resolved[0].get("title", "")
+    download_url = nxt.url or nxt.webpage_url
+    if download_url and is_safe_url(download_url):
+        try:
+            nxt.url = await MUSIC_CACHE.fetch(cache_key, lambda path: download_media(download_url, path))
+        except (OSError, ValueError, asyncio.TimeoutError):
+            pass
+
+
 async def start_playback(guild_id: str, start_sec: int = 0):
     """Ensure track stream URL is resolved before handing off to play_track."""
     q = guild_queues.get(guild_id)
@@ -553,21 +589,23 @@ async def start_playback(guild_id: str, start_sec: int = 0):
         current_track.url = cached
         play_track(guild_id, start_sec=start_sec)
         await refresh_music_panel(guild_id)
+        asyncio.create_task(prefetch_next(guild_id))
         return
-    if current_track.webpage_url:
-        resolved = await extract_tracks(current_track.webpage_url, max_results=1)
-        if resolved:
-            current_track.url = resolved[0].get("url", "")
-            if not current_track.title and resolved[0].get("title"):
-                current_track.title = resolved[0].get("title", "")
-    elif not current_track.url and current_track.title:
-        resolved = await extract_tracks(current_track.title, max_results=1)
-        if resolved:
-            current_track.url = resolved[0].get("url", "")
-            if not current_track.title and resolved[0].get("title"):
-                current_track.title = resolved[0].get("title", "")
+    # Prefetched or freshly resolved tracks already carry a direct URL; only a
+    # lazy playlist entry (empty URL) resolves here, bounded by the metadata
+    # semaphore. This removes a full re-extraction before single links play.
+    if not current_track.url:
+        target = current_track.webpage_url or current_track.title
+        if target:
+            resolved = await extract_tracks(target, max_results=1)
+            if resolved:
+                current_track.url = resolved[0].get("url", "")
+                if not current_track.title and resolved[0].get("title"):
+                    current_track.title = resolved[0].get("title", "")
 
-    download_url = current_track.webpage_url or current_track.url
+    # Cache-first from the direct URL when available (no second extraction);
+    # a lazy playlist entry still re-extracts through its webpage URL.
+    download_url = current_track.url or current_track.webpage_url
     if download_url and is_safe_url(download_url):
         try:
             current_track.url = await MUSIC_CACHE.fetch(cache_key, lambda path: download_media(download_url, path))
@@ -575,6 +613,7 @@ async def start_playback(guild_id: str, start_sec: int = 0):
             log.info('Optional audio cache unavailable (%s); using the resolved stream', exc)
     play_track(guild_id, start_sec=start_sec)
     await refresh_music_panel(guild_id)
+    asyncio.create_task(prefetch_next(guild_id))
 
 
 async def handle_track_finished(guild_id: str, force_next: bool = False):

@@ -101,7 +101,7 @@ Pause/resume, skip, shuffle, loop and volume are **live-panel buttons** now (own
 
 ### Other functions
 
-- Resolve media using yt-dlp (plus Spotify public-embed metadata with lazy YouTube-search playback) and stream through FFmpeg; bound metadata-resolution concurrency and voice sessions.
+- Resolve media using yt-dlp (plus Spotify public-embed metadata with lazy YouTube-search playback) and stream through FFmpeg; bound metadata-resolution concurrency and voice sessions. The next queued track is warmed in the background (pre-resolved and cached, owner feedback 2026-10-18) so songs start quickly, and cache downloads prefer the already-resolved direct URL.
 - Advance queues, maintain playback state, and support track/queue loop modes. Search/nowplaying/seek/autoplay/DJ-administration and the panel-covered controls (pause/resume/skip/shuffle/loop/volume) are removed from public sync.
 - Keep the queue session-scoped (owner decision 2026-10-18): leaving voice clears it and nothing is restored across restarts. The live music panel puts DJ-gated pause/resume, skip, shuffle, loop and volume controls inside one themed components-v2 message per session, using the character palette taken from each bot's own artwork.
 - Maintain a size/TTL-bounded local audio cache and expose health/readiness status.

@@ -17,7 +17,7 @@ class CacheTest(unittest.IsolatedAsyncioTestCase):
         track = MagicMock(webpage_url='https://example.test/audio', track_id='id')
         cache = MagicMock(); cache.lookup.return_value = '/cache/audio'
         play, extract = MagicMock(), AsyncMock()
-        scope = {'guild_queues': {'guild': MagicMock(tracks=[track], position=0)}, 'MUSIC_CACHE': cache, 'play_track': play, 'extract_tracks': extract, 'refresh_music_panel': AsyncMock()}
+        scope = {'guild_queues': {'guild': MagicMock(tracks=[track], position=0)}, 'MUSIC_CACHE': cache, 'play_track': play, 'extract_tracks': extract, 'refresh_music_panel': AsyncMock(), 'prefetch_next': MagicMock(), 'asyncio': MagicMock()}
         exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), scope)
         await scope['start_playback']('guild', start_sec=12)
         extract.assert_not_awaited()
@@ -55,6 +55,19 @@ class CacheTest(unittest.IsolatedAsyncioTestCase):
                 raise RuntimeError('download failed')
             with self.assertRaises(RuntimeError): await cache.fetch('failure', failed)
             self.assertEqual(list(pathlib.Path(directory).iterdir()), [])
+
+    async def test_stale_staging_files_are_swept_and_unrelated_files_are_kept(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache = AudioCache(directory, max_bytes=100, max_item_bytes=50, ttl_seconds=60, minimum_free_ratio=0)
+            stale = pathlib.Path(directory) / ('.partial-' + 'a' * 32)
+            stale.write_bytes(b'partial')
+            unrelated = pathlib.Path(directory) / 'user-note.txt'
+            unrelated.write_bytes(b'keep me')
+            async def download(path): path.write_bytes(b'123')
+            path = await cache.fetch('sweep', download)
+            self.assertFalse(stale.exists())
+            self.assertTrue(unrelated.exists())
+            self.assertTrue(pathlib.Path(path).exists())
 
     async def test_expired_audio_is_downloaded_again(self):
         with tempfile.TemporaryDirectory() as directory:

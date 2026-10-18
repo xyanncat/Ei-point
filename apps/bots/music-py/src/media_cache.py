@@ -53,6 +53,14 @@ class AudioCache:
             usage = shutil.disk_usage(self.root)
             if usage.free / usage.total <= self.minimum_free_ratio:
                 raise ValueError('Disk hold: optional audio download is paused')
+            # Sweep stale staging files: a killed downloader may still hold one
+            # briefly (WinError 32), which used to poison the whole fetch.
+            for stale in self.root.glob('.partial-*'):
+                if re.fullmatch(r'\.partial-[a-f0-9]{32}', stale.name) and not stale.is_symlink() and stale.is_file():
+                    try:
+                        stale.unlink()
+                    except OSError:
+                        pass
             temporary = self.root / ('.partial-'+uuid.uuid4().hex)
             destination = self.root / (hashlib.sha256(key.encode()).hexdigest()+'.audio')
             try:
@@ -71,4 +79,7 @@ class AudioCache:
                 os.replace(temporary, destination)
                 return str(destination)
             finally:
-                temporary.unlink(missing_ok=True)
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
