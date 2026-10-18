@@ -25,6 +25,18 @@ Verify order stays a utility link. Staff workspace is linked from the account me
 
 `Configuration`, `Fleet controls` and `Administration` are removed as destinations; their controls moved into the sections above.
 
+Sections with distinct subpages use **local tabs** (bookmarkable URLs); the sidebar stays at the eight destinations:
+
+| Section | Tabs |
+|---|---|
+| Commerce | Orders `/dashboard/commerce` · Payment review `/dashboard/commerce/payments` · Services `/dashboard/commerce/services` · Memberships & referrals `/dashboard/commerce/memberships` |
+| Community | Welcome & leave `/dashboard/community` · Levels `/dashboard/community/levels` · Announcements `/dashboard/community/announcements` · Cards & economy `/dashboard/community/economy` |
+| Moderation | Incidents `/dashboard/moderation` · Cases `/dashboard/moderation/cases` · Protection rules `/dashboard/moderation/protection` |
+| Activity | Audit trail `/dashboard/activity` · Job history `/dashboard/activity/jobs` |
+| Settings | Server `/dashboard/settings` · Notifications `/dashboard/settings/notifications` · Modules `/dashboard/settings/modules` · Staff access `/dashboard/settings/staff` |
+
+One home per module: welcome/leveling/games live in Community, security/moderation/logging in Moderation · Protection rules, everything else in Settings · Modules. Staff access (role grants for the selected server) lives in Settings · Staff access; System keeps guild approvals, the secret vault and infrastructure accounts.
+
 ## Design tokens
 
 | Role | Value |

@@ -223,7 +223,15 @@ export function CommandPermissionsPanel({ guildId, botKey, canOperate }: { guild
   );
 }
 
-export function ServerSettingsPanel({ guildId, canOperate }: { guildId: string; canOperate: boolean }) {
+export function ServerSettingsPanel({
+  guildId,
+  canOperate,
+  scope = "all",
+}: {
+  guildId: string;
+  canOperate: boolean;
+  scope?: "all" | "server" | "notifications";
+}) {
   const base = `/api/guilds/${encodeURIComponent(guildId)}`;
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -244,7 +252,10 @@ export function ServerSettingsPanel({ guildId, canOperate }: { guildId: string; 
   const notices = useNotices(load);
   const disabled = notices.busy || loading || !canOperate || !settings;
   return (
-    <Panel title="Server settings" detail="Pause and notification preferences are saved to this server.">
+    <Panel
+      title={scope === "notifications" ? "Notification preferences" : "Server settings"}
+      detail="Saved to the selected server."
+    >
       <Notices error={notices.error} notice={notices.notice} />
       {loading ? (
         <p className="sf-dim" role="status">Loading confirmed server state…</p>
@@ -252,34 +263,40 @@ export function ServerSettingsPanel({ guildId, canOperate }: { guildId: string; 
         <Empty title="Settings unavailable" detail="The API did not return settings for this server." />
       ) : (
         <>
-          <Check
-            label="Pause server (bots stop acting)"
-            checked={settings.server_paused}
-            disabled={disabled}
-            onChange={(value) => void notices.run(() => mutate(`${base}/settings`, { server_paused: value }), "Server pause setting saved.")}
-          />
-          <Check
-            label="Enable notifications"
-            checked={settings.notifications_enabled}
-            disabled={disabled}
-            onChange={(value) => void notices.run(() => mutate(`${base}/settings`, { notifications_enabled: value }), "Notification setting saved.")}
-          />
-          <div className="sf-grid-2">
-            {["security", "moderation", "fleet", "orders"].map((key) => (
+          {scope !== "notifications" && (
+            <Check
+              label="Pause server (bots stop acting)"
+              checked={settings.server_paused}
+              disabled={disabled}
+              onChange={(value) => void notices.run(() => mutate(`${base}/settings`, { server_paused: value }), "Server pause setting saved.")}
+            />
+          )}
+          {scope !== "server" && (
+            <>
               <Check
-                key={key}
-                label={`${key} notifications`}
-                checked={settings.notification_preferences[key] ?? true}
+                label="Enable notifications"
+                checked={settings.notifications_enabled}
                 disabled={disabled}
-                onChange={(value) =>
-                  void notices.run(
-                    () => mutate(`${base}/settings`, { notification_preferences: { ...settings.notification_preferences, [key]: value } }),
-                    "Notification preferences saved.",
-                  )
-                }
+                onChange={(value) => void notices.run(() => mutate(`${base}/settings`, { notifications_enabled: value }), "Notification setting saved.")}
               />
-            ))}
-          </div>
+              <div className="sf-grid-2">
+                {["security", "moderation", "fleet", "orders"].map((key) => (
+                  <Check
+                    key={key}
+                    label={`${key} notifications`}
+                    checked={settings.notification_preferences[key] ?? true}
+                    disabled={disabled}
+                    onChange={(value) =>
+                      void notices.run(
+                        () => mutate(`${base}/settings`, { notification_preferences: { ...settings.notification_preferences, [key]: value } }),
+                        "Notification preferences saved.",
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            </>
+          )}
           {!canOperate && <p className="sf-dim">Read-only: full guild access is required to change settings.</p>}
         </>
       )}

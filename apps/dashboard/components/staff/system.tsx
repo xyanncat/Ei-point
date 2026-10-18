@@ -3,7 +3,6 @@
 // vault and infrastructure accounts. Relocated from "Administration".
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../../lib/api";
-import { MODULE_LABELS } from "../../lib/workspace-config-schema";
 import { Empty, Panel } from "./ui";
 
 async function mutate<T>(path: string, body: unknown, method = "PATCH") {
@@ -24,17 +23,14 @@ function failText(cause: unknown) {
 }
 
 type Guild = { guild_id: string; name: string; approved: boolean; owner_id?: string };
-type Scope = { guild_id: string; role_id: string; scope: string };
 type Secret = { name: string; masked: string; updated_at: string };
 type InfraAccount = { id: string; provider: string; account_name: string; secret_ref: string; endpoint: string; region: string; enabled: boolean; metadata: Record<string, unknown> };
 
 export function SystemPanels({ guildId }: { guildId: string }) {
   const [guilds, setGuilds] = useState<Guild[]>([]);
-  const [staff, setStaff] = useState<Scope[]>([]);
   const [secrets, setSecrets] = useState<Secret[]>([]);
   const [accounts, setAccounts] = useState<InfraAccount[]>([]);
   const [guildDraft, setGuildDraft] = useState({ guild_id: "", name: "", owner_id: "", approved: true });
-  const [scopeDraft, setScopeDraft] = useState({ guild_id: guildId, role_id: "", scope: "read" });
   const [secretDraft, setSecretDraft] = useState({ name: "", value: "" });
   const [accountDraft, setAccountDraft] = useState({ id: "", provider: "postgres", account_name: "", secret_ref: "", endpoint: "", region: "", enabled: true, metadata: "{}" });
   const [revealed, setRevealed] = useState<{ name: string; value: string } | null>(null);
@@ -44,14 +40,12 @@ export function SystemPanels({ guildId }: { guildId: string }) {
 
   const load = useCallback(async () => {
     try {
-      const [g, s, v, a] = await Promise.all([
+      const [g, v, a] = await Promise.all([
         api<{ guilds: Guild[] }>("/api/admin/guilds"),
-        api<{ scopes: Scope[] }>("/api/admin/staff-scopes"),
         api<{ secrets: Secret[] }>("/api/admin/secrets"),
         api<{ accounts: InfraAccount[] }>("/api/admin/accounts"),
       ]);
       setGuilds(g.guilds);
-      setStaff(s.scopes);
       setSecrets(v.secrets);
       setAccounts(a.accounts);
     } catch (cause) {
@@ -107,27 +101,7 @@ export function SystemPanels({ guildId }: { guildId: string }) {
         </form>
       </Panel>
 
-      <Panel title="Staff access" detail="Grant scopes to Discord roles for staff who are not owners or managers.">
-        {staff.map((s, i) => (
-          <div className="sf-actions" key={i}>
-            <span><span className="sf-num">{s.guild_id}</span> · role <span className="sf-num">{s.role_id}</span> · {s.scope}</span>
-            <button className="sf-ghost" disabled={busy} onClick={() => void run(() => mutate("/api/admin/staff-scopes", s, "DELETE"), "Staff scope removed.")}>Remove scope</button>
-          </div>
-        ))}
-        {!staff.length && <Empty title="No staff scopes" />}
-        <form className="sf-actions" onSubmit={(e) => { e.preventDefault(); void run(() => mutate("/api/admin/staff-scopes", scopeDraft, "PUT"), "Staff scope granted."); }}>
-          <label className="sf-field"><span>Guild ID</span><input required value={scopeDraft.guild_id} onChange={(e) => setScopeDraft({ ...scopeDraft, guild_id: e.target.value })} /></label>
-          <label className="sf-field"><span>Discord role ID</span><input required value={scopeDraft.role_id} onChange={(e) => setScopeDraft({ ...scopeDraft, role_id: e.target.value })} /></label>
-          <label className="sf-field"><span>Scope</span>
-            <select value={scopeDraft.scope} onChange={(e) => setScopeDraft({ ...scopeDraft, scope: e.target.value })}>
-              {[...new Set(["read", "commerce-settle", ...Object.keys(MODULE_LABELS)])].map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
-          </label>
-          <button className="sf-ghost" disabled={busy}>Grant scope</button>
-        </form>
-      </Panel>
+      {/* Staff access moved to Settings · Staff access (owner task 2026-10-19). */}
 
       <Panel title="Secret vault" detail="Values stay masked. A revealed value hides itself after 30 seconds.">
         {secrets.map((s) => (

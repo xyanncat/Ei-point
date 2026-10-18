@@ -47,7 +47,7 @@ export function AnnouncementComposer({ guildId, canOperate }: { guildId: string;
 
   return (
     <Panel
-      title="Announcements"
+      title="Compose an announcement"
       detail="Compose an embed, check the draft preview, then queue it for the sending bot. Queue acknowledgement is not proof of delivery."
     >
       {error && <p className="sf-note sf-error" role="alert">{error}</p>}

@@ -17,13 +17,23 @@ type Order = {
   timeline?: { at: string; label: string }[];
 };
 
-export function CommerceOrders({ guildId, scopes }: { guildId: string; scopes: string[] }) {
+export function CommerceOrders({
+  guildId,
+  scopes,
+  title = "Order history",
+  defaultStatus = "all",
+}: {
+  guildId: string;
+  scopes: string[];
+  title?: string;
+  defaultStatus?: string;
+}) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(defaultStatus);
   const trigger = useRef<HTMLElement | null>(null);
   const sequence = useRef(0);
   const admin = scopes.includes("*") || scopes.includes("commerce-settle");
@@ -47,11 +57,12 @@ export function CommerceOrders({ guildId, scopes }: { guildId: string; scopes: s
     setOrders([]);
     setNotice("");
     setSelected(null);
+    setStatusFilter(defaultStatus);
     if (read) void load();
     return () => {
       sequence.current++;
     };
-  }, [guildId, read, load]);
+  }, [guildId, read, load, defaultStatus]);
 
   async function action(order: Order, value: "settle" | "reject") {
     if (value === "settle" && !window.confirm(`Confirm you matched ${order.orderId} against the payment statement. Settling activates membership and referral rewards. Continue?`)) return;
@@ -91,11 +102,7 @@ export function CommerceOrders({ guildId, scopes }: { guildId: string; scopes: s
   }
 
   return (
-    <Panel
-      title="Orders & payment review"
-      detail={admin ? "Review transfers against your statement. Settling confirms an order and applies its membership and referral credit." : "Read-only order overview."}
-      actions={<button className="sf-ghost" disabled={busy} onClick={() => void load()}>{busy ? "Loading…" : "Refresh"}</button>}
-    >
+    <Panel title={title} detail={admin ? "Transfers are matched against your statement; settling applies membership and referral credit." : "Read-only order overview."}>
       {error && <p className="sf-note sf-error" role="alert">{error}</p>}
       {notice && <p className="sf-note sf-ok-note sf-checkmark" role="status">{notice}</p>}
       <label className="sf-field" style={{ maxWidth: "14rem" }}>
@@ -124,7 +131,10 @@ export function CommerceOrders({ guildId, scopes }: { guildId: string; scopes: s
           </tbody>
         </table>
       ) : (
-        <Empty title={busy ? "Loading orders…" : "No orders"} detail={busy ? undefined : "No commerce orders in this server."} />
+        <Empty
+          title={busy ? "Loading orders…" : defaultStatus === "claimed" ? "Nothing waiting for review" : "No orders"}
+          detail={busy ? undefined : defaultStatus === "claimed" ? "No orders are waiting for review in this server." : "No commerce orders in this server."}
+        />
       )}
       {active && (
         <Drawer title={`Order ${active.orderId}`} onClose={() => setSelected(null)} restore={() => trigger.current?.focus()}>

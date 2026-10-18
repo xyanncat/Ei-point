@@ -21,7 +21,7 @@ export default function BotsPage() {
     <>
       <PageHeader
         eyebrow="Staff workspace"
-        title="Bot fleet"
+        title="Bots"
         explain="Every service assigned to this server, with its process, gateway and database signals."
         actions={
           <button className="sf-ghost" onClick={() => void refresh()} disabled={busy}>

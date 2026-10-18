@@ -295,6 +295,34 @@ export class KafkaEngine {
     return this.map ? [...this.map.all.keys()] : [];
   }
 
+  /** Debug-only: meshes in traversal order with vertex counts + visibility. */
+  listMeshes(): { index: number; name: string; vertices: number; visible: boolean }[] {
+    const out: { index: number; name: string; vertices: number; visible: boolean }[] = [];
+    let index = 0;
+    this.model?.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const geometry = mesh.geometry as THREE.BufferGeometry;
+      mesh.userData.k3dMeshIndex = index;
+      out.push({
+        index,
+        name: mesh.name || `mesh-${index}`,
+        vertices: geometry?.attributes?.position?.count ?? 0,
+        visible: mesh.visible,
+      });
+      index += 1;
+    });
+    return out;
+  }
+
+  setMeshVisible(index: number, visible: boolean) {
+    this.model?.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (mesh.isMesh && mesh.userData.k3dMeshIndex === index) mesh.visible = visible;
+    });
+    this.requestRender();
+  }
+
   setSkeletonVisible(visible: boolean) {
     if (!this.model) return;
     if (visible && !this.skeleton) {

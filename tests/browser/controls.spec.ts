@@ -108,7 +108,7 @@ test("settings save with version and CSRF; system accounts manage end to end", a
       body: JSON.stringify(result),
     });
   });
-  await page.goto("/dashboard/settings");
+  await page.goto("/dashboard/moderation/protection");
   await expect(page).toHaveTitle(/Ei point/);
   await page.getByLabel("AI warnings", { exact: true }).uncheck();
   await page

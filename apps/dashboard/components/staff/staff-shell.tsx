@@ -5,34 +5,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Icon, type IconName } from "../icons";
+import { Icon } from "../icons";
 import { BrandMark } from "../brand-mark";
+import { crumbFor, isSectionActive, SECTIONS } from "./sections";
 import { useStaff } from "./staff-context";
 import "./staff.css";
 
-const NAV: { href: string; label: string; icon: IconName; admin?: boolean }[] = [
-  { href: "/dashboard", label: "Overview", icon: "overview" },
-  { href: "/dashboard/bots", label: "Bots", icon: "bots" },
-  { href: "/dashboard/moderation", label: "Moderation", icon: "shield" },
-  { href: "/dashboard/community", label: "Community", icon: "cards" },
-  { href: "/dashboard/commerce", label: "Commerce", icon: "store" },
-  { href: "/dashboard/activity", label: "Activity", icon: "activity" },
-  { href: "/dashboard/settings", label: "Settings", icon: "cards" },
-  { href: "/dashboard/system", label: "System", icon: "crown", admin: true },
-];
-
-function active(href: string, path: string) {
-  if (href === "/dashboard") return path === "/dashboard" || path === "/dashboard/";
-  return path.startsWith(href);
-}
-
-function crumbFor(path: string) {
-  const parts = path.replace(/^\/dashboard\/?/, "").split("/").filter(Boolean);
-  const section = NAV.find((n) => active(n.href, path));
-  const label = section?.label ?? "Overview";
-  const sub = parts.length > 1 ? parts[1].replaceAll("-", " ") : "";
-  return { label, sub: sub ? parts.length > 2 ? decodeURIComponent(parts[2]) : sub : "" };
-}
+// Navigation structure (sidebar sections + local tabs) lives in ./sections.
 
 export function StaffShell({ children }: { children: ReactNode }) {
   const { boot, user, guilds, guild, setGuild, guildName, demo, isAdmin, error, reference, retry, logout } = useStaff();
@@ -108,8 +87,8 @@ export function StaffShell({ children }: { children: ReactNode }) {
           </label>
         </div>
         <nav className="sf-nav" aria-label="Staff workspace">
-          {NAV.filter((n) => !n.admin || isAdmin).map((n) => (
-            <Link key={n.href} href={n.href} aria-current={active(n.href, path) ? "page" : undefined}>
+          {SECTIONS.filter((n) => !n.admin || isAdmin).map((n) => (
+            <Link key={n.href} href={n.href} aria-current={isSectionActive(n, path) ? "page" : undefined}>
               <Icon name={n.icon} />
               {n.label}
             </Link>
