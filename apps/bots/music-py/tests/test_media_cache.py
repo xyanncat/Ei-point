@@ -17,7 +17,7 @@ class CacheTest(unittest.IsolatedAsyncioTestCase):
         track = MagicMock(webpage_url='https://example.test/audio', track_id='id')
         cache = MagicMock(); cache.lookup.return_value = '/cache/audio'
         play, extract = MagicMock(), AsyncMock()
-        scope = {'guild_queues': {'guild': MagicMock(tracks=[track], position=0)}, 'MUSIC_CACHE': cache, 'play_track': play, 'extract_tracks': extract}
+        scope = {'guild_queues': {'guild': MagicMock(tracks=[track], position=0)}, 'MUSIC_CACHE': cache, 'play_track': play, 'extract_tracks': extract, 'refresh_music_panel': AsyncMock()}
         exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), 'exec'), scope)
         await scope['start_playback']('guild', start_sec=12)
         extract.assert_not_awaited()

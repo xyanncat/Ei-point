@@ -92,16 +92,16 @@
       summary/usage SQL (`packages/modules/ai/`)
 - [x] Provider router: 2 concurrent, 20 queued then clean reject, 60 s deadline with abort,
       primary→fallback, budgets (`AI_CONCURRENT`/`AI_QUEUE_MAX`/`AI_DEADLINE_MS`)
-- [x] Music queue: add/remove/shuffle (keeps current first)/loop modes/snapshot round-trip
-      with clamping restore (`apps/bots/music-py/src/queue_state.py`, dependency-free)
+- [x] Music queue: add/remove/shuffle (keeps current first)/loop modes
+      (`apps/bots/music-py/src/queue_state.py`, dependency-free)
 - [x] Tests 7/7 (TS) + 6/6 (Python unittest) pass, `tsc` clean
 - [x] Demo caught + fixed a real bug: `globals.css` pointed at `./theme.css` instead of `../theme.css`
 - [x] Voice playback engine: discord.py VoiceClient + yt-dlp stream resolution + FFmpeg audio player with volume transformer, queue loop, and bounded concurrency (2 resolutions, 2 voice sessions)
-- [x] Music commands & UI parity: 13 slash commands including /seek, /autoplay, /claimmaster, /masters, and Search Track Picker Select menu component (Matrix #54)
-- [x] Periodic 15s snapshots persist real elapsed position_ms to music.queue_snapshots; queue restoration on restart
+- [x] Music commands & UI parity: 13 slash commands (play/pause/resume/skip/stop/queue/shuffle/loop/volume/disconnect + ping/botinfo/about) and the live music panel with six DJ-gated buttons (owner request 2026-10-18); the search picker remains retired with `/search` (Matrix #54)
+- [x] Session-scoped queue (owner decision 2026-10-18): leaving voice — /disconnect, /stop, a kick or a lost channel — clears the queue, loop mode, autoplay and the panel; nothing is restored across restarts (the elapsed-offset freeze keeps pause/resume exact)
 - [x] HTTP healthcheck on port 3105 distinguishing liveness and gateway/DB readiness; ops.service_status heartbeats
 - [x] Robin `/play` is link-driven (owner requirement 2026-10-17): a song or playlist link is required (non-links and unsafe links refused without extraction); a playlist link enqueues at most `PLAYLIST_MAX_TRACKS` (default 50, 1–100 validated at startup, enforced at enqueue too) with each track resolved lazily through the existing bounded metadata path — `tests/test_play_links.py` 9/9 (red first), music suite 37/37.
-- [x] Robin response contract (A18, §8C): every success/error/empty path and the search-picker callback route through the configured embed/image helper (`embed_reply_helper`/`respond`, per-identity `EI_POINT_EMBED_IMAGE_ROBIN`); the approved-root surface, FFmpeg reconnect/failure routing, queue persistence and bounded cache are covered dependency-free (`apps/bots/music-py/tests/test_response_embeds.py`, `test_ffmpeg_playback.py`) — 28/28 Python. Cyrene `/search`/`/tts`/`/speak`/`/leave` contracts 19/19 TS (fake inference; audible Discord audio and model provisioning remain open).
+- [x] Robin response contract (A18, §8C): every success/error/empty path routes through the configured embed/image helper (`embed_reply_helper`/`respond`, per-identity `EI_POINT_EMBED_IMAGE_ROBIN`); the approved-root surface, FFmpeg reconnect/failure routing, session-scoped queue clearing, the live panel and bounded cache are covered dependency-free (`apps/bots/music-py/tests/test_response_embeds.py`, `test_ffmpeg_playback.py`, `test_session_scope.py`, `test_music_panel.py`). Cyrene `/search`/`/tts`/`/speak`/`/leave` contracts 19/19 TS (fake inference; audible Discord audio and model provisioning remain open).
 
 # Website — public site (done, self-audited; per @frontend-design)
 

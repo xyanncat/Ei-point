@@ -17,7 +17,7 @@ Full rebuild from off-host copies + image digests on a clean host. Measure RTO e
 
 - Kill service mid card-trade / payment-settlement / referral-redeem / job → assert no duplicate financial effects (unique + tx enforced in `infra/postgres/`).
 - `docker restart postgres` mid-write → unsafe mutations fail clearly, then reconnect (no claimed success).
-- Kill music bot → queue + position restored from `music.queue_snapshots` (≤15 s loss); voice session rejoin is best-effort.
+- Kill music bot → sessions end (the queue is live-session state; nothing is restored across restarts — owner decision 2026-10-18); voice session rejoin is best-effort.
 - Kill AI provider (firewall block) → moderation/security unaffected; AI returns actionable error within deadline.
 - DNS blackout simulation → cached resolver path holds; failures are explicit, not hangs.
 - Disk 90% simulation → optional downloads/uploads stop; financial/WAL writes never auto-deleted.

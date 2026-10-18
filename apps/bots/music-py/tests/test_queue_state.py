@@ -39,16 +39,6 @@ class QueueTest(unittest.TestCase):
         self.assertEqual(q.position, 0)
         self.assertEqual(len(q.tracks), 5)
 
-    def test_snapshot_round_trip(self) -> None:
-        q = QueueState(tracks=[track(1), track(2)], position=1, position_ms=5000, loop_mode="queue", volume=80)
-        restored = QueueState.restore(q.snapshot())
-        self.assertEqual(restored.snapshot(), q.snapshot())
-
-    def test_restore_clamps_bad_data(self) -> None:
-        q = QueueState.restore({"queue": [{"track_id": "t1", "title": "x", "duration_ms": 1}], "position": 99, "volume": 999, "loop_mode": "bogus"})
-        self.assertEqual(q.position, 0)
-        self.assertEqual(q.volume, 150)
-        self.assertEqual(q.loop_mode, "off")
 
 
 if __name__ == "__main__":

@@ -73,20 +73,23 @@ class RobinEmbedContractTest(unittest.TestCase):
             self.assertIn(required, functions)
 
     def test_no_interaction_reply_bypasses_the_helper(self):
-        respond = next(
-            node
+        # Exemptions: `respond` routes every interaction reply, and
+        # `post_music_panel` posts the live panel as a persistent channel
+        # message (regular messages stay editable for the whole session,
+        # unlike interaction replies, which expire with their token).
+        ranges = [
+            (node.lineno, node.end_lineno)
             for node in self.tree.body
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and node.name == "respond"
-        )
-        lo, hi = respond.lineno, respond.end_lineno
+            and node.name in {"respond", "post_music_panel"}
+        ]
         bypass: list[int] = []
         for node in ast.walk(self.tree):
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
                 and node.func.attr in REPLY_ATTRS
-                and not (lo <= node.lineno <= hi)
+                and not any(lo <= node.lineno <= hi for lo, hi in ranges)
             ):
                 bypass.append(node.lineno)
         self.assertEqual(

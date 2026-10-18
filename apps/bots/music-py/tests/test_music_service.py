@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 import unittest
@@ -23,45 +22,7 @@ except ImportError:
 
 
 class MusicServiceTest(unittest.TestCase):
-    def test_queue_state_persistence_contract(self):
-        q = QueueState()
-        q.add(Track(
-            track_id="t1",
-            title="Test Song",
-            duration_ms=120000,
-            url="https://audio.stream/t1.mp3",
-            webpage_url="https://youtube.com/watch?v=t1",
-        ))
-        q.volume = 90
-        q.loop_mode = "track"
-        q.position_ms = 45000
 
-        snap = q.snapshot()
-        serialized = json.dumps(snap["queue"])
-        deserialized = json.loads(serialized)
-
-        restored = QueueState.restore({
-            "queue": deserialized,
-            "position": snap["position"],
-            "position_ms": snap["position_ms"],
-            "loop_mode": snap["loop_mode"],
-            "volume": snap["volume"],
-        })
-
-        self.assertEqual(len(restored.tracks), 1)
-        self.assertEqual(restored.tracks[0].title, "Test Song")
-        self.assertEqual(restored.tracks[0].url, "https://audio.stream/t1.mp3")
-        self.assertEqual(restored.tracks[0].webpage_url, "https://youtube.com/watch?v=t1")
-        self.assertEqual(restored.volume, 90)
-        self.assertEqual(restored.loop_mode, "track")
-        self.assertEqual(restored.position_ms, 45000)
-
-    def test_restore_empty_snapshot(self):
-        restored = QueueState.restore({})
-        self.assertEqual(len(restored.tracks), 0)
-        self.assertEqual(restored.volume, 100)
-        self.assertEqual(restored.loop_mode, "off")
-        self.assertEqual(restored.position_ms, 0)
 
     def test_queue_advancement_modes(self):
         # 1. loop_mode = 'off'
@@ -101,16 +62,6 @@ class MusicServiceTest(unittest.TestCase):
         self.assertEqual(q.tracks[0].track_id, "t1")
         self.assertEqual(len(q.tracks), 3)
 
-    def test_volume_and_position_clamping(self):
-        restored = QueueState.restore({
-            "queue": [{"track_id": "t1", "title": "Test", "duration_ms": 1000}],
-            "position": 99,
-            "position_ms": -50,
-            "volume": 250,
-        })
-        self.assertEqual(restored.position, 0)
-        self.assertEqual(restored.position_ms, 0)
-        self.assertEqual(restored.volume, 150)
 
     def test_is_safe_url_ssrf_protection(self):
         # Disallowed schemes and private/internal hosts

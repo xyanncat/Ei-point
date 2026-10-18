@@ -2,9 +2,9 @@
 
 Full playback engine, yt-dlp resolution, FFmpeg streaming,
 queue advancement loop, seeking, autoplay, DJ/Master permissions,
-search track picker UI, bounded concurrency (2 resolutions, 2 voice sessions),
-periodic 15s PostgreSQL snapshot flush to music.queue_snapshots,
-queue restoration, daemon HTTP health server on port 3105,
+search track picker UI, live music panel, bounded concurrency (2 resolutions, 2 voice sessions),
+session-scoped queue lifecycle (owner decision 2026-10-18: leaving voice clears the queue),
+daemon HTTP health server on port 3105,
 and status heartbeat into ops.service_status.
 """
 from __future__ import annotations
@@ -120,62 +120,10 @@ def init_db():
                 options="-c statement_timeout=5000",
             )
             db_ready = True
-            log.info("Connected to PostgreSQL for queue snapshots.")
+            log.info("Connected to PostgreSQL.")
         except Exception as exc:
             db_ready = False
             log.warning("PostgreSQL connection failed (%s); persistence will retry.", exc)
-
-
-def build_queue_snapshots() -> list[tuple[str, dict]]:
-    """Build immutable snapshots of all guild queues on the event loop thread."""
-    now = time.time()
-    snapshots: list[tuple[str, dict]] = []
-    for guild_id, started in list(track_started_at.items()):
-        q = guild_queues.get(guild_id)
-        if q and q.tracks and q.position < len(q.tracks):
-            elapsed = max(0.0, now - started)
-            q.position_ms = int(elapsed * 1000)
-    for guild_id, q in list(guild_queues.items()):
-        snapshots.append((guild_id, q.snapshot()))
-    return snapshots
-
-
-def flush_snapshots_sync(snapshots: list[tuple[str, dict]] | None = None):
-    """Flush queue snapshots to music.queue_snapshots inside the database lock."""
-    global db_conn, db_ready
-    if snapshots is None:
-        snapshots = build_queue_snapshots()
-
-    with db_lock:
-        if not db_conn or not db_ready:
-            return
-        try:
-            with db_conn.cursor() as cur:
-                for guild_id, snap in snapshots:
-                    cur.execute(
-                        """
-                        INSERT INTO music.queue_snapshots (guild_id, queue, position, position_ms, loop_mode, volume, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, now())
-                        ON CONFLICT (guild_id) DO UPDATE SET
-                          queue = EXCLUDED.queue,
-                          position = EXCLUDED.position,
-                          position_ms = EXCLUDED.position_ms,
-                          loop_mode = EXCLUDED.loop_mode,
-                          volume = EXCLUDED.volume,
-                          updated_at = now()
-                        """,
-                        (
-                            guild_id,
-                            json.dumps(snap.get("queue", [])),
-                            int(snap.get("position", 0)),
-                            int(snap.get("position_ms", 0)),
-                            str(snap.get("loop_mode", "off")),
-                            int(snap.get("volume", 100)),
-                        ),
-                    )
-        except Exception as exc:
-            log.error("Failed to flush queue snapshots: %s", exc)
-            db_ready = False
 
 
 def update_service_status_sync(ping_ms: float):
@@ -200,37 +148,6 @@ def update_service_status_sync(ping_ms: float):
                 )
         except Exception as exc:
             log.debug("Failed to record service status: %s", exc)
-
-
-def restore_guild_queue(guild_id: str) -> QueueState:
-    global db_conn, db_ready
-    with db_lock:
-        if not db_conn or not db_ready:
-            return get_or_create_queue(guild_id)
-        try:
-            with db_conn.cursor() as cur:
-                cur.execute(
-                    "SELECT queue, position, position_ms, loop_mode, volume FROM music.queue_snapshots WHERE guild_id = %s",
-                    (guild_id,),
-                )
-                row = cur.fetchone()
-                if row:
-                    queue_data, position, pos_ms, loop_mode, volume = row
-                    if isinstance(queue_data, str):
-                        queue_data = json.loads(queue_data)
-                    q = QueueState.restore({
-                        "queue": queue_data,
-                        "position": position,
-                        "position_ms": pos_ms,
-                        "loop_mode": loop_mode,
-                        "volume": volume,
-                    })
-                    guild_queues[guild_id] = q
-                    log.info("Restored queue for guild %s with %d tracks.", guild_id, len(q.tracks))
-                    return q
-        except Exception as exc:
-            log.warning("Could not restore snapshot for guild %s: %s", guild_id, exc)
-    return get_or_create_queue(guild_id)
 
 
 async def check_dj_permission(interaction: discord.Interaction) -> bool:
@@ -521,6 +438,7 @@ async def start_playback(guild_id: str, start_sec: int = 0):
     if cached:
         current_track.url = cached
         play_track(guild_id, start_sec=start_sec)
+        await refresh_music_panel(guild_id)
         return
     if current_track.webpage_url:
         resolved = await extract_tracks(current_track.webpage_url, max_results=1)
@@ -542,6 +460,7 @@ async def start_playback(guild_id: str, start_sec: int = 0):
         except (OSError, ValueError, asyncio.TimeoutError) as exc:
             log.info('Optional audio cache unavailable (%s); using the resolved stream', exc)
     play_track(guild_id, start_sec=start_sec)
+    await refresh_music_panel(guild_id)
 
 
 async def handle_track_finished(guild_id: str, force_next: bool = False):
@@ -591,6 +510,7 @@ async def handle_track_finished(guild_id: str, force_next: bool = False):
         track_started_at.pop(guild_id, None)
         active_sessions.discard(guild_id)
         q.position_ms = 0
+        await refresh_music_panel(guild_id)
 
 
 # --- HTTP Health Server ---
@@ -676,12 +596,220 @@ class SearchPickerView(discord.ui.View):
         self.add_item(SearchPickerSelect(tracks, guild_id, member))
 
 
+# --- Live music panel (owner request 2026-10-18) ---
+
+guild_panels: dict[str, discord.Message] = {}
+
+
+def build_panel_embed(guild_id: str) -> discord.Embed:
+    """Render the live panel from current session state."""
+    q = guild_queues.get(guild_id)
+    guild = bot.get_guild(int(guild_id))
+    vc = guild.voice_client if guild else None
+    if q and q.tracks and q.position < len(q.tracks):
+        curr = q.tracks[q.position]
+        mins, secs = divmod(curr.duration_ms // 1000, 60)
+        playing = "⏸️ Paused" if vc and vc.is_paused() else "▶️ Playing"
+        now = f"🎧 **Now playing:** `{curr.title}` ({mins}:{secs:02d}) — {playing}"
+    else:
+        now = "🎧 Nothing is playing right now."
+    loop = q.loop_mode if q else "off"
+    volume = q.volume if q else 100
+    count = len(q.tracks) if q else 0
+    autoplay = "on" if guild_autoplay.get(guild_id, False) else "off"
+    body = (
+        f"{now}\n"
+        f"🔁 Loop: `{loop}` | 🔊 Volume: `{volume}%` | 📜 Queue: `{count}` | 📻 Autoplay: `{autoplay}`\n"
+        "Buttons and slash commands control the same live session."
+    )
+    return make_ei_embed(body, title="Robin · Music Panel")
+
+
+class MusicPanelView(discord.ui.View):
+    """Persistent controller for the live session (registered once at startup).
+
+    Stable custom ids (`robin_panel:*`) keep the buttons working for the bot's
+    lifetime; every click resolves current state fresh, so a stale panel cannot
+    act on old data and an ended session answers honestly.
+    """
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    async def _authorize(self, interaction: discord.Interaction) -> bool:
+        # Acknowledge first so the 3 s window is safe even when the DJ check
+        # hits the database; the panel refresh (or an ephemeral error) follows.
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+        if not interaction.guild or not interaction.guild.voice_client:
+            await respond(interaction, "❌ No active music session. Use /play to start one.", ephemeral=True)
+            return False
+        if not await check_dj_permission(interaction):
+            await respond(interaction, "❌ You need the DJ/Master role to use the music panel.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Pause / Resume", emoji="⏯️", style=discord.ButtonStyle.primary, custom_id="robin_panel:toggle", row=0)
+    async def toggle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._authorize(interaction):
+            return
+        guild_id = str(interaction.guild_id)
+        vc = interaction.guild.voice_client if interaction.guild else None
+        if vc and vc.is_playing():
+            started = track_started_at.pop(guild_id, None)
+            if started is not None:
+                q = get_or_create_queue(guild_id)
+                q.position_ms = int(max(0.0, time.time() - started) * 1000)
+            vc.pause()
+        elif vc and vc.is_paused():
+            q = get_or_create_queue(guild_id)
+            track_started_at[guild_id] = time.time() - q.position_ms / 1000
+            vc.resume()
+        else:
+            await respond(interaction, "❌ Nothing is currently playing.", ephemeral=True)
+            return
+        await refresh_music_panel(guild_id)
+
+    @discord.ui.button(label="Skip", emoji="⏭️", style=discord.ButtonStyle.secondary, custom_id="robin_panel:skip", row=0)
+    async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._authorize(interaction):
+            return
+        guild_id = str(interaction.guild_id)
+        playback_failure_count[guild_id] = 0
+        next_track = advance_for_skip(guild_id)
+        vc = interaction.guild.voice_client if interaction.guild else None
+        if vc and (vc.is_playing() or vc.is_paused()):
+            playback_generations[guild_id] = playback_generations.get(guild_id, 0) + 1
+            vc.stop()
+        if next_track:
+            await start_playback(guild_id)
+        else:
+            active_sessions.discard(guild_id)
+        await refresh_music_panel(guild_id)
+
+    @discord.ui.button(label="Shuffle", emoji="🔀", style=discord.ButtonStyle.secondary, custom_id="robin_panel:shuffle", row=0)
+    async def shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._authorize(interaction):
+            return
+        guild_id = str(interaction.guild_id)
+        q = get_or_create_queue(guild_id)
+        if len(q.tracks) <= 1:
+            await respond(interaction, "❌ Not enough tracks in queue to shuffle.", ephemeral=True)
+            return
+        q.shuffle()
+        await refresh_music_panel(guild_id)
+
+    @discord.ui.button(label="Loop", emoji="🔁", style=discord.ButtonStyle.secondary, custom_id="robin_panel:loop", row=0)
+    async def loop(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self._authorize(interaction):
+            return
+        guild_id = str(interaction.guild_id)
+        q = get_or_create_queue(guild_id)
+        order = ("off", "track", "queue")
+        q.loop_mode = order[(order.index(q.loop_mode) + 1) % len(order)] if q.loop_mode in order else "off"
+        await refresh_music_panel(guild_id)
+
+    async def _adjust_volume(self, interaction: discord.Interaction, delta: int):
+        if not await self._authorize(interaction):
+            return
+        guild_id = str(interaction.guild_id)
+        q = get_or_create_queue(guild_id)
+        q.volume = max(0, min(150, q.volume + delta))
+        vc = interaction.guild.voice_client if interaction.guild else None
+        apply_live_volume(vc, q.volume)
+        await refresh_music_panel(guild_id)
+
+    @discord.ui.button(label="Volume -10", emoji="🔉", style=discord.ButtonStyle.secondary, custom_id="robin_panel:vol_down", row=1)
+    async def volume_down(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_volume(interaction, -10)
+
+    @discord.ui.button(label="Volume +10", emoji="🔊", style=discord.ButtonStyle.secondary, custom_id="robin_panel:vol_up", row=1)
+    async def volume_up(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._adjust_volume(interaction, 10)
+
+
+async def post_music_panel(channel, guild_id: str):
+    """Post one live panel per session as a regular channel message.
+
+    Regular messages (unlike interaction replies) stay editable for the whole
+    session, which keeps the panel live for hours.
+    """
+    if channel is None or guild_id in guild_panels:
+        return
+    try:
+        guild_panels[guild_id] = await channel.send(embed=build_panel_embed(guild_id), view=MusicPanelView())
+    except Exception as exc:
+        log.warning("Could not post the music panel: %s", exc)
+
+
+async def refresh_music_panel(guild_id: str):
+    message = guild_panels.get(guild_id)
+    if not message:
+        return
+    try:
+        await message.edit(embed=build_panel_embed(guild_id), view=MusicPanelView())
+    except Exception:
+        guild_panels.pop(guild_id, None)
+
+
+async def close_music_panel(guild_id: str):
+    message = guild_panels.pop(guild_id, None)
+    if not message:
+        return
+    try:
+        await message.edit(
+            embed=make_ei_embed("Session ended — the queue was cleared. Use /play to start a new one.", title="Robin · Music Panel"),
+            view=None,
+        )
+    except Exception:
+        pass
+
+
+async def end_music_session(guild_id: str):
+    """Session-scoped queue (owner decision 2026-10-18).
+
+    Leaving voice — /disconnect, /stop, a kick or a lost channel — clears the
+    queue, loop mode, autoplay and the failure counters, and closes the panel,
+    so a new session always starts empty and no stale track can resume.
+    """
+    playback_generations[guild_id] = playback_generations.get(guild_id, 0) + 1
+    playback_failure_count.pop(guild_id, None)
+    active_sessions.discard(guild_id)
+    track_started_at.pop(guild_id, None)
+    guild_autoplay.pop(guild_id, None)
+    guild_queues[guild_id] = QueueState()
+    await close_music_panel(guild_id)
+
+
+def advance_for_skip(guild_id: str) -> Track | None:
+    """Skip helper shared by /skip and the panel: always moves forward even in
+    track-loop mode; wraps to the first track only in queue-loop mode."""
+    q = get_or_create_queue(guild_id)
+    if q.position + 1 < len(q.tracks):
+        q.position += 1
+        q.position_ms = 0
+        return q.tracks[q.position]
+    if q.loop_mode == "queue" and q.tracks:
+        q.position = 0
+        q.position_ms = 0
+        return q.tracks[0]
+    q.position_ms = 0
+    return None
+
+
+def apply_live_volume(vc, percent: int):
+    """Scale the live VoiceClient source volume when a track is playing."""
+    if vc and hasattr(vc, "source") and isinstance(vc.source, discord.PCMVolumeTransformer):
+        vc.source.volume = max(0.0, min(1.5, percent / 100.0))
+
+
 # --- Discord Bot Client ---
 intents = discord.Intents.default()
 intents.guilds = True
 intents.voice_states = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+bot.add_view(MusicPanelView())
 BOT_STARTED_AT = time.monotonic()
 
 
@@ -806,8 +934,7 @@ async def on_ready():
             log.warning("Leaving unapproved guild: %s (%s)", guild.name, guild.id)
             await guild.leave()
             continue
-        if str(guild.id) not in guild_queues:
-            await asyncio.to_thread(restore_guild_queue, str(guild.id))
+
 
     try:
         # Keep Robin's public slash surface aligned with the approved spec.
@@ -833,8 +960,16 @@ async def on_guild_join(guild: discord.Guild):
         log.warning("Auto-leaving unapproved newly joined guild: %s (%s)", guild.name, guild.id)
         await guild.leave()
         return
-    if str(guild.id) not in guild_queues:
-        await asyncio.to_thread(restore_guild_queue, str(guild.id))
+
+
+@bot.event
+async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    # Session-scoped queue (owner decision 2026-10-18): any disconnection -
+    # /disconnect, /stop, a kick or a lost channel - clears the queue and
+    # closes the panel so stale tracks can never resume.
+    if member.id != bot.user.id or after.channel is not None:
+        return
+    await end_music_session(str(member.guild.id))
 
 
 async def respond(interaction: discord.Interaction, message: str, ephemeral: bool = False, title: str = "Ei Point", edit: bool = False, **kwargs):
@@ -939,6 +1074,13 @@ async def cmd_play(interaction: discord.Interaction, link: str):
     if not voice_client.is_playing() and not voice_client.is_paused():
         await start_playback(guild_id)
 
+    # Live panel (owner request 2026-10-18): one panel per session; the first
+    # /play posts it, later plays refresh it.
+    if guild_id not in guild_panels:
+        await post_music_panel(interaction.channel, guild_id)
+    else:
+        await refresh_music_panel(guild_id)
+
     if len(tracks_info) == 1:
         await respond(interaction, f"🎵 **Added to queue** (#{first_position}): `{tracks_info[0]['title']}`", title="Robin · Queue")
     else:
@@ -978,9 +1120,13 @@ async def cmd_pause(interaction: discord.Interaction):
 
     vc = interaction.guild.voice_client if interaction.guild else None
     if vc and vc.is_playing():
-        build_queue_snapshots()
-        track_started_at.pop(str(interaction.guild_id), None)
+        # Freeze the elapsed offset so /resume can restart the clock (session state only).
+        started = track_started_at.pop(str(interaction.guild_id), None)
+        if started is not None:
+            q = get_or_create_queue(str(interaction.guild_id))
+            q.position_ms = int(max(0.0, time.time() - started) * 1000)
         vc.pause()
+        await refresh_music_panel(str(interaction.guild_id))
         await respond(interaction, "⏸️ Playback paused.")
     else:
         await respond(interaction, "❌ Nothing is currently playing.", ephemeral=True)
@@ -997,6 +1143,7 @@ async def cmd_resume(interaction: discord.Interaction):
         q = get_or_create_queue(str(interaction.guild_id))
         track_started_at[str(interaction.guild_id)] = time.time() - q.position_ms / 1000
         vc.resume()
+        await refresh_music_panel(str(interaction.guild_id))
         await respond(interaction, "▶️ Playback resumed.")
     else:
         await respond(interaction, "❌ Playback is not paused.", ephemeral=True)
@@ -1013,20 +1160,9 @@ async def cmd_skip(interaction: discord.Interaction):
 
     guild_id = str(interaction.guild_id)
     playback_failure_count[guild_id] = 0
-    q = get_or_create_queue(guild_id)
-    # /skip must always advance even in track-loop mode (same force_next
-    # logic as handle_track_finished, which repeats the current track).
-    if q.position + 1 < len(q.tracks):
-        q.position += 1
-        q.position_ms = 0
-        next_track = q.tracks[q.position]
-    elif q.loop_mode == "queue" and q.tracks:
-        q.position = 0
-        q.position_ms = 0
-        next_track = q.tracks[0]
-    else:
-        q.position_ms = 0
-        next_track = None
+    # Shared skip logic (also used by the live panel): always advances even in
+    # track-loop mode; wraps to the first track only in queue-loop mode.
+    next_track = advance_for_skip(guild_id)
 
     vc = interaction.guild.voice_client if interaction.guild else None
     if vc and (vc.is_playing() or vc.is_paused()):
@@ -1038,6 +1174,7 @@ async def cmd_skip(interaction: discord.Interaction):
         await respond(interaction, f"⏭️ Skipped to: `{next_track.title}`", title="Robin · Playback")
     else:
         active_sessions.discard(guild_id)
+        await refresh_music_panel(guild_id)
         await respond(interaction, "⏭️ Skipped. Queue is now empty.", title="Robin · Playback")
 
 
@@ -1048,14 +1185,9 @@ async def cmd_stop(interaction: discord.Interaction):
         return
 
     guild_id = str(interaction.guild_id)
-    playback_generations[guild_id] = playback_generations.get(guild_id, 0) + 1
-    playback_failure_count[guild_id] = 0
-    q = get_or_create_queue(guild_id)
-    q.tracks.clear()
-    q.position = 0
-    q.position_ms = 0
-    active_sessions.discard(guild_id)
-    track_started_at.pop(guild_id, None)
+    # Session-scoped queue (owner decision 2026-10-18): /stop ends the session,
+    # so the queue, loop mode and the panel close with it.
+    await end_music_session(guild_id)
 
     vc = interaction.guild.voice_client if interaction.guild else None
     if vc:
@@ -1168,6 +1300,7 @@ async def cmd_shuffle(interaction: discord.Interaction):
         return
 
     q.shuffle()
+    await refresh_music_panel(guild_id)
     await respond(interaction, "🔀 Queue shuffled (current song preserved).")
 
 
@@ -1187,6 +1320,7 @@ async def cmd_loop(interaction: discord.Interaction, mode: app_commands.Choice[s
     guild_id = str(interaction.guild_id)
     q = get_or_create_queue(guild_id)
     q.loop_mode = mode.value
+    await refresh_music_panel(guild_id)
     await respond(interaction, f"🔁 Loop mode set to: `{mode.name}`")
 
 
@@ -1207,8 +1341,8 @@ async def cmd_volume(interaction: discord.Interaction, percent: int):
 
     # Dynamically scale active VoiceClient source volume if playing
     vc = interaction.guild.voice_client if interaction.guild else None
-    if vc and hasattr(vc, "source") and isinstance(vc.source, discord.PCMVolumeTransformer):
-        vc.source.volume = percent / 100.0
+    apply_live_volume(vc, percent)
+    await refresh_music_panel(guild_id)
 
     await respond(interaction, f"🔊 Volume set to **{percent}%**.")
 
@@ -1295,10 +1429,9 @@ async def cmd_disconnect(interaction: discord.Interaction):
         return
 
     guild_id = str(interaction.guild_id)
-    playback_generations[guild_id] = playback_generations.get(guild_id, 0) + 1
-    playback_failure_count[guild_id] = 0
-    active_sessions.discard(guild_id)
-    track_started_at.pop(guild_id, None)
+    # Session-scoped queue (owner decision 2026-10-18): leaving voice clears the
+    # queue and closes the panel so the next session starts empty.
+    await end_music_session(guild_id)
 
     vc = interaction.guild.voice_client if interaction.guild else None
     if vc:
@@ -1327,10 +1460,7 @@ async def periodic_tasks():
                     authorized = False
                 if not authorized:
                     await voice_client.disconnect(force=True)
-            # 1. Flush snapshots to PostgreSQL every 15s (build snapshots on event loop thread first)
-            snapshots = build_queue_snapshots()
-            await asyncio.to_thread(flush_snapshots_sync, snapshots)
-            # 2. Update service status
+            # Update service status
             ping = bot.latency * 1000 if bot.latency else 0.0
             await asyncio.to_thread(update_service_status_sync, ping)
         except Exception as exc:
@@ -1403,8 +1533,6 @@ def main():
         log.info("KeyboardInterrupt received.")
     finally:
         is_stopping = True
-        log.info("Flushing final state snapshot to database...")
-        flush_snapshots_sync()
         if db_conn and not db_conn.closed:
             try:
                 db_conn.close()

@@ -1,7 +1,7 @@
-"""Queue state: pure in-memory model with snapshot serialization.
+"""Queue state: pure in-memory model for the live voice session.
 
-Playback position snapshots persist every 15 s (music.queue_snapshots); a reboot
-restores the queue but Discord voice continuity is best-effort (plan section 4).
+Owner decision 2026-10-18: the queue is session-scoped - leaving voice clears
+it and nothing is restored across restarts; state lives only in memory.
 No discord.py imports here — keep this module dependency-free and unit-tested.
 """
 from __future__ import annotations
@@ -68,42 +68,3 @@ class QueueState:
             self.position_ms = 0
             return self.tracks[0]
         return None
-
-    def snapshot(self) -> dict:
-        return {
-            "queue": [
-                {
-                    "track_id": t.track_id,
-                    "title": t.title,
-                    "duration_ms": t.duration_ms,
-                    "url": getattr(t, "url", ""),
-                    "webpage_url": getattr(t, "webpage_url", ""),
-                }
-                for t in self.tracks
-            ],
-            "position": self.position,
-            "position_ms": self.position_ms,
-            "loop_mode": self.loop_mode,
-            "volume": self.volume,
-        }
-
-    @classmethod
-    def restore(cls, data: dict) -> "QueueState":
-        tracks = [
-            Track(
-                track_id=t["track_id"],
-                title=t["title"],
-                duration_ms=t.get("duration_ms", 0),
-                url=t.get("url", ""),
-                webpage_url=t.get("webpage_url", ""),
-            )
-            for t in data.get("queue", [])
-        ]
-        q = cls(tracks=tracks)
-        q.position = min(int(data.get("position", 0)), max(0, len(tracks) - 1)) if tracks else 0
-        q.position_ms = max(0, int(data.get("position_ms", 0)))
-        if data.get("loop_mode") in ("off", "track", "queue"):
-            q.loop_mode = data["loop_mode"]
-        volume = int(data.get("volume", 100))
-        q.volume = max(0, min(150, volume))
-        return q

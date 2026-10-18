@@ -107,7 +107,7 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 
 - Resolve media using yt-dlp and stream through FFmpeg; bound metadata-resolution concurrency and voice sessions.
 - Advance queues, maintain playback state, and support track/queue loop modes. Search/nowplaying/seek/autoplay/DJ administration commands are removed from public sync.
-- Persist queue snapshots and playback position in PostgreSQL and restore saved queue state after restart.
+- Keep the queue session-scoped (owner decision 2026-10-18): leaving voice clears it and nothing is restored across restarts. The live music panel puts DJ-gated pause/resume, skip, shuffle, loop and volume controls on one message per session.
 - Maintain a size/TTL-bounded local audio cache and expose health/readiness status.
 
 ## Cipher
