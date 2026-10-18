@@ -1,0 +1,401 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-15",
+  "timezone": "Asia/Riyadh",
+  "sourceRevision": "9864875817d7eeae3467cf66d7d1cce31fe06828",
+  "sourceState": "existing documentation changes; audit added documentation only",
+  "environment": {
+    "os": "Windows",
+    "node": "24.8.0",
+    "pnpm": "9.12.0",
+    "python": "3.14.7",
+    "dockerAvailable": false,
+    "browser": "Edge via Playwright; local production server on 127.0.0.1:3310"
+  },
+  "score": 615,
+  "maximum": 1000,
+  "scoreMeaning": "Engineering readiness judgment against requirements and evidence; not line coverage or failure probability",
+  "phases": [
+    {
+      "phase": 1,
+      "name": "Inventory and feature mapping",
+      "dimensions": {
+        "coverage": 18,
+        "correctness": 14,
+        "recovery": 10,
+        "operations": 3,
+        "evidence": 7
+      },
+      "score": 52,
+      "maximum": 100,
+      "complete": false
+    },
+    {
+      "phase": 2,
+      "name": "Foundation, builds and local database",
+      "dimensions": {
+        "coverage": 26,
+        "correctness": 22,
+        "recovery": 11,
+        "operations": 3,
+        "evidence": 8
+      },
+      "score": 70,
+      "maximum": 100,
+      "complete": false
+    },
+    {
+      "phase": 3,
+      "name": "Shared runtime and dispatch",
+      "dimensions": {
+        "coverage": 20,
+        "correctness": 17,
+        "recovery": 12,
+        "operations": 5,
+        "evidence": 8
+      },
+      "score": 62,
+      "maximum": 100,
+      "complete": false
+    },
+    {
+      "phase": 4,
+      "name": "Dashboard and public website",
+      "dimensions": {
+        "coverage": 26,
+        "correctness": 20,
+        "recovery": 13,
+        "operations": 4,
+        "evidence": 7
+      },
+      "score": 70,
+      "maximum": 100,
+      "complete": false
+    },
+    {
+      "phase": 5,
+      "name": "Security and moderation",
+      "dimensions": {
+        "coverage": 25,
+        "correctness": 16,
+        "recovery": 11,
+        "operations": 4,
+        "evidence": 7
+      },
+      "score": 63,
+      "maximum": 100,
+      "complete": false
+    },
+    {
+      "phase": 6,
+      "name": "Community, cards and economy",
+      "dimensions": {
+        "coverage": 25,
+        "correctness": 20,
+        "recovery": 16,
+        "operations": 5,
+        "evidence": 8
+      },
+      "score": 74,
+      "maximum": 100,
+      "complete": false
+    },
+    {
+      "phase": 7,
+      "name": "Commerce, referrals and membership",
+      "dimensions": {
+        "coverage": 19,
+        "correctness": 18,
+        "recovery": 11,
+        "operations": 4,
+        "evidence": 7
+      },
+      "score": 59,
+      "maximum": 100,
+      "complete": false
+    },
+    {
+      "phase": 8,
+      "name": "AI, persistent memory, music and voice",
+      "dimensions": {
+        "coverage": 22,
+        "correctness": 17,
+        "recovery": 12,
+        "operations": 3,
+        "evidence": 7
+      },
+      "score": 61,
+      "maximum": 100,
+      "complete": false
+    },
+    {
+      "phase": 9,
+      "name": "Deployment operations and recovery",
+      "dimensions": {
+        "coverage": 23,
+        "correctness": 18,
+        "recovery": 14,
+        "operations": 3,
+        "evidence": 6
+      },
+      "score": 64,
+      "maximum": 100,
+      "complete": false
+    },
+    {
+      "phase": 10,
+      "name": "Staging and launch qualification",
+      "dimensions": {
+        "coverage": 14,
+        "correctness": 10,
+        "recovery": 8,
+        "operations": 2,
+        "evidence": 6
+      },
+      "score": 40,
+      "maximum": 100,
+      "complete": false
+    }
+  ],
+  "automatedTests": {
+    "passed": 285,
+    "failed": 0,
+    "skipped": 0,
+    "repeatRunsExcluded": true
+  },
+  "browserSuites": {
+    "passed": 4,
+    "total": 4,
+    "initialHarnessFailures": "Two stale public-page selectors corrected in audit copy; initial logs retained locally"
+  },
+  "featureCoverage": {
+    "rows": 179,
+    "decisionRequired": 114,
+    "implementedUnverified": 65,
+    "verified": 0,
+    "issues": 228,
+    "exitCode": 1
+  },
+  "checks": [
+    {
+      "command": "pnpm test",
+      "log": "tmp/audit-2026-10-15-1000/node-tests-pinned.log",
+      "sha256": "eca7ed0f96f299e92c8f6373b97590b5c08e391f906296e899f395c9947b9e6e",
+      "exitCode": 0,
+      "kind": "automated-tests",
+      "passed": 240
+    },
+    {
+      "command": "node --test tests/feature-coverage.test.mjs",
+      "log": "tmp/audit-2026-10-15-1000/coverage-tests.log",
+      "sha256": "bb68dd3e336acd922bc33a4e4a06bc8aeb6c4af87b0d3bbdba5e3e4014f29103",
+      "exitCode": 0,
+      "kind": "automated-tests",
+      "passed": 12
+    },
+    {
+      "command": "python -m unittest discover -s tests -v",
+      "log": "tmp/audit-2026-10-15-1000/python-music.log",
+      "sha256": "21dcc4325025ed63a4983bccacf7ebaf2b6a41acde23334c5bfded52c04cf874",
+      "exitCode": 0,
+      "kind": "automated-tests",
+      "cwd": "apps/bots/music-py",
+      "passed": 20
+    },
+    {
+      "command": "python -m unittest discover -s tests -v",
+      "log": "tmp/audit-2026-10-15-1000/python-qwen.log",
+      "sha256": "d2ab35e1c2d9e3a57e3c7acc991b7e10eda44a4380641d53ff02b8d5b13bfee8",
+      "exitCode": 0,
+      "kind": "automated-tests",
+      "cwd": "apps/services/qwen-tts",
+      "passed": 13
+    },
+    {
+      "command": "pnpm typecheck",
+      "log": "tmp/audit-2026-10-15-1000/typecheck.log",
+      "sha256": "f660a95825872551e20d97e3216c7559bb9c475854d8bf306fdf62858b2681f6",
+      "exitCode": 0,
+      "kind": "validation"
+    },
+    {
+      "command": "pnpm build",
+      "log": "tmp/audit-2026-10-15-1000/build.log",
+      "sha256": "c80a917157c77e7e2a077d48dc3311ef6d069d141d1f44c8ff5a86e7faefe2f9",
+      "exitCode": 0,
+      "kind": "validation"
+    },
+    {
+      "command": "pnpm lint",
+      "log": "tmp/audit-2026-10-15-1000/lint.log",
+      "sha256": "8c6d809602c2b6073655b8e9e487276a763d50d620e91f3e5f224c94f0d17e95",
+      "exitCode": 0,
+      "kind": "validation"
+    },
+    {
+      "command": "pnpm audit --prod --json",
+      "log": "tmp/audit-2026-10-15-1000/dependencies.json",
+      "sha256": "ad42a95851d25523d03916eebf5e663d67a4a5e080da6a0489eb8fa152d3576b",
+      "exitCode": 0,
+      "kind": "validation"
+    },
+    {
+      "command": "node scripts/check-feature-coverage.mjs",
+      "log": "tmp/audit-2026-10-15-1000/coverage-gate.log",
+      "sha256": "7caf6a916e6eb82963fddf4da895d279aef871e45f86a4f66117f9e2b33ff998",
+      "exitCode": 1,
+      "kind": "required-gate",
+      "status": "failed",
+      "issues": 228,
+      "rows": 179
+    },
+    {
+      "command": "bash -n <each tracked shell entrypoint>",
+      "log": "tmp/audit-2026-10-15-1000/bash-syntax.json",
+      "sha256": "cb8e38089fecc1c80dccaae2ed544a6e3f35727d86c92c0594f59effded02620",
+      "exitCode": 0,
+      "kind": "syntax",
+      "files": 10
+    },
+    {
+      "command": "node tmp/audit-2026-10-15-1000/workspace-controls-qa.cjs",
+      "log": "tmp/audit-2026-10-15-1000/browser-controls.log",
+      "sha256": "8f50e289c4158a10203c9b822a465c0a0ad87e2a1cc83b7898a8cbf9137f6e00",
+      "exitCode": 0,
+      "kind": "browser-suite",
+      "apiBoundary": "mocked control/payment APIs; local production Next server"
+    },
+    {
+      "command": "node tmp/audit-2026-10-15-1000/checkout-qa.cjs",
+      "log": "tmp/audit-2026-10-15-1000/browser-checkout.log",
+      "sha256": "dc3d5db52f3c384145e792a53a17fc1141f6fe7d3590857110c276c87099aa02",
+      "exitCode": 0,
+      "kind": "browser-suite",
+      "apiBoundary": "mocked control/payment APIs; local production Next server"
+    },
+    {
+      "command": "node tmp/audit-2026-10-15-1000/commerce-guild-qa.cjs",
+      "log": "tmp/audit-2026-10-15-1000/browser-guild.log",
+      "sha256": "6cec7c0f6fd2d07c883d808bf23bcf585b32c3f4f24fce4e3aee661c282d41a1",
+      "exitCode": 0,
+      "kind": "browser-suite",
+      "apiBoundary": "mocked control/payment APIs; local production Next server"
+    },
+    {
+      "command": "node tmp/audit-2026-10-15-1000/public-kafka-qa.cjs",
+      "log": "tmp/audit-2026-10-15-1000/browser-public.log",
+      "sha256": "d4944c60d19026ea5819d10f8276553e64e0be84a25079aebc355d5de5336b48",
+      "exitCode": 0,
+      "kind": "browser-suite",
+      "apiBoundary": "mocked control/payment APIs; local production Next server"
+    },
+    {
+      "command": "node tmp/audit-2026-10-15-1000/release-probe.mjs",
+      "log": "tmp/audit-2026-10-15-1000/release-probe.log",
+      "sha256": "7897c521d8f4b5e64e90eaf4181e5b0de38d5ea9921338f334caa4990a086223",
+      "exitCode": 0,
+      "kind": "defect-reproduction",
+      "finding": "A03",
+      "meaning": "exit zero confirms defect reproduced, not product correctness"
+    },
+    {
+      "command": "node tmp/audit-2026-10-15-1000/expiry-probe.mjs",
+      "log": "tmp/audit-2026-10-15-1000/expiry-probe.log",
+      "sha256": "1a4326425fef46176732358cde4a80cdb0c4edb06c9acdcfbb6b9a9bc8a82ee6",
+      "exitCode": 0,
+      "kind": "defect-reproduction",
+      "finding": "A05",
+      "meaning": "exit zero confirms defect reproduced, not product correctness"
+    },
+    {
+      "command": "python tmp/audit-2026-10-15-1000/qwen-probe.py",
+      "log": "tmp/audit-2026-10-15-1000/qwen-probe.log",
+      "sha256": "a4e42d8a3839ce3e4631b10e5c98511c523dc3cb7d1b78f32aad07e9c712d5e4",
+      "exitCode": 0,
+      "kind": "defect-reproduction",
+      "finding": "A09",
+      "meaning": "exit zero confirms defect reproduced, not product correctness"
+    }
+  ],
+  "inventory": {
+    "includedFiles": 637,
+    "sourceFiles": 409,
+    "commands": 115,
+    "events": 58,
+    "routes": 6,
+    "exactNameCandidates": 76,
+    "withoutExactNameCandidates": 39,
+    "log": "tmp/audit-2026-10-15-1000/fresh-inventory.json",
+    "sha256": "640c0f82c3f23353b8ca76954b6c307f3d983d74007c40e6f7f74643fcbe0437",
+    "archives": [
+      {
+        "archive": "Ei Paradise.zip",
+        "archive_bytes": 17660821,
+        "archive_sha256": "62dcf862c61ec2008b70d702097519cd11d88729f6109df6511674ca33d1265c",
+        "counts": {
+          "included_files": 69,
+          "source_files": 34,
+          "command_symbols": 12,
+          "capability_symbols": 39,
+          "capability_kind_counts": {
+            "event": 21,
+            "route": 6,
+            "slash-command": 9,
+            "subcommand": 3
+          },
+          "symbols_with_exact_name_candidates": 10,
+          "symbols_without_exact_name_candidates": 2
+        }
+      },
+      {
+        "archive": "EI-point.zip",
+        "archive_bytes": 404552570,
+        "archive_sha256": "c5dadd64aaa82351d3a759510948cbc0c2ecc7155fdeefbc27894765047c58ad",
+        "counts": {
+          "included_files": 531,
+          "source_files": 350,
+          "command_symbols": 85,
+          "capability_symbols": 118,
+          "capability_kind_counts": {
+            "event": 33,
+            "slash-command": 51,
+            "subcommand": 34
+          },
+          "symbols_with_exact_name_candidates": 50,
+          "symbols_without_exact_name_candidates": 35
+        }
+      },
+      {
+        "archive": "swish.zip",
+        "archive_bytes": 20581481,
+        "archive_sha256": "f7a737622fef2915cae116aba271acd7e7cf39e18b5c77f833e9ffdc185538da",
+        "counts": {
+          "included_files": 37,
+          "source_files": 25,
+          "command_symbols": 18,
+          "capability_symbols": 22,
+          "capability_kind_counts": {
+            "event": 4,
+            "slash-command": 18
+          },
+          "symbols_with_exact_name_candidates": 16,
+          "symbols_without_exact_name_candidates": 2
+        }
+      }
+    ]
+  },
+  "parserSelfTest": {
+    "command": "node scripts/inventory-archives.mjs --self-test",
+    "passedAssertions": 8,
+    "note": "Observed tool output; separate from 285 tests"
+  },
+  "boundaries": [
+    "No production-code repairs or deployment in this audit",
+    "No live VPS, Docker image execution, Discord or OAuth acceptance",
+    "No actual model inference quality/performance; Qwen unit runtime is fake",
+    "No payment sandbox or real provider settlement acceptance",
+    "No live logical/PITR/off-host restore or 72-hour soak",
+    "npm advisory scan excludes Python/container/OS/application-logic risks",
+    "Raw logs and browser harnesses are ignored local evidence; hashes do not make them portable test assets"
+  ]
+}
