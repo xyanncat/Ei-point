@@ -815,6 +815,14 @@ async def on_ready():
             bot.tree.remove_command(removed)
         synced = await bot.tree.sync()
         log.info("Synced %d slash commands globally.", len(synced))
+        # Guild-scoped overrides from earlier development syncs shadow the
+        # published global surface (duplicate picker entries and stale
+        # signatures fail with CommandSignatureMismatch/CommandNotFound);
+        # clear them so only the approved global set remains.
+        for guild in bot.guilds:
+            bot.tree.clear_commands(guild=guild)
+            await bot.tree.sync(guild=guild)
+        log.info("Cleared guild-scoped command overrides for %d guilds.", len(bot.guilds))
     except Exception as exc:
         log.error("Failed to sync slash commands: %s", exc)
 
