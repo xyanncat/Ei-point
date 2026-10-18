@@ -322,3 +322,49 @@ test("workspace states: bot table, orders drawer, search shortcut, guild switch,
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("permission gates: admin-only destinations stay locked and unlisted for non-admins", async ({
+  page,
+}) => {
+  const errors = trackPageErrors(page);
+  const member = {
+    user: { id: "qa-member", name: "QA member" },
+    isAdmin: false,
+    expiresAt: new Date(Date.now() + 3600000).toISOString(),
+  };
+  const guild = { guildId: "111111111111111111", name: "QA guild", approved: true, scopes: ["read"] };
+  await page.route("**/api/auth/me", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(member) }),
+  );
+  await page.route("**/api/guilds", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ guilds: [guild] }) }),
+  );
+  await page.route("**/api/overview?*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ guild, cards: [], stale: false, fetchedAt: new Date().toISOString(), incidents: [], actions: [] }),
+    }),
+  );
+
+  await page.goto("/dashboard");
+  // System is not offered in navigation for non-admins…
+  expect(await page.getByRole("link", { name: "System", exact: true }).count()).toBe(0);
+  // …and direct URLs stay locked by the pages themselves (APIs remain the
+  // real authorization boundary).
+  await page.goto("/dashboard/system");
+  await expect(page.getByRole("heading", { name: "Owner/admin only" })).toBeVisible();
+  await page.goto("/dashboard/system/vault");
+  await expect(page.getByRole("heading", { name: "Owner/admin only" })).toBeVisible();
+  await page.goto("/dashboard/system/backups");
+  await expect(page.getByRole("heading", { name: "Owner/admin only" })).toBeVisible();
+  await page.goto("/dashboard/settings/staff");
+  await expect(page.getByRole("heading", { name: "Owner/admin only" })).toBeVisible();
+  // The Staff access tab is not offered in Settings either.
+  await page.goto("/dashboard/settings");
+  expect(await page.getByRole("link", { name: "Staff access", exact: true }).count()).toBe(0);
+  // Ordinary sections remain available.
+  await page.goto("/dashboard/commerce");
+  await expect(page.getByRole("heading", { name: "Orders", exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});

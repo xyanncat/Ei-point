@@ -95,7 +95,7 @@ export function CommerceOrders({
 
   if (!read) {
     return (
-      <Panel title="Orders" detail="Your staff role does not include commerce orders.">
+      <Panel title="Orders unavailable" detail="Your staff role does not include commerce orders.">
         <Empty title="No access" detail="Payment proofs and settlement stay with commerce staff." />
       </Panel>
     );

@@ -6,6 +6,8 @@ import type { IconName } from "../icons";
 export interface SectionTab {
   href: string;
   label: string;
+  /** Admin-only tabs stay hidden from navigation for other staff. */
+  admin?: boolean;
 }
 
 export interface SectionDef {
@@ -78,7 +80,7 @@ export const SECTIONS: SectionDef[] = [
       { href: "/dashboard/settings", label: "Server" },
       { href: "/dashboard/settings/notifications", label: "Notifications" },
       { href: "/dashboard/settings/modules", label: "Modules" },
-      { href: "/dashboard/settings/staff", label: "Staff access" },
+      { href: "/dashboard/settings/staff", label: "Staff access", admin: true },
     ],
   },
   {
@@ -88,10 +90,10 @@ export const SECTIONS: SectionDef[] = [
     admin: true,
     group: "Owner · admin",
     tabs: [
-      { href: "/dashboard/system", label: "Guilds" },
-      { href: "/dashboard/system/integrations", label: "Integrations" },
-      { href: "/dashboard/system/vault", label: "Secret vault" },
-      { href: "/dashboard/system/backups", label: "Backups" },
+      { href: "/dashboard/system", label: "Guilds", admin: true },
+      { href: "/dashboard/system/integrations", label: "Integrations", admin: true },
+      { href: "/dashboard/system/vault", label: "Secret vault", admin: true },
+      { href: "/dashboard/system/backups", label: "Backups", admin: true },
     ],
   },
 ];
