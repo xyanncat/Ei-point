@@ -28,18 +28,27 @@ APPROVED_ROOTS = {
     "botinfo",
     "about",
     "play",
-    "pause",
-    "resume",
-    "skip",
-    "stop",
     "queue",
-    "shuffle",
-    "loop",
-    "volume",
+    "stop",
     "disconnect",
 }
 
-REMOVED_ROOTS = {"search", "nowplaying", "seek", "autoplay", "claimmaster", "masters"}
+# Retired from public sync: the six legacy names plus the six playback controls
+# that now live on the live music panel's buttons (owner decision 2026-10-18).
+REMOVED_ROOTS = {
+    "search",
+    "nowplaying",
+    "seek",
+    "autoplay",
+    "claimmaster",
+    "masters",
+    "pause",
+    "resume",
+    "skip",
+    "shuffle",
+    "loop",
+    "volume",
+}
 
 # discord.py interaction delivery methods that must never appear raw.
 REPLY_ATTRS = {"send", "send_message", "edit_message", "edit_original_response"}

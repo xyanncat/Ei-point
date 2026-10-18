@@ -9,6 +9,26 @@ const DEFAULT_IMAGE =
   "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif";
 const BRAND = 0x8f2938;
 
+/** Per-identity character themes (owner request 2026-10-18), grounded in each
+ *  bot's own artwork in `project assets/bots/<Bot>/embed.png`. */
+export const IDENTITY_THEMES = {
+  kafka: { color: 0xe0202f, emoji: "🕷️", name: "Kafka" },
+  cyrene: { color: 0xce86e0, emoji: "🌸", name: "Cyrene" },
+  robin: { color: 0x9078d8, emoji: "🕊️", name: "Robin" },
+  cipher: { color: 0x2e5fd0, emoji: "🐱", name: "Cipher" },
+  silverwolf: { color: 0x9152e0, emoji: "🐺", name: "Silver Wolf" },
+  himiko: { color: 0xb0304c, emoji: "🌹", name: "Himiko" },
+} as const;
+
+export type IdentityTheme = { color: number; emoji: string; name: string };
+
+/** Resolve the character theme for an identity key (blank/unknown -> undefined). */
+export function identityTheme(imageKey?: string): IdentityTheme | undefined {
+  const key = imageKey?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (!key) return undefined;
+  return (IDENTITY_THEMES as Record<string, IdentityTheme>)[key];
+}
+
 export interface EmbedReplyOptions {
   title: string;
   description: string;
@@ -32,12 +52,13 @@ export function resolveEmbedImage(imageKey?: string): string {
 
 export function createEiEmbed(options: EmbedReplyOptions): EmbedBuilder {
   const imageUrl = options.imageUrl ?? resolveEmbedImage(options.imageKey);
+  const theme = identityTheme(options.imageKey);
   const embed = new EmbedBuilder()
-    .setColor(options.color ?? BRAND)
+    .setColor(options.color ?? theme?.color ?? BRAND)
     .setTitle(options.title.slice(0, 256))
     .setDescription(options.description.slice(0, 4096))
     .setImage(imageUrl)
-    .setFooter({ text: "Ei Point · powered by Ei-Flow" })
+    .setFooter({ text: theme ? `${theme.emoji} ${theme.name} · Ei Point · powered by Ei-Flow` : "Ei Point · powered by Ei-Flow" })
     .setTimestamp();
   if (options.fields?.length) {
     embed.addFields(options.fields.slice(0, 25).map((field) => ({
@@ -142,7 +163,7 @@ function payloadWithEiEmbed(input: unknown, imageKey?: string): unknown {
       });
       return { ...value, embeds };
     }
-    return { ...value, embeds: [createEiEmbed({ title: "Ei Point", description: "No additional details.", imageUrl })] };
+    return { ...value, embeds: [createEiEmbed({ title: "Ei Point", description: "No additional details.", imageUrl, ...(imageKey ? { imageKey } : {}) })] };
   }
   const existingEmbeds = Array.isArray(value.embeds) ? value.embeds : [];
   const hasExistingEmbed = existingEmbeds.length > 0;
@@ -150,13 +171,13 @@ function payloadWithEiEmbed(input: unknown, imageKey?: string): unknown {
     const [first, ...restEmbeds] = existingEmbeds;
     const branded = first && typeof first === "object"
       ? EmbedBuilder.from(first as never).setImage(imageUrl)
-      : createEiEmbed({ title: "Ei Point", description: value.content, imageUrl });
+      : createEiEmbed({ title: "Ei Point", description: value.content, imageUrl, ...(imageKey ? { imageKey } : {}) });
     const data = branded.toJSON();
     if (!data.description && value.content) branded.setDescription(String(value.content).slice(0, 4096));
     const { content: _content, ...rest } = value;
     const brandedEmbeds = [branded.toJSON(), ...restEmbeds];
     if (data.description && value.content) {
-      brandedEmbeds.push(createEiEmbed({ title: "Ei Point", description: String(value.content), imageUrl }).toJSON());
+      brandedEmbeds.push(createEiEmbed({ title: "Ei Point", description: String(value.content), imageUrl, ...(imageKey ? { imageKey } : {}) }).toJSON());
     }
     return {
       ...rest,
@@ -167,7 +188,7 @@ function payloadWithEiEmbed(input: unknown, imageKey?: string): unknown {
   const { content: _content, ...rest } = value;
   return {
     ...rest,
-    embeds: [createEiEmbed({ title: "Ei Point", description: value.content, imageUrl })],
+    embeds: [createEiEmbed({ title: "Ei Point", description: value.content, imageUrl, ...(imageKey ? { imageKey } : {}) })],
     allowedMentions: value.allowedMentions ?? { parse: [] },
   };
 }

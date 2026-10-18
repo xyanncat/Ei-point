@@ -601,40 +601,82 @@ class SearchPickerView(discord.ui.View):
 guild_panels: dict[str, discord.Message] = {}
 
 
-def build_panel_embed(guild_id: str) -> discord.Embed:
-    """Render the live panel from current session state."""
+# Robin's palette and emblem come from her own artwork (project assets/bots/Robin/embed.png).
+ROBIN_PANEL_COLOR = 0x9078D8
+ROBIN_EMBLEM = "🕊️"
+
+
+def panel_image_url() -> str:
+    return (
+        os.getenv("EI_POINT_EMBED_IMAGE_ROBIN")
+        or os.getenv("EI_POINT_EMBED_IMAGE_URL")
+        or "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif"
+    ).strip()
+
+
+def panel_text(guild_id: str) -> str:
+    """Render the live panel text from current session state."""
     q = guild_queues.get(guild_id)
     guild = bot.get_guild(int(guild_id))
     vc = guild.voice_client if guild else None
     if q and q.tracks and q.position < len(q.tracks):
         curr = q.tracks[q.position]
         mins, secs = divmod(curr.duration_ms // 1000, 60)
-        playing = "⏸️ Paused" if vc and vc.is_paused() else "▶️ Playing"
-        now = f"🎧 **Now playing:** `{curr.title}` ({mins}:{secs:02d}) — {playing}"
+        state = "⏸️ Paused" if vc and vc.is_paused() else "▶️ Playing"
+        now = f"🎧 **Now playing** `{curr.title}` — `{mins}:{secs:02d}` · {state}"
     else:
-        now = "🎧 Nothing is playing right now."
+        now = "🎧 *Nothing is playing — add a song with* `/play`"
     loop = q.loop_mode if q else "off"
     volume = q.volume if q else 100
     count = len(q.tracks) if q else 0
     autoplay = "on" if guild_autoplay.get(guild_id, False) else "off"
-    body = (
+    return (
+        f"### {ROBIN_EMBLEM} Robin · Live Session\n"
         f"{now}\n"
-        f"🔁 Loop: `{loop}` | 🔊 Volume: `{volume}%` | 📜 Queue: `{count}` | 📻 Autoplay: `{autoplay}`\n"
-        "Buttons and slash commands control the same live session."
+        f"-# 🔁 loop `{loop}` · 🔊 volume `{volume}%` · 📜 queue `{count}` · 📻 autoplay `{autoplay}`"
     )
-    return make_ei_embed(body, title="Robin · Music Panel")
 
 
-class MusicPanelView(discord.ui.View):
-    """Persistent controller for the live session (registered once at startup).
+class MusicPanelView(discord.ui.LayoutView):
+    """Live session panel as one components-v2 block (owner request 2026-10-18).
 
-    Stable custom ids (`robin_panel:*`) keep the buttons working for the bot's
-    lifetime; every click resolves current state fresh, so a stale panel cannot
-    act on old data and an ended session answers honestly.
+    The six DJ/Master controls sit inside the panel container itself, under the
+    session text and the character artwork. Stable `robin_panel:*` ids plus a
+    persistent registration keep the buttons working for the bot's lifetime;
+    every click resolves current state fresh, so a stale panel cannot act on
+    old data and an ended session answers honestly.
     """
 
-    def __init__(self):
+    def __init__(self, guild_id: str | None = None):
         super().__init__(timeout=None)
+        self.guild_id = guild_id
+        container = discord.ui.Container(accent_colour=ROBIN_PANEL_COLOR)
+        if guild_id is not None:
+            container.add_item(discord.ui.TextDisplay(panel_text(guild_id)))
+            image = panel_image_url()
+            if image:
+                container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(image)))
+        main_row = discord.ui.ActionRow()
+        for custom_id, label, emoji, style, handler in (
+            ("robin_panel:toggle", "Pause / Resume", "⏯️", discord.ButtonStyle.primary, self._on_toggle),
+            ("robin_panel:skip", "Skip", "⏭️", discord.ButtonStyle.secondary, self._on_skip),
+            ("robin_panel:shuffle", "Shuffle", "🔀", discord.ButtonStyle.secondary, self._on_shuffle),
+            ("robin_panel:loop", "Loop", "🔁", discord.ButtonStyle.secondary, self._on_loop),
+        ):
+            button = discord.ui.Button(style=style, label=label, emoji=emoji, custom_id=custom_id)
+            button.callback = handler
+            main_row.add_item(button)
+        container.add_item(main_row)
+        volume_row = discord.ui.ActionRow()
+        for custom_id, label, emoji, delta in (
+            ("robin_panel:vol_down", "Volume -10", "🔉", -10),
+            ("robin_panel:vol_up", "Volume +10", "🔊", 10),
+        ):
+            button = discord.ui.Button(style=discord.ButtonStyle.secondary, label=label, emoji=emoji, custom_id=custom_id)
+            button.callback = (lambda interaction, delta=delta: self._adjust_volume(interaction, delta))
+            volume_row.add_item(button)
+        container.add_item(volume_row)
+        self.add_item(container)
 
     async def _authorize(self, interaction: discord.Interaction) -> bool:
         # Acknowledge first so the 3 s window is safe even when the DJ check
@@ -649,8 +691,7 @@ class MusicPanelView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="Pause / Resume", emoji="⏯️", style=discord.ButtonStyle.primary, custom_id="robin_panel:toggle", row=0)
-    async def toggle(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def _on_toggle(self, interaction: discord.Interaction):
         if not await self._authorize(interaction):
             return
         guild_id = str(interaction.guild_id)
@@ -670,8 +711,7 @@ class MusicPanelView(discord.ui.View):
             return
         await refresh_music_panel(guild_id)
 
-    @discord.ui.button(label="Skip", emoji="⏭️", style=discord.ButtonStyle.secondary, custom_id="robin_panel:skip", row=0)
-    async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def _on_skip(self, interaction: discord.Interaction):
         if not await self._authorize(interaction):
             return
         guild_id = str(interaction.guild_id)
@@ -687,8 +727,7 @@ class MusicPanelView(discord.ui.View):
             active_sessions.discard(guild_id)
         await refresh_music_panel(guild_id)
 
-    @discord.ui.button(label="Shuffle", emoji="🔀", style=discord.ButtonStyle.secondary, custom_id="robin_panel:shuffle", row=0)
-    async def shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def _on_shuffle(self, interaction: discord.Interaction):
         if not await self._authorize(interaction):
             return
         guild_id = str(interaction.guild_id)
@@ -699,8 +738,7 @@ class MusicPanelView(discord.ui.View):
         q.shuffle()
         await refresh_music_panel(guild_id)
 
-    @discord.ui.button(label="Loop", emoji="🔁", style=discord.ButtonStyle.secondary, custom_id="robin_panel:loop", row=0)
-    async def loop(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def _on_loop(self, interaction: discord.Interaction):
         if not await self._authorize(interaction):
             return
         guild_id = str(interaction.guild_id)
@@ -719,25 +757,18 @@ class MusicPanelView(discord.ui.View):
         apply_live_volume(vc, q.volume)
         await refresh_music_panel(guild_id)
 
-    @discord.ui.button(label="Volume -10", emoji="🔉", style=discord.ButtonStyle.secondary, custom_id="robin_panel:vol_down", row=1)
-    async def volume_down(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._adjust_volume(interaction, -10)
-
-    @discord.ui.button(label="Volume +10", emoji="🔊", style=discord.ButtonStyle.secondary, custom_id="robin_panel:vol_up", row=1)
-    async def volume_up(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._adjust_volume(interaction, 10)
-
 
 async def post_music_panel(channel, guild_id: str):
-    """Post one live panel per session as a regular channel message.
+    """Post one live panel per session as a components-v2 message.
 
-    Regular messages (unlike interaction replies) stay editable for the whole
-    session, which keeps the panel live for hours.
+    The panel is a regular channel message (unlike interaction replies it stays
+    editable for the whole session) whose text, artwork and buttons live in one
+    container, so the controls render inside the panel itself.
     """
     if channel is None or guild_id in guild_panels:
         return
     try:
-        guild_panels[guild_id] = await channel.send(embed=build_panel_embed(guild_id), view=MusicPanelView())
+        guild_panels[guild_id] = await channel.send(view=MusicPanelView(guild_id))
     except Exception as exc:
         log.warning("Could not post the music panel: %s", exc)
 
@@ -747,7 +778,7 @@ async def refresh_music_panel(guild_id: str):
     if not message:
         return
     try:
-        await message.edit(embed=build_panel_embed(guild_id), view=MusicPanelView())
+        await message.edit(view=MusicPanelView(guild_id))
     except Exception:
         guild_panels.pop(guild_id, None)
 
@@ -756,11 +787,15 @@ async def close_music_panel(guild_id: str):
     message = guild_panels.pop(guild_id, None)
     if not message:
         return
+    ended = discord.ui.LayoutView(timeout=None)
+    container = discord.ui.Container(accent_colour=ROBIN_PANEL_COLOR)
+    container.add_item(discord.ui.TextDisplay(
+        f"### {ROBIN_EMBLEM} Robin · Session ended\n"
+        "The queue was cleared — use `/play` to start a new session."
+    ))
+    ended.add_item(container)
     try:
-        await message.edit(
-            embed=make_ei_embed("Session ended — the queue was cleared. Use /play to start a new one.", title="Robin · Music Panel"),
-            view=None,
-        )
+        await message.edit(view=ended)
     except Exception:
         pass
 
@@ -938,7 +973,10 @@ async def on_ready():
 
     try:
         # Keep Robin's public slash surface aligned with the approved spec.
-        for removed in ("search", "nowplaying", "seek", "autoplay", "claimmaster", "masters"):
+        # Pause/resume/skip/shuffle/loop/volume were retired from public sync
+        # (owner decision 2026-10-18): their controls live on the live panel.
+        for removed in ("search", "nowplaying", "seek", "autoplay", "claimmaster", "masters",
+                        "pause", "resume", "skip", "shuffle", "loop", "volume"):
             bot.tree.remove_command(removed)
         synced = await bot.tree.sync()
         log.info("Synced %d slash commands globally.", len(synced))

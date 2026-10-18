@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EmbedBuilder } from "discord.js";
-import { commonCommandDefinitions, createEiEmbed, isCommonCommand, resolveEmbedImage, respondToCommonCommand, toEiEmbedPayload, withEiEmbedReplies } from "./index.js";
+import { commonCommandDefinitions, createEiEmbed, identityTheme, isCommonCommand, resolveEmbedImage, respondToCommonCommand, toEiEmbedPayload, withEiEmbedReplies } from "./index.js";
 
 test("common command list contains the three shared commands", () => {
   assert.deepEqual(commonCommandDefinitions().map((command) => command.name), ["botinfo", "ping", "about"]);
@@ -92,4 +92,18 @@ test("common command replies use the configured image", async () => {
     if (previousShared === undefined) delete process.env.EI_POINT_EMBED_IMAGE_URL;
     else process.env.EI_POINT_EMBED_IMAGE_URL = previousShared;
   }
+});
+
+test("per-identity character themes set the accent color and footer", () => {
+  assert.equal(identityTheme("kafka")?.color, 0xe0202f);
+  assert.equal(identityTheme("Silver Wolf")?.color, 0x9152e0);
+  assert.equal(identityTheme("robin")?.name, "Robin");
+  assert.equal(identityTheme(""), undefined);
+  const themed = createEiEmbed({ title: "Test", description: "Body", imageKey: "himiko" }).toJSON();
+  assert.equal(themed.color, 0xb0304c);
+  assert.ok(String(themed.footer?.text).includes("Himiko"));
+  assert.ok(String(themed.footer?.text).includes("Ei Point"));
+  const plain = createEiEmbed({ title: "Test", description: "Body" }).toJSON();
+  assert.equal(plain.color, 0x8f2938);
+  assert.equal(plain.footer?.text, "Ei Point · powered by Ei-Flow");
 });
