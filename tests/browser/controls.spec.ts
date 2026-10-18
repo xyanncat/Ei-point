@@ -275,10 +275,10 @@ test("workspace states: bot table, orders drawer, search shortcut, guild switch,
   await page.goto("/dashboard");
   await expect(page.getByRole("heading", { name: "Sign in required" })).toBeVisible();
   await page.getByRole("link", { name: "Go to sign in" }).click();
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?returnTo=%2Fdashboard$/);
   const discord = page.getByRole("link", { name: "Continue with Discord ↗" });
   await expect(discord).toBeVisible();
-  await expect(discord).toHaveAttribute("href", "/api/auth/login");
+  await expect(discord).toHaveAttribute("href", "/api/auth/login?returnTo=%2Fdashboard");
   expect(await imageLoaded(page.locator(".kafka-character").first())).toBe(true);
   await page.unroute("**/api/auth/me");
 

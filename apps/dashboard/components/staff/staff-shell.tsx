@@ -50,7 +50,7 @@ export function StaffShell({ children }: { children: ReactNode }) {
             <h2>Sign in required</h2>
             <p>Your session has ended. Sign in with Discord to open the staff workspace.</p>
             <p>
-              <Link className="sf-primary" href="/login">Go to sign in</Link>
+              <Link className="sf-primary" href="/login?returnTo=%2Fdashboard">Go to sign in</Link>
             </p>
           </section>
         </main>

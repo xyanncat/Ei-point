@@ -1,6 +1,7 @@
 import type { OrderVerification } from "@ei-point/contracts";
 import { headers } from "next/headers";
 import { PageArt } from "../../components/page-art";
+import { orderGuidance } from "../../lib/order-status";
 type Verification =
   | { state: "ok"; order: OrderVerification & { currency?: string } }
   | { state: "unknown" }
@@ -81,17 +82,7 @@ export default async function VerifyPage({
                   <dt>Status</dt>
                   <dd>{result.order.status}</dd>
                 </dl>
-                <p>
-                  {result.order.status === "pending"
-                    ? "Payment is still awaited — complete it from the checkout session that created the order and submit the proof there."
-                    : result.order.status === "claimed"
-                      ? "Proof received — a person reviews the transfer before the order is confirmed. Keep this page handy."
-                      : ["confirmed", "settled"].includes(result.order.status)
-                        ? "Payment received and verified. Staff deliver the service next."
-                        : ["rejected", "expired"].includes(result.order.status)
-                          ? "This order cannot be reopened. Place a new order or ask staff for help with your order ID."
-                          : "If this looks wrong, ask staff and keep your order ID handy."}
-                </p>
+                <p>{orderGuidance(result.order.status)}</p>
                 <p>
                   <a href="/help">Help &amp; FAQ ↗</a> ·{" "}
                   <a href="/services">Browse services ↗</a>

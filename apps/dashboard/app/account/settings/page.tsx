@@ -2,6 +2,7 @@
 // My Account · Account settings. The signed-in identity and sign-out are the
 // real, working functions here; everything else is marked honestly.
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api, ApiError } from "../../../lib/api";
 import { PageHeader, Panel } from "../../../components/staff/ui";
 
@@ -58,7 +59,16 @@ export default function AccountSettingsPage() {
             </p>
           </>
         ) : (
-          <p>{signedOut ? "You are signed out." : "Loading…"}</p>
+          <>
+            <p>{signedOut ? "You are signed out." : "Loading…"}</p>
+            {signedOut ? (
+              <p className="sf-actions">
+                <Link className="sf-primary" href={`/login?returnTo=${encodeURIComponent("/account/settings")}`}>
+                  Continue with Discord
+                </Link>
+              </p>
+            ) : null}
+          </>
         )}
       </Panel>
       <Panel title="Preferences" detail="Notification and privacy preferences arrive with the account backend.">

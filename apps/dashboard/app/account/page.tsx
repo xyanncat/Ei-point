@@ -27,7 +27,7 @@ export default function AccountOverviewPage() {
         explain="Purchases, membership and referrals in one place. Your data will always be scoped to your signed-in Discord identity."
         actions={
           signedOut ? (
-            <Link className="sf-primary" href="/login">
+            <Link className="sf-primary" href={`/login?returnTo=${encodeURIComponent("/account")}`}>
               Continue with Discord
             </Link>
           ) : (
@@ -50,6 +50,11 @@ export default function AccountOverviewPage() {
             title="Not connected yet"
             detail="Order history by account arrives with the customer dashboard. Until then, use your order's verification link."
           />
+          <p className="sf-actions">
+            <Link className="sf-ghost" href="/account/orders">
+              Look up an order
+            </Link>
+          </p>
         </Panel>
       </div>
 
