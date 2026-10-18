@@ -2,23 +2,27 @@
    One token set shared by the shell, pages and patterns. Motion is CSS-only
    and fully disabled under prefers-reduced-motion. */
 
+/* Typography is intentionally a verifiable stack: a serif system face for the
+   page titles (--sf-display / --k-font-display) and the loaded UI faces for
+   everything else (.sf-app font-family → --k-font-ui). */
 .sf-app {
-  --sf-bg: #100d13;
-  --sf-surface: #1b141f;
-  --sf-raised: #261a29;
-  --sf-text: #f3e9e8;
-  --sf-dim: #bbaab8;
-  --sf-wine: #7d2856;
-  --sf-wine-deep: #5d1d40;
-  --sf-orchid: #cf8aaf;
-  --sf-gold: #c7ab7a;
-  --sf-line: #3a2a3c;
-  --sf-line-soft: #2b1f2f;
-  --sf-ok: #6fd39a;
-  --sf-warn: #e4b45c;
-  --sf-bad: #ff8f8f;
-  --sf-radius: 10px;
-  --sf-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  /* Workspace names mapped onto the shared Kafka tokens (tokens.css). */
+  --sf-bg: var(--k-bg);
+  --sf-surface: var(--k-surface);
+  --sf-raised: var(--k-raised);
+  --sf-text: var(--k-text);
+  --sf-dim: var(--k-dim);
+  --sf-wine: var(--k-wine);
+  --sf-wine-deep: var(--k-wine-deep);
+  --sf-orchid: var(--k-orchid);
+  --sf-gold: var(--k-gold);
+  --sf-line: var(--k-line);
+  --sf-line-soft: var(--k-line-soft);
+  --sf-ok: var(--k-ok);
+  --sf-warn: var(--k-warn);
+  --sf-bad: var(--k-bad);
+  --sf-radius: var(--k-radius-m);
+  --sf-display: var(--k-font-display);
   display: flex;
   min-height: 100vh;
   background:
@@ -26,8 +30,9 @@
     radial-gradient(900px 500px at -10% 110%, rgba(207, 138, 175, 0.08), transparent 60%),
     var(--sf-bg);
   color: var(--sf-text);
-  font-size: 15px;
-  line-height: 1.55;
+  font-family: var(--k-font-ui);
+  font-size: var(--k-text-body);
+  line-height: var(--k-leading);
 }
 
 .sf-app a { color: var(--sf-orchid); text-decoration: none; }
@@ -337,6 +342,23 @@
 }
 .sf-tabs a:hover { color: var(--sf-text) !important; text-decoration: none; }
 .sf-tabs a[aria-current="page"] { color: var(--sf-text) !important; border-bottom-color: var(--sf-orchid); }
+
+/* ---- shared disabled states (design system §components) ---- */
+.sf-primary:disabled,
+.sf-ghost:disabled,
+.sf-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.sf-primary:disabled:hover { filter: none; }
+.sf-ghost:disabled:hover { border-color: var(--sf-line); background: transparent; }
+.sf-field input:disabled,
+.sf-field select:disabled,
+.sf-field textarea:disabled,
+.sf-check input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 @media (prefers-reduced-motion: reduce) {
   .sf-tabs a { transition: none; }
 }

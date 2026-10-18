@@ -1,14 +1,16 @@
 :root {
-  --bg: #120e13;
-  --bg-deep: #0e0a0f;
-  --surface: #281b25;
-  --surface-line: #51313f;
-  --text: #eee7df;
-  --text-dim: #bfaab4;
-  --accent: #dfa4b6;
-  --gold: #e6bf75;
-  --ok: #7de3a8;
-  --bad: #ff8f8f;
+  /* Legacy public names mapped onto the shared Kafka tokens (tokens.css).
+     One source of truth — see docs/kafka-design-system.md. */
+  --bg: var(--k-bg);
+  --bg-deep: var(--k-bg-deep);
+  --surface: var(--k-surface);
+  --surface-line: var(--k-line);
+  --text: var(--k-text);
+  --text-dim: var(--k-dim);
+  --accent: var(--k-orchid);
+  --gold: var(--k-gold);
+  --ok: var(--k-ok);
+  --bad: var(--k-bad);
   --display-weight: 800;
 }
 

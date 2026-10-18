@@ -1,0 +1,64 @@
+/* Kafka design system — canonical tokens. Single source of truth for every
+   surface of Ei point (public site, my account, staff workspace, system).
+   Consumers map their legacy names onto these:
+     - app/theme.css  → public site variables (--bg, --surface, …)
+     - components/staff/staff.css → workspace variables (--sf-*)
+   Documented in docs/kafka-design-system.md. Do not add raw hex values to
+   components; add a token here or use an existing one. */
+:root {
+  /* surfaces — near-black canvas, dark plum panels */
+  --k-bg: #100d13;
+  --k-bg-deep: #0e0a0f;
+  --k-surface: #1b141f;
+  --k-raised: #261a29;
+
+  /* text — warm light on dark, never pure white */
+  --k-text: #f3e9e8;
+  --k-dim: #bbaab8;
+
+  /* lines */
+  --k-line: #3a2a3c;
+  --k-line-soft: #2b1f2f;
+
+  /* accents — wine carries actions, orchid carries attention, gold ornament */
+  --k-wine: #7d2856;
+  --k-wine-deep: #5d1d40;
+  --k-orchid: #cf8aaf;
+  --k-gold: #c7ab7a;
+
+  /* semantic status — never decorative, never purple */
+  --k-ok: #6fd39a;
+  --k-warn: #e4b45c;
+  --k-bad: #ff8f8f;
+
+  /* typography */
+  --k-font-ui: "Outfit Variable", "Outfit", "Nunito Sans Variable", "Nunito Sans", "Segoe UI", system-ui, sans-serif;
+  --k-font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --k-text-s: 0.82rem;
+  --k-text-m: 0.92rem;
+  --k-text-body: 0.9375rem;
+  --k-leading: 1.55;
+  --k-leading-tight: 1.15;
+
+  /* spacing scale */
+  --k-space-1: 0.3rem;
+  --k-space-2: 0.55rem;
+  --k-space-3: 0.85rem;
+  --k-space-4: 1.2rem;
+  --k-space-5: 1.7rem;
+  --k-space-6: 2.4rem;
+
+  /* corners + elevation */
+  --k-radius-s: 7px;
+  --k-radius-m: 10px;
+  --k-radius-l: 14px;
+  --k-shadow-overlay: 0 18px 40px rgba(0, 0, 0, 0.45);
+
+  /* focus — one visible indicator everywhere */
+  --k-focus: 2px solid var(--k-orchid);
+
+  /* motion — placeholders for interface transitions (no decorative motion) */
+  --k-dur-fast: 160ms;
+  --k-dur-base: 260ms;
+  --k-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
