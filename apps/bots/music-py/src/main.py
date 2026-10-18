@@ -13,7 +13,9 @@ import asyncio
 import json
 import logging
 import os
+import re
 import signal
+import ssl
 import sys
 import threading
 import time
@@ -22,6 +24,7 @@ from media_cache import AudioCache
 from response_contract import embed_reply_helper
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -30,6 +33,14 @@ try:
     import yt_dlp
 except ImportError:
     yt_dlp = None
+
+# Spotify's public embed metadata needs CA roots Python's local bundle may lack
+# (certifi ships in the runtime requirements); fall back to the default store.
+try:
+    import certifi
+    HTTP_SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+except Exception:
+    HTTP_SSL_CONTEXT = ssl.create_default_context()
 
 try:
     from queue_state import QueueState, Track
@@ -258,6 +269,106 @@ def tracks_from_dump(data, limit: int) -> list[dict]:
     return resolved
 
 
+# --- Spotify (DRM: metadata via the public embed endpoint, playback via YouTube search) ---
+def spotify_target(url: str) -> tuple[str, str] | None:
+    match = re.search(r"open\.spotify\.com/(?:intl-[a-z]{2}/)?(track|playlist|album)/([A-Za-z0-9]+)", url or "")
+    if not match:
+        return None
+    return (match.group(1), match.group(2))
+
+
+def spotify_text(value) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.replace("\xa0", " ").strip()
+
+
+def spotify_artists(value) -> str:
+    if isinstance(value, list):
+        names = [spotify_text(entry.get("name")) for entry in value if isinstance(entry, dict)]
+        return ", ".join(name for name in names if name)
+    return spotify_text(value)
+
+
+def spotify_query(title: str, artists: str) -> str:
+    title = spotify_text(title)
+    artists = spotify_text(artists)
+    if artists and artists.lower() not in title.lower():
+        return f"{artists} - {title}"[:200]
+    return title[:200]
+
+
+def parse_spotify_embed(html: str, kind: str) -> list[dict]:
+    """Parse the public embed page into lazy queueable tracks.
+
+    Spotify audio is DRM-protected, so each track carries no direct URL: the
+    title becomes the YouTube search query and playback resolves it through the
+    existing bounded metadata path (same lazy semantics as flat playlists).
+    """
+    match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html or "", re.S)
+    if not match:
+        return []
+    try:
+        entity = (
+            json.loads(match.group(1))
+            .get("props", {})
+            .get("pageProps", {})
+            .get("state", {})
+            .get("data", {})
+            .get("entity", {})
+        )
+    except (ValueError, AttributeError):
+        return []
+    if not isinstance(entity, dict):
+        return []
+    rows = []
+    if kind == "track":
+        title = spotify_text(entity.get("name"))
+        if title:
+            rows.append({"title": title, "artists": spotify_artists(entity.get("artists")), "duration": entity.get("duration")})
+    else:
+        for entry in entity.get("trackList") or []:
+            if not isinstance(entry, dict):
+                continue
+            title = spotify_text(entry.get("title"))
+            if title:
+                rows.append({"title": title, "artists": entry.get("subtitle"), "duration": entry.get("duration")})
+    tracks = []
+    for row in rows[:PLAYLIST_MAX_TRACKS]:
+        query = spotify_query(row["title"], row["artists"])
+        if not query:
+            continue
+        duration = row.get("duration")
+        tracks.append({
+            "title": query[:100],
+            "duration": int(duration) if isinstance(duration, (int, float)) and duration else 180_000,
+            "url": "",
+            "webpage_url": "",
+        })
+    return tracks
+
+
+async def spotify_tracks(kind: str, ident: str) -> list[dict]:
+    """Fetch Spotify's public embed metadata (no credentials) for a track,
+    playlist or album and return lazy YouTube-search tracks, bounded by
+    PLAYLIST_MAX_TRACKS."""
+    url = f"https://open.spotify.com/embed/{kind}/{ident}"
+    try:
+        timeout = aiohttp.ClientTimeout(total=20)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}, ssl=HTTP_SSL_CONTEXT) as response:
+                if response.status != 200:
+                    log.warning("Spotify metadata request failed with status %s", response.status)
+                    return []
+                html = await response.text()
+    except Exception as exc:
+        log.warning("Spotify metadata fetch failed: %s", exc)
+        return []
+    if len(html) > 4_000_000:
+        return []
+    return parse_spotify_embed(html, kind)
+
+
 async def extract_link(url: str) -> list[dict]:
     """Resolve a song or playlist link via yt-dlp.
 
@@ -270,6 +381,9 @@ async def extract_link(url: str) -> list[dict]:
         return []
     if not url.startswith(("http://", "https://")) or not is_safe_url(url):
         return []
+    spotify = spotify_target(url)
+    if spotify:
+        return await spotify_tracks(*spotify)
     try:
         async with asyncio.timeout(30):
             async with metadata_semaphore:
@@ -1027,14 +1141,16 @@ async def respond(interaction: discord.Interaction, message: str, ephemeral: boo
 
 
 def make_ei_embed(message: str, title: str = "Ei Point") -> discord.Embed:
-    embed = discord.Embed(title=title[:256], description=(message or " ")[:4096], color=0x8F2938)
-    image_url = (
-        os.getenv("EI_POINT_EMBED_IMAGE_ROBIN")
-        or os.getenv("EI_POINT_EMBED_IMAGE_URL")
-        or "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif"
-    )
-    embed.set_image(url=image_url.strip())
-    embed.set_footer(text="Ei Point · powered by Ei-Flow")
+    clean = (title or "Ei Point").strip()
+    if clean.startswith(ROBIN_EMBLEM):
+        themed = clean
+    elif clean.lower().startswith("robin"):
+        themed = f"{ROBIN_EMBLEM} {clean}"
+    else:
+        themed = f"{ROBIN_EMBLEM} Robin · {clean}"
+    embed = discord.Embed(title=themed[:256], description=(message or " ")[:4096], color=ROBIN_PANEL_COLOR)
+    embed.set_image(url=panel_image_url())
+    embed.set_footer(text=f"{ROBIN_EMBLEM} Robin · Ei Point · powered by Ei-Flow")
     return embed
 
 

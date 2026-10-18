@@ -179,7 +179,7 @@ All Kafka rows above are owner-or-Administrator only. Temporary actions need ret
 
 | Command | Function |
 |---|---|
-| `/play` | Require a link of the song or playlist. A song link enqueues one track; a playlist link enqueues its tracks bounded by `PLAYLIST_MAX_TRACKS` (default 50, 1–100 validated at startup), each resolved lazily at playback. |
+| `/play` | Require a link of the song or playlist. A song link enqueues one track; a playlist link enqueues its tracks bounded by `PLAYLIST_MAX_TRACKS` (default 50, 1–100 validated at startup), each resolved lazily at playback. Spotify track/playlist/album links resolve their metadata through Spotify's public embed endpoint (no credentials; Spotify audio is DRM-protected) and each track plays as a bounded YouTube search through the same lazy path. |
 | `/pause` | Pause current playback. |
 | `/resume` | Resume paused playback. |
 | `/skip` | Skip the current track and start the next eligible track. |

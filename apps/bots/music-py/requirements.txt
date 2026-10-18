@@ -4,4 +4,6 @@ discord.py[voice]==2.7.1
 # Keep current: stream URLs produced by stale extractors are rejected (HTTP 403)
 # by YouTube's CDN; 2026.8.19 verified against YouTube Music and licensed tracks.
 yt-dlp==2026.8.19
+# Public Spotify embed metadata fetch (TLS roots for the music resolver).
+certifi==2026.10.18
 psycopg[binary]==3.2.9

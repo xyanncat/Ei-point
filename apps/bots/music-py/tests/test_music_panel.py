@@ -64,7 +64,7 @@ def panel_namespace() -> dict:
         "start_playback": AsyncMock(),
         "apply_live_volume": MagicMock(),
         "ROBIN_PANEL_COLOR": 0x9078D8,
-        "ROBIN_EMBLEM": "R",
+        "ROBIN_EMBLEM": "★",
         "panel_text": MagicMock(return_value="panel"),
         "panel_image_url": MagicMock(return_value="https://example.test/robin.png"),
     }
@@ -198,6 +198,23 @@ class PanelControlTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ns["guild_queues"][GUILD].position, 1)
         interaction.guild.voice_client.stop.assert_called_once()
         ns["start_playback"].assert_awaited_once_with(GUILD)
+
+
+class RobinThemeTest(unittest.TestCase):
+    def test_embeds_use_the_robin_theme_and_themed_titles(self):
+        ns = panel_namespace()
+        load_panel(ns, {"make_ei_embed"})
+        ns["make_ei_embed"]("Body", "Robin · Queue")
+        kwargs = ns["discord"].Embed.call_args.kwargs
+        self.assertEqual(kwargs["color"], 0x9078D8)
+        self.assertEqual(kwargs["title"], "★ Robin · Queue")
+        self.assertEqual(
+            ns["discord"].Embed.return_value.set_footer.call_args.kwargs["text"],
+            "★ Robin · Ei Point · powered by Ei-Flow",
+        )
+        ns["discord"].Embed.reset_mock()
+        ns["make_ei_embed"]("Body")
+        self.assertEqual(ns["discord"].Embed.call_args.kwargs["title"], "★ Robin · Ei Point")
 
 
 if __name__ == "__main__":

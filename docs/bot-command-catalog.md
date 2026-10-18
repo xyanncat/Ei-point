@@ -92,7 +92,7 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 | `/botinfo` | Show Robin's identity and status. |
 | `/ping` | Show Discord gateway latency. |
 | `/about` | Describe Ei Point and Ei-Flow and mention the configured owner. |
-| `/play <link>` | Play or enqueue a song or playlist link (owner requirement 2026-10-17): non-links are refused; a playlist link enqueues up to 50 tracks (bounded), each resolved lazily in order. |
+| `/play <link>` | Play or enqueue a song or playlist link (owner requirement 2026-10-17): non-links are refused; a playlist link enqueues up to 50 tracks (bounded), each resolved lazily in order. Spotify track/playlist/album links resolve metadata through Spotify's public embed endpoint and play as bounded YouTube searches. |
 | `/stop` | Stop playback, clear the queue, and leave voice. |
 | `/queue` | Display upcoming tracks. |
 | `/disconnect` | Disconnect Robin from the voice channel. |
@@ -101,7 +101,7 @@ Pause/resume, skip, shuffle, loop and volume are **live-panel buttons** now (own
 
 ### Other functions
 
-- Resolve media using yt-dlp and stream through FFmpeg; bound metadata-resolution concurrency and voice sessions.
+- Resolve media using yt-dlp (plus Spotify public-embed metadata with lazy YouTube-search playback) and stream through FFmpeg; bound metadata-resolution concurrency and voice sessions.
 - Advance queues, maintain playback state, and support track/queue loop modes. Search/nowplaying/seek/autoplay/DJ-administration and the panel-covered controls (pause/resume/skip/shuffle/loop/volume) are removed from public sync.
 - Keep the queue session-scoped (owner decision 2026-10-18): leaving voice clears it and nothing is restored across restarts. The live music panel puts DJ-gated pause/resume, skip, shuffle, loop and volume controls inside one themed components-v2 message per session, using the character palette taken from each bot's own artwork.
 - Maintain a size/TTL-bounded local audio cache and expose health/readiness status.

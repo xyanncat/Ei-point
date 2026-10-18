@@ -55,7 +55,7 @@ export function createEiEmbed(options: EmbedReplyOptions): EmbedBuilder {
   const theme = identityTheme(options.imageKey);
   const embed = new EmbedBuilder()
     .setColor(options.color ?? theme?.color ?? BRAND)
-    .setTitle(options.title.slice(0, 256))
+    .setTitle(theme ? `${theme.emoji} ${options.title.slice(0, 250)}` : options.title.slice(0, 256))
     .setDescription(options.description.slice(0, 4096))
     .setImage(imageUrl)
     .setFooter({ text: theme ? `${theme.emoji} ${theme.name} · Ei Point · powered by Ei-Flow` : "Ei Point · powered by Ei-Flow" })

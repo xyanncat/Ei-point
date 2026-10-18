@@ -101,9 +101,11 @@ test("per-identity character themes set the accent color and footer", () => {
   assert.equal(identityTheme(""), undefined);
   const themed = createEiEmbed({ title: "Test", description: "Body", imageKey: "himiko" }).toJSON();
   assert.equal(themed.color, 0xb0304c);
+  assert.equal(themed.title, "🌹 Test");
   assert.ok(String(themed.footer?.text).includes("Himiko"));
   assert.ok(String(themed.footer?.text).includes("Ei Point"));
   const plain = createEiEmbed({ title: "Test", description: "Body" }).toJSON();
   assert.equal(plain.color, 0x8f2938);
+  assert.equal(plain.title, "Test");
   assert.equal(plain.footer?.text, "Ei Point · powered by Ei-Flow");
 });
