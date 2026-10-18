@@ -85,3 +85,14 @@ Unconnected features are marked unavailable/planned; the demo never shows contra
 6. ðŸš§ My account + login: login uses the approved hero composition; account links and honest states are in; order history/membership arrive with the commerce rollout.
 7. ðŸš§ Artwork + motion polish: hero and login final; section landing art, silk-thread pass and character animation assets (rigged, not moving posters) still to come.
 8. ðŸš§ Verification: browser suite updated to this IA (16/16 green locally, incl. drawer focus, guild-switch race, reduced motion, 390px fit). CI enforces on every push.
+
+## Three areas (owner task 2026-10-19, part 2)
+
+| Area | Navigation | Routes |
+|---|---|---|
+| Public website | Home · Services · Cards · Membership · Help (utility: Verify order, My account; staff via account menu + footer) | `/`, `/services`, `/services/[sku]`, `/cards`, `/membership`, `/help`, `/referrals`, `/about`, `/verify`, `/login` |
+| My account | Overview · My orders · Membership · Referrals · Account settings | `/account`, `/account/orders`, `/account/membership`, `/account/referrals`, `/account/settings` — customer data backend does not exist yet; pages document the gap honestly |
+| Staff workspace | Grouped sidebar: Workspace / Server management / Records / Preferences / Owner·admin | `/dashboard/*` with section tabs (see above), bot tabs (Overview/Configuration/Command permissions/Diagnostics) |
+| System (global) | Guilds · Integrations · Secret vault · Backups | `/dashboard/system/*`; `/system/*` redirects here deliberately |
+
+Preserved public URLs: `/referrals` and `/about` (no redirects). The ordering FAQ moved from `/about` to `/help`; `/about` keeps the studio team.

@@ -4,7 +4,7 @@
 import { useOverview } from "../../../../components/staff/use-overview";
 import { useStaff } from "../../../../components/staff/staff-context";
 import { ModuleConfig } from "../../../../components/staff/panels";
-import { Empty, PageHeader, Panel } from "../../../../components/staff/ui";
+import { PageHeader } from "../../../../components/staff/ui";
 
 const PROTECTION_MODULES = ["security", "moderation", "logging"];
 
@@ -29,12 +29,7 @@ export default function ModerationProtectionPage() {
         }
       />
       <ModuleConfig guildId={guild} modules={modules} canOperate={canOperate} />
-      <Panel title="Temporary actions" detail="Mutes and timeouts issued by the modules.">
-        <Empty
-          title="Not connected yet"
-          detail="Temporary actions with expiry and retry status appear here once the security modules publish them."
-        />
-      </Panel>
     </>
   );
 }
+

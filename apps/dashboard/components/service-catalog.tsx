@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import assets from "../lib/project-assets.json";
 import { CheckoutButton } from "./checkout";
 export function ServiceCatalog() {
@@ -49,7 +50,9 @@ export function ServiceCatalog() {
             <p>
               {s.game} · {s.category}
             </p>
-            <h3>{s.name}</h3>
+            <h3>
+              <Link href={`/services/${s.sku}`}>{s.name}</Link>
+            </h3>
             <p>{s.description}</p>
             <dl>
               <dt>Estimated duration</dt>
@@ -80,6 +83,9 @@ export function ServiceCatalog() {
                   maximumFractionDigits: 0,
                 }).format(s.price_minor / 100)}
               </strong>
+              <Link className="ei-detail-link" href={`/services/${s.sku}`}>
+                Details ↗
+              </Link>
               <CheckoutButton serviceId={s.sku} name={s.name} />
             </footer>
           </article>

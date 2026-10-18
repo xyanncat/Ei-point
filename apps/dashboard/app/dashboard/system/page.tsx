@@ -1,24 +1,24 @@
 "use client";
-// System: owner/admin-only operational controls, separated from the selected
-// Discord server (owner brief). Relocated from "Administration".
+// System · Guilds: fleet-wide server approvals. Global administration, not
+// scoped to whichever server happens to be selected.
 import { useStaff } from "../../../components/staff/staff-context";
-import { SystemPanels } from "../../../components/staff/system";
+import { GuildsPanel } from "../../../components/staff/system";
 import { Empty, PageHeader, Panel } from "../../../components/staff/ui";
 
-export default function SystemPage() {
-  const { guild, isAdmin } = useStaff();
+export default function SystemGuildsPage() {
+  const { isAdmin } = useStaff();
   return (
     <>
       <PageHeader
-        eyebrow="System · owner/admin only"
-        title="Infrastructure & access"
-        explain="Global controls — approvals, staff scopes, the secret vault and provider accounts. These affect the whole fleet, not one server."
+        eyebrow="Global administration · not scoped to the selected server"
+        title="Approved servers"
+        explain="Which Discord servers may use the fleet. Changes affect every server."
       />
       {isAdmin ? (
-        <SystemPanels guildId={guild} />
+        <GuildsPanel />
       ) : (
         <Panel title="Owner/admin only">
-          <Empty title="No access" detail="An admin scope is required for authorization and vault controls." />
+          <Empty title="No access" detail="An admin scope is required for fleet-wide controls." />
         </Panel>
       )}
     </>

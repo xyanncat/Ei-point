@@ -27,6 +27,17 @@ export default function MembershipPage() {
             Starting at ₹700 for 30 days. Checkout shows current pricing and available payment methods.
           </p>
         </div>
+        <div className="clip-panel">
+          <h2>Good to know</h2>
+          <ul>
+            <li>A membership runs 30 days per order — reorder any time before it lapses.</li>
+            <li>Open to the five supported games; ordering needs a Discord sign-in.</li>
+            <li>Settlement is manual: staff verify your transfer before the term starts.</li>
+          </ul>
+          <p>
+            Membership questions are answered in the <a href="/help">help centre</a>.
+          </p>
+        </div>
         <CheckoutButton serviceId="account-management-membership" name="30-day account management membership" />
         <p>
           <a className="ei-action" href="/verify">

@@ -33,6 +33,18 @@ export default function ServicesPage() {
       <div id="catalog">
         <ServiceCatalog />
       </div>
+      <div className="ei-home-section" aria-label="Service help">
+        <h2>Questions before ordering?</h2>
+        <p className="lede">
+          Payment steps, verification, timing and supported games are explained
+          in the help centre.
+        </p>
+        <p>
+          <a className="ei-action" href="/help">
+            Help &amp; FAQ ↗
+          </a>
+        </p>
+      </div>
     </section>
   );
 }

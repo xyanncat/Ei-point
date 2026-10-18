@@ -37,6 +37,15 @@ export default function CardsPage() {
           ))}
         </ul>
       )}
+      <div className="clip-panel">
+        <h2>Public catalog vs your collection</h2>
+        <p>
+          This page is the public catalog: artworks and definitions anyone can
+          browse. A personal collection, trading and card purchases are not
+          connected yet — nothing here promises them until the card system
+          ships.
+        </p>
+      </div>
     </section>
   );
 }

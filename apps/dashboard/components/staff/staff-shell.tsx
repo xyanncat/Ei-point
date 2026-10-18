@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Icon } from "../icons";
 import { BrandMark } from "../brand-mark";
-import { crumbFor, isSectionActive, SECTIONS } from "./sections";
+import { crumbFor, isSectionActive, navGroups, SECTIONS } from "./sections";
 import { useStaff } from "./staff-context";
 import "./staff.css";
 
@@ -87,11 +87,16 @@ export function StaffShell({ children }: { children: ReactNode }) {
           </label>
         </div>
         <nav className="sf-nav" aria-label="Staff workspace">
-          {SECTIONS.filter((n) => !n.admin || isAdmin).map((n) => (
-            <Link key={n.href} href={n.href} aria-current={isSectionActive(n, path) ? "page" : undefined}>
-              <Icon name={n.icon} />
-              {n.label}
-            </Link>
+          {navGroups(SECTIONS.filter((n) => !n.admin || isAdmin)).map((group) => (
+            <div key={group.group} className="sf-nav-group-wrap">
+              {group.group ? <p className="sf-nav-group">{group.group}</p> : null}
+              {group.items.map((n) => (
+                <Link key={n.href} href={n.href} aria-current={isSectionActive(n, path) ? "page" : undefined}>
+                  <Icon name={n.icon} />
+                  {n.label}
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="sf-side-foot">

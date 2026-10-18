@@ -7,6 +7,7 @@ const publicRoutes = [
   "/membership",
   "/referrals",
   "/verify",
+  "/help",
   "/missing-kafka-page",
 ];
 
@@ -124,6 +125,7 @@ test("service filters narrow the catalog and the empty state explains the search
   ).toBeVisible();
   await page.goto("/about");
   expect(await page.getByRole("link", { name: /Discord profile/ }).count()).toBeGreaterThan(0);
+  await page.goto("/help");
   await page.getByText("How do payments work?").click();
   await expect(
     page.getByText("Choose a service, sign in with Discord"),

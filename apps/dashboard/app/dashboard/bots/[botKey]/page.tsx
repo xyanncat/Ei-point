@@ -1,63 +1,60 @@
 "use client";
-// Bot detail: signals, assigned capabilities, bot state and command
-// permissions — the relocated fleet-admin functions, scoped to one bot.
+// Bot · Overview: assigned capabilities and cross-links into the workspace.
 import { use } from "react";
+import Link from "next/link";
 import { useOverview } from "../../../../components/staff/use-overview";
-import { useStaff } from "../../../../components/staff/staff-context";
-import { botsMeta } from "../../../../components/staff/bots-meta";
-import { BotStatePanel, CommandPermissionsPanel } from "../../../../components/staff/panels";
-import { HealthBadge, PageHeader, Panel, Empty, stamp, stateText } from "../../../../components/staff/ui";
+import { Empty, Panel } from "../../../../components/staff/ui";
 
-export default function BotDetailPage({ params }: { params: Promise<{ botKey: string }> }) {
+const RELATED: Record<string, { label: string; href: string }[]> = {
+  kafka: [
+    { label: "Moderation · Incidents", href: "/dashboard/moderation" },
+    { label: "Moderation · Protection rules", href: "/dashboard/moderation/protection" },
+  ],
+  cipher: [
+    { label: "Commerce · Payment review", href: "/dashboard/commerce/payments" },
+    { label: "Commerce · Orders", href: "/dashboard/commerce" },
+  ],
+  silverwolf: [{ label: "Community · Cards & economy", href: "/dashboard/community/economy" }],
+  himiko: [
+    { label: "Community · Welcome & leave", href: "/dashboard/community" },
+    { label: "Community · Announcements", href: "/dashboard/community/announcements" },
+  ],
+};
+
+export default function BotOverviewPage({ params }: { params: Promise<{ botKey: string }> }) {
   const { botKey } = use(params);
-  const { guild } = useStaff();
-  const { data, busy, error, refresh } = useOverview();
+  const { data } = useOverview();
   const card = data?.cards.find((c) => c.botKey === botKey);
-  const meta = botsMeta(botKey);
-  const scopes = data?.guild.scopes ?? [];
-  const canOperate = scopes.includes("*");
+  const related = RELATED[botKey] ?? [];
 
   return (
     <>
-      <PageHeader
-        eyebrow="Bots"
-        title={meta.name}
-        explain={meta.summary}
-        actions={
-          <button className="sf-ghost" onClick={() => void refresh()} disabled={busy}>
-            {busy ? "Refreshing…" : "Refresh"}
-          </button>
-        }
-      />
-      {error && (
-        <div className="sf-note sf-error" role="alert">
-          <p>{error}</p>
-        </div>
-      )}
-      {card ? (
-        <div className="sf-grid-2">
-          <Panel title="Signals" detail="Health is reported per process; unknown beats a false healthy.">
-            <dl className="sf-kv">
-              <div><dt>Process</dt><dd><HealthBadge health={card.stale ? "stale" : card.state} text={card.stale ? "Stale" : stateText(card.state)} /></dd></div>
-              <div><dt>Discord gateway</dt><dd>{card.stale ? "Unknown" : stateText(card.gateway)}</dd></div>
-              <div><dt>Database</dt><dd>{card.stale ? "Unknown" : card.dbReady ? "Ready" : "Unavailable"}</dd></div>
-              <div><dt>Provider</dt><dd>{card.stale ? "Unknown" : stateText(card.provider ?? "unknown")}</dd></div>
-              <div><dt>Latency</dt><dd>{card.latencyMs == null || card.stale ? "Unavailable" : `${card.latencyMs} ms`}</dd></div>
-              <div><dt>Last heartbeat</dt><dd className="sf-num">{stamp(card.updatedAt)}</dd></div>
-            </dl>
-            <p className="sf-dim">Assigned modules: {(card.modules ?? []).join(", ") || "None configured"}</p>
-          </Panel>
-          <BotStatePanel guildId={guild} botKey={botKey} canOperate={canOperate} />
-          <CommandPermissionsPanel guildId={guild} botKey={botKey} canOperate={canOperate} />
-        </div>
-      ) : (
-        <Panel title="Bot not found">
-          <Empty
-            title={`No bot named “${botKey}” is assigned to this server`}
-            detail="It may be registered under another key, or the registry has not published it yet."
-          />
+      <Panel title="Assigned capabilities" detail="Modules this bot runs for the selected server.">
+        {card?.modules?.length ? (
+          <ul className="sf-list">
+            {card.modules.map((module) => (
+              <li key={module}>
+                <span className="sf-dot" />
+                {module}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Empty title="No modules reported" />
+        )}
+      </Panel>
+      {related.length ? (
+        <Panel title="Where this bot's work lives" detail="Feature workflows stay on their own pages — nothing is duplicated here.">
+          <ul className="sf-list">
+            {related.map((link) => (
+              <li key={link.href}>
+                <span className="sf-dot" />
+                <Link href={link.href}>{link.label}</Link>
+              </li>
+            ))}
+          </ul>
         </Panel>
-      )}
+      ) : null}
     </>
   );
 }

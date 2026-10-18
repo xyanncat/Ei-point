@@ -126,11 +126,15 @@ test("settings save with version and CSRF; system accounts manage end to end", a
   ).toBeVisible();
   await page.getByRole("link", { name: "System", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Infrastructure & access" }),
+    page.getByRole("heading", { name: "Approved servers" }),
   ).toBeVisible();
   expect(
     await page.getByRole("heading", { name: "No server access yet" }).count(),
   ).toBe(0);
+  await page.getByRole("link", { name: "Integrations", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Integrations & accounts" }),
+  ).toBeVisible();
   await page.getByLabel("Account name", { exact: true }).fill("QA database");
   await page.getByLabel("Vault secret reference").fill("QA_DATABASE");
   await page
