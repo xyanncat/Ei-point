@@ -4,13 +4,15 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { PublicNav } from "./public-nav";
 export function SiteFrame({ children }: { children: ReactNode }) {
-  const dashboard = usePathname().startsWith("/dashboard");
+  const path = usePathname();
+  // The staff workspace and the login composition carry their own chrome.
+  const bare = path.startsWith("/dashboard") || path === "/login";
   const [paused, setPaused] = useState(false);
   return (
     <div
-      className={`${dashboard ? "ei-dashboard-frame" : "ei-public"}${paused ? " ei-motion-paused" : ""}`}
+      className={`${bare ? "ei-dashboard-frame" : "ei-public"}${paused ? " ei-motion-paused" : ""}`}
     >
-      {!dashboard && (
+      {!bare && (
         <>
           <div className="ei-atmosphere" aria-hidden="true">
             <svg viewBox="0 0 1400 900" preserveAspectRatio="none">
@@ -30,7 +32,7 @@ export function SiteFrame({ children }: { children: ReactNode }) {
         </>
       )}
       <main id="main">{children}</main>
-      {!dashboard && (
+      {!bare && (
         <footer className="ei-site-footer">
           <a href="/">Ei point</a>
           <p>Stay connected. Keep your community close.</p>

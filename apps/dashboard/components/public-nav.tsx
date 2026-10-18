@@ -17,6 +17,7 @@ export function PublicNav() {
         ["/membership", "Membership"],
         ["/referrals", "Referrals"],
         ["/verify", "Verify order"],
+        ["/account", "My account"],
         ["/dashboard", "Dashboard"],
       ].map(([href, label]) => (
         <a

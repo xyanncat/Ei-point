@@ -36,7 +36,7 @@ test("late first-guild payment response cannot overwrite the current guild's ord
         guild: guild(url.searchParams.get("guildId") ?? first),
         cards: [
           {
-            botKey: "commerce",
+            botKey: "cipher",
             modules: ["commerce"],
             state: "ok",
             gateway: "ok",
@@ -49,6 +49,8 @@ test("late first-guild payment response cannot overwrite the current guild's ord
         incidents: [],
         actions: [],
       };
+    } else if (path === "/api/catalog") {
+      result = { items: [] };
     } else if (path.endsWith("/settings")) {
       result = {
         settings: {
@@ -93,8 +95,7 @@ test("late first-guild payment response cannot overwrite the current guild's ord
       body: JSON.stringify(result),
     });
   });
-  await page.goto("/dashboard");
-  await page.getByRole("button", { name: "Fleet controls", exact: true }).click();
+  await page.goto("/dashboard/commerce");
   await Promise.race([
     requested,
     new Promise((_, reject) =>
@@ -104,12 +105,12 @@ test("late first-guild payment response cannot overwrite the current guild's ord
   await page
     .getByRole("combobox", { name: "Choose server" })
     .selectOption(second);
-  await page.getByRole("button", { name: "Fleet controls", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "RP-NEW222", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Commerce", exact: true }).click();
+  await expect(page.getByText("RP-NEW222")).toBeVisible();
   release();
   await page.waitForTimeout(250);
-  expect(await page.getByRole("heading", { name: "RP-OLD111", exact: true }).count()).toBe(0);
-  expect(await page.getByRole("heading", { name: "RP-NEW222", exact: true }).count()).toBe(1);
+  expect(await page.getByText("RP-OLD111").count()).toBe(0);
+  expect(await page.getByText("RP-NEW222").count()).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
 

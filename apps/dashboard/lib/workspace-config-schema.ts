@@ -6,7 +6,8 @@ export interface ConfigField {
 }
 // Settings are provided by the server schema; identities are display context only.
 export const MODULE_LABELS: Record<string, string> = {
-  moderation: 'Moderation · Shanks', logging: 'Audit logging · Sanji', security: 'Security · Zoro',
-  welcome: 'Welcome · Boa Hancock', community: 'Community · Boa Hancock & Nami', leveling: 'Leveling · Nami',
-  games: 'Games · Luffy', ai: 'AI · Cyrene', search: 'Search · Nico Robin', music: 'Music', commerce: 'Commerce',
+  moderation: 'Moderation', logging: 'Audit logging', security: 'Security',
+  welcome: 'Welcomes & leave', community: 'Community', leveling: 'Levels & XP',
+  games: 'Cards & economy', ai: 'AI chat & voice', search: 'Search answers',
+  music: 'Music', commerce: 'Commerce', announcements: 'Announcements',
 };

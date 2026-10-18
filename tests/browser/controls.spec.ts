@@ -7,7 +7,7 @@ const overview = (id: string) => ({
   guild: { guildId: id, name: "QA guild", approved: true, scopes: ["*"] },
   cards: [
     {
-      botKey: "moderation",
+      botKey: "kafka",
       modules: ["moderation"],
       state: "ok",
       gateway: "ok",
@@ -22,7 +22,7 @@ const overview = (id: string) => ({
   actions: [],
 });
 
-test("module configuration saves with version and CSRF; infrastructure accounts manage end to end", async ({
+test("settings save with version and CSRF; system accounts manage end to end", async ({
   page,
 }) => {
   const errors = trackPageErrors(page);
@@ -62,6 +62,14 @@ test("module configuration saves with version and CSRF; infrastructure accounts 
       };
     } else if (path === "/api/overview") {
       result = overview(guildId);
+    } else if (path.endsWith("/settings")) {
+      result = {
+        settings: {
+          notifications_enabled: true,
+          server_paused: false,
+          notification_preferences: {},
+        },
+      };
     } else if (path.endsWith("/configuration/moderation")) {
       if (method === "PUT") {
         expect(body.expectedVersion).toBe(version);
@@ -100,9 +108,8 @@ test("module configuration saves with version and CSRF; infrastructure accounts 
       body: JSON.stringify(result),
     });
   });
-  await page.goto("/dashboard");
+  await page.goto("/dashboard/settings");
   await expect(page).toHaveTitle(/Ei point/);
-  await page.getByRole("button", { name: "Configuration", exact: true }).click();
   await page.getByLabel("AI warnings", { exact: true }).uncheck();
   await page
     .getByRole("button", { name: "Save configuration", exact: true })
@@ -115,7 +122,11 @@ test("module configuration saves with version and CSRF; infrastructure accounts 
   emptyGuilds = true;
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "Authorization & vault" }),
+    page.getByRole("link", { name: "System", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "System", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Infrastructure & access" }),
   ).toBeVisible();
   expect(
     await page.getByRole("heading", { name: "No server access yet" }).count(),
@@ -123,7 +134,7 @@ test("module configuration saves with version and CSRF; infrastructure accounts 
   await page.getByLabel("Account name", { exact: true }).fill("QA database");
   await page.getByLabel("Vault secret reference").fill("QA_DATABASE");
   await page
-    .getByLabel("Endpoint without credentials")
+    .getByLabel("Endpoint (no credentials)")
     .fill("postgresql://localhost:5432/qa");
   await page.getByRole("button", { name: "Add account", exact: true }).click();
   await expect(
@@ -164,57 +175,73 @@ test("module configuration saves with version and CSRF; infrastructure accounts 
   ]);
 });
 
-test("dashboard states: search, modal focus, guild switch, reduced motion, stale, sign-in, empty access and unavailable", async ({
+test("workspace states: bot table, orders drawer, search shortcut, guild switch, reduced motion, stale, sign-in, empty access and unavailable", async ({
   page,
 }) => {
   const errors = trackPageErrors(page);
   await page.goto("/dashboard");
-  await expect(page.locator(".cc-bot")).toHaveCount(6);
+  await expect(page.locator(".sf-table tbody tr")).toHaveCount(6);
   await expect(page).toHaveTitle(/Ei point/);
-  await page.locator(".cc-bot").first().click();
+
+  // Orders drawer: Escape closes and focus returns to the trigger.
+  await page.goto("/dashboard/commerce");
+  const review = page.getByRole("button", { name: "Review" }).first();
+  await review.click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.getByRole("dialog")).toContainText("Assigned modules");
+  await expect(page.getByRole("dialog")).toContainText("Order");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
-  expect(
-    await page
-      .locator(".cc-bot")
-      .first()
-      .evaluate((element) => element === document.activeElement),
-  ).toBe(true);
-  await page.keyboard.press("/");
-  expect(
-    await page
-      .getByRole("textbox", { name: "Search bots and modules" })
-      .evaluate((element) => element === document.activeElement),
-  ).toBe(true);
+  expect(await review.evaluate((element) => element === document.activeElement)).toBe(true);
+
+  // Bots list: "/" focuses the page search (retry covers the hydration window).
+  await page.goto("/dashboard/bots");
+  await expect(async () => {
+    await page.keyboard.press("/");
+    expect(
+      await page
+        .getByRole("textbox", { name: "Search bots and modules" })
+        .evaluate((element) => element === document.activeElement),
+    ).toBe(true);
+  }).toPass({ timeout: 10000 });
   await page.getByRole("textbox", { name: "Search bots and modules" }).fill("music");
-  await expect(page.locator(".cc-bot")).toHaveCount(1);
+  await expect(page.locator(".sf-table tbody tr")).toHaveCount(1);
   await page.getByRole("textbox", { name: "Search bots and modules" }).fill("");
+  await expect(page.locator(".sf-table tbody tr")).toHaveCount(6);
+
+  // Guild switch keeps the worked server and is reflected in the workspace.
   await page
     .getByRole("combobox", { name: "Choose server" })
     .selectOption("222222222222222222");
   await expect(
-    page.locator(".cc-page-heading").getByText("Royality staging", { exact: true }),
+    page.getByRole("combobox", { name: "Choose server" }),
+  ).toHaveValue("222222222222222222");
+  await page.goto("/dashboard");
+  await expect(
+    page.locator(".sf-eyebrow").filter({ hasText: "Royality staging" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Overview", exact: true }).click();
+
+  // Mobile navigation drawer.
   await page.setViewportSize({ width: 390, height: 844 });
-  await page
-    .locator(".cc-sidebar")
-    .evaluate((element) =>
-      Promise.all(element.getAnimations().map((animation) => animation.finished)),
-    );
   expect(await fitsViewport(page)).toBe(true);
   await page.getByRole("button", { name: "Toggle navigation" }).click();
-  await page.getByRole("button", { name: "Bot fleet", exact: true }).click();
-  await expect(page.locator(".cc-bot")).toHaveCount(6);
+  await page.getByRole("link", { name: "Bots", exact: true }).click();
+  await page.waitForURL("**/dashboard/bots");
+  await expect(page.locator(".sf-table tbody tr")).toHaveCount(6);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  // Reduced motion removes UI transitions.
   await page.emulateMedia({ reducedMotion: "reduce" });
   expect(
     await page
-      .locator(".cc-bot")
+      .locator(".sf-icon-btn")
       .first()
       .evaluate((element) => getComputedStyle(element).transitionDuration),
   ).toBe("0s");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+
+  // Failed refresh keeps the last snapshot and explains itself.
+  await page.goto("/dashboard");
+  await expect(page.locator(".sf-table tbody tr")).toHaveCount(6);
   await page.route("**/api/overview?*", (route) =>
     route.fulfill({
       status: 503,
@@ -230,8 +257,10 @@ test("dashboard states: search, modal focus, guild switch, reduced motion, stale
   await expect(
     page.getByText("Live update unavailable. Showing the last snapshot."),
   ).toBeVisible();
-  await expect(page.locator(".cc-notice")).toContainText("Showing the last snapshot");
+  await expect(page.locator(".sf-note.sf-error").first()).toContainText("Showing the last snapshot");
   await page.unroute("**/api/overview?*");
+
+  // Sign-in: inline notice then the full login page.
   await page.route("**/api/auth/me", (route) =>
     route.fulfill({
       status: 401,
@@ -239,18 +268,28 @@ test("dashboard states: search, modal focus, guild switch, reduced motion, stale
       body: JSON.stringify({ code: "auth-required", error: "Sign in" }),
     }),
   );
-  await page.reload();
-  await expect(
-    page.getByRole("link", { name: "Continue with Discord" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Continue with Discord" }),
-  ).toHaveAttribute("href", "/api/auth/login");
-  await expect(page.locator(".cc-login-portrait")).toBeVisible();
-  expect(
-    await imageLoaded(page.locator(".cc-login-portrait img").first()),
-  ).toBe(true);
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "Sign in required" })).toBeVisible();
+  await page.getByRole("link", { name: "Go to sign in" }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  const discord = page.getByRole("link", { name: "Continue with Discord ↗" });
+  await expect(discord).toBeVisible();
+  await expect(discord).toHaveAttribute("href", "/api/auth/login");
+  expect(await imageLoaded(page.locator(".kafka-character").first())).toBe(true);
   await page.unroute("**/api/auth/me");
+
+  // Empty access for regular members.
+  await page.route("**/api/auth/me", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        user: { id: "qa-member", name: "QA member" },
+        isAdmin: false,
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+    }),
+  );
   await page.route("**/api/guilds", (route) =>
     route.fulfill({
       status: 200,
@@ -258,10 +297,14 @@ test("dashboard states: search, modal focus, guild switch, reduced motion, stale
       body: JSON.stringify({ guilds: [] }),
     }),
   );
-  await page.reload();
+  await page.goto("/dashboard");
   await expect(
     page.getByRole("heading", { name: "No server access yet" }),
   ).toBeVisible();
+  await page.unroute("**/api/auth/me");
+  await page.unroute("**/api/guilds");
+
+  // Service outage.
   await page.route("**/api/auth/me", (route) =>
     route.fulfill({
       status: 503,
@@ -269,7 +312,7 @@ test("dashboard states: search, modal focus, guild switch, reduced motion, stale
       body: JSON.stringify({ code: "service-unavailable", error: "Account unavailable" }),
     }),
   );
-  await page.reload();
+  await page.goto("/dashboard");
   await expect(
     page.getByRole("heading", { name: "Workspace unavailable" }),
   ).toBeVisible();
