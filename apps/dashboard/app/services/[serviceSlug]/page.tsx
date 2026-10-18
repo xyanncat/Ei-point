@@ -84,9 +84,9 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
           <p>Checkout always shows the authoritative amount for your order; staff confirm availability before starting.</p>
         </div>
       </div>
-      <p>
+      <div>
         <CheckoutButton serviceId={service.sku} name={service.name} />
-      </p>
+      </div>
       <p>
         <a className="ei-action" href="/verify">
           Verify an order ↗

@@ -45,6 +45,11 @@ export default function CardsPage() {
           connected yet — nothing here promises them until the card system
           ships.
         </p>
+        <p>
+          Search, filters and detail views arrive together with the first card
+          definitions and artwork — the asset drop for cards is still pending,
+          so there is nothing to filter yet.
+        </p>
       </div>
     </section>
   );

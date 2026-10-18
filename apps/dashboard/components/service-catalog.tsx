@@ -24,7 +24,10 @@ export function ServiceCatalog() {
       <div className="ei-catalog-tools">
         <div>
           <h2>Choose your service</h2>
-          <p>{services.length} services · prices from the supplied archive</p>
+          <p>
+            {services.length} services · prices from the supplied archive ·
+            availability confirmed by staff before an order starts
+          </p>
         </div>
         <label>
           Game

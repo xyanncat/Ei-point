@@ -172,3 +172,20 @@ test("services page navigates to verification", async ({ page }) => {
   expect(new URL(page.url()).pathname).toBe("/verify");
   expect(errors).toEqual([]);
 });
+
+test("service details render archive facts with an honest purchase entry; unknown slugs reach not-found", async ({
+  page,
+}) => {
+  const errors = trackPageErrors(page);
+  await page.goto("/services/account-management-membership");
+  await expect(
+    page.getByRole("heading", { name: "All-Games Account Management Membership (30 Days)" }),
+  ).toBeVisible();
+  await expect(page.getByText("₹700").first()).toBeVisible();
+  expect(await page.getByRole("button", { name: /Checkout/i }).count()).toBeGreaterThan(0);
+  expect(await page.getByRole("link", { name: "← All services" }).count()).toBe(1);
+  await page.goto("/services/not-a-real-service");
+  await expect(page.getByRole("heading", { name: "A loose thread." })).toBeVisible();
+  expect(await page.getByRole("link", { name: "Return to Ei point" }).count()).toBe(1);
+  expect(errors).toEqual([]);
+});
