@@ -173,7 +173,7 @@ async function main() {
       try {
         guildCommands = await discordRequest(token, `/applications/${appId}/guilds/${guildId}/commands`);
       } catch (error) {
-        if (String(error.message).includes("HTTP 404")) {
+        if (/HTTP (403|404)/.test(String(error.message))) {
           bot.guilds[guildId] = { status: "not-installed" };
           continue;
         }
