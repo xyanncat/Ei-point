@@ -26,6 +26,7 @@ from src.main import (
     make_handler,
     validate_request,
     verify_model_manifest,
+    mkldnn_enabled,
 )
 
 
@@ -164,6 +165,31 @@ class ServiceQueueTests(unittest.TestCase):
 
 
 class HardInferenceSupervisionTests(unittest.TestCase):
+    def test_permanently_blocked_inference_becomes_restart_due_after_grace(self):
+        gate = threading.Event()
+        runtime = FakeRuntime(gate)
+        service = TtsService(runtime, queue_max=2, request_timeout=0.1, hard_timeout=0.3, stuck_exit_after=0.5)
+        service.start_worker()
+        first = threading.Thread(target=lambda: _swallow_timeout(service, "blocked", "default"), daemon=True)
+        first.start()
+        deadline = time.monotonic() + 1
+        while runtime.calls == 0 and time.monotonic() < deadline:
+            time.sleep(0.005)
+        deadline = time.monotonic() + 2
+        while not service.worker_stuck and time.monotonic() < deadline:
+            service.snapshot_ready()
+            time.sleep(0.01)
+        self.assertTrue(service.worker_stuck)
+        stuck_at = service._stuck_at
+        self.assertIsNotNone(stuck_at)
+        # Inside the grace the service stays degraded but alive; past it the process
+        # is expected to exit so the container supervisor replaces the worker.
+        self.assertFalse(service.stuck_restart_due(stuck_at + 0.4))
+        self.assertTrue(service.stuck_restart_due(stuck_at + 0.5))
+        gate.set()
+        first.join(timeout=2)
+        self.assertFalse(first.is_alive())
+
     def test_stuck_inference_degrades_readiness_and_recovers_for_later_work(self):
         gate = threading.Event()
         runtime = FakeRuntime(gate)
@@ -259,6 +285,13 @@ class ModelManifestTests(unittest.TestCase):
 
 
 class QwenRuntimeTests(unittest.TestCase):
+    def test_mkldnn_policy_respects_capability_and_explicit_override(self):
+        self.assertFalse(mkldnn_enabled("auto", "DEFAULT"))
+        self.assertTrue(mkldnn_enabled("auto", "AVX2"))
+        self.assertTrue(mkldnn_enabled("on", "DEFAULT"))
+        self.assertFalse(mkldnn_enabled("off", "AVX2"))
+        self.assertFalse(mkldnn_enabled("", "DEFAULT"))
+
     def test_voice_clone_uses_model_language_detection(self):
         revision = "a" * 40
         runtime = QwenRuntime(Path("."), revision, Path("reference.wav"), "reference text", 1)

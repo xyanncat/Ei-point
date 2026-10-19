@@ -1,38 +1,40 @@
 #!/usr/bin/env node
 // Enforce the project resource envelope for a selected release (A02).
-// Owner decision 2026-10-16: 9 CPU cores of 10; RAM and disk uncapped because
-// Ei Point is the only project on the host. Per-service limits remain required
-// and validated; the aggregate memory ceiling is retired (null = uncapped).
+// Owner decision: Ei Point is the only project on this 10-vCPU host. Runtime CPU is
+// pooled with weighted CFS shares; the aggregate cap is the ei-point.slice
+// (CPUQuota=900%) that every container must belong to. CPU shares are fairness
+// weights, not a reservation or a hard per-service cap. Memory limits stay
+// mandatory per service; the aggregate memory ceiling is retired (null = uncapped).
 // Usage: node scripts/check-resource-budget.mjs [rendered-compose.json]
-// Without an argument the approved in-repo allocation is validated.
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const CPU_CEILING = 9;
 export const MEMORY_CEILING_GIB = null;
+export const POOL_CGROUP_PARENT = "ei-point.slice";
 
-/** Approved runtime allocation (plan §2A). Keep in sync with infra/docker/compose.yml. */
+/** Approved runtime allocation. Keep in sync with infra/docker/compose.yml. */
 export const APPROVED_RUNTIME = {
-  postgres: { cpus: 1.25, memoryGiB: 6 },
-  nginx: { cpus: 0.15, memoryGiB: 0.5 },
-  api: { cpus: 0.35, memoryGiB: 1 },
-  web: { cpus: 0.30, memoryGiB: 1 },
-  "bot-community": { cpus: 0.40, memoryGiB: 2 },
-  "bot-ai": { cpus: 0.50, memoryGiB: 2 },
-  "hy-mt2": { cpus: 1.00, memoryGiB: 4 },
-  "tts-qwen": { cpus: 0.75, memoryGiB: 8 },
-  "bot-music": { cpus: 0.75, memoryGiB: 2 },
-  "bot-kafka": { cpus: 0.75, memoryGiB: 1.5 },
-  "bot-himiko": { cpus: 0.35, memoryGiB: 1.5 },
-  "bot-commerce": { cpus: 0.40, memoryGiB: 1.5 },
-  workers: { cpus: 0.50, memoryGiB: 1.5 },
+  postgres: { shares: 2048, memoryGiB: 6, cgroupParent: POOL_CGROUP_PARENT },
+  nginx: { shares: 256, memoryGiB: 0.5, cgroupParent: POOL_CGROUP_PARENT },
+  api: { shares: 1024, memoryGiB: 1, cgroupParent: POOL_CGROUP_PARENT },
+  web: { shares: 1024, memoryGiB: 1, cgroupParent: POOL_CGROUP_PARENT },
+  "bot-community": { shares: 512, memoryGiB: 2, cgroupParent: POOL_CGROUP_PARENT },
+  "bot-ai": { shares: 512, memoryGiB: 2, cgroupParent: POOL_CGROUP_PARENT },
+  "hy-mt2": { shares: 2048, memoryGiB: 4, cgroupParent: POOL_CGROUP_PARENT },
+  "tts-qwen": { shares: 8192, memoryGiB: 8, cgroupParent: POOL_CGROUP_PARENT },
+  "bot-music": { shares: 512, memoryGiB: 2, cgroupParent: POOL_CGROUP_PARENT },
+  "bot-kafka": { shares: 512, memoryGiB: 1.5, cgroupParent: POOL_CGROUP_PARENT },
+  "bot-himiko": { shares: 512, memoryGiB: 1.5, cgroupParent: POOL_CGROUP_PARENT },
+  "bot-commerce": { shares: 512, memoryGiB: 1.5, cgroupParent: POOL_CGROUP_PARENT },
+  workers: { shares: 1024, memoryGiB: 1.5, cgroupParent: POOL_CGROUP_PARENT },
 };
 
 /** Allowed concurrently with the runtime during maintenance windows. */
 export const APPROVED_MAINTENANCE = {
-  migrate: { cpus: 0.25, memoryGiB: 0.25 },
-  backup: { cpus: 0.25, memoryGiB: 1 },
+  migrate: { shares: 256, memoryGiB: 0.25, cgroupParent: POOL_CGROUP_PARENT },
+  backup: { shares: 256, memoryGiB: 1, cgroupParent: POOL_CGROUP_PARENT },
 };
 
 const RUNTIME_SERVICES = new Set(Object.keys(APPROVED_RUNTIME));
@@ -51,16 +53,29 @@ function parseMemoryGiB(value) {
   return amount;
 }
 
-/** Read deploy resource limits from a rendered compose JSON (docker compose config --format json). */
+function positiveNumber(value) {
+  const number = typeof value === "string" ? Number(value) : value;
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+/** Read deploy resource controls from a rendered compose JSON (docker compose config --format json). */
 export function serviceResourcesFromCompose(compose) {
   const entries = Object.entries(compose?.services ?? {});
   return Object.fromEntries(
     entries.map(([name, service]) => {
-      const limits = service?.deploy?.resources?.limits;
-      if (!limits || limits.cpus === undefined || limits.memory === undefined) return [name, {}];
-      const cpus = typeof limits.cpus === "string" ? Number(limits.cpus) : limits.cpus;
+      const limits = service?.deploy?.resources?.limits ?? {};
+      const cpus = positiveNumber(limits.cpus);
+      const shares = positiveNumber(service?.cpu_shares);
       const memoryGiB = parseMemoryGiB(limits.memory);
-      return [name, { cpus: Number.isFinite(cpus) ? cpus : undefined, memoryGiB: memoryGiB ?? undefined }];
+      return [
+        name,
+        {
+          ...(cpus ? { cpus } : {}),
+          ...(shares ? { shares } : {}),
+          ...(memoryGiB ? { memoryGiB } : {}),
+          ...(service?.cgroup_parent ? { cgroupParent: service.cgroup_parent } : {}),
+        },
+      ];
     }),
   );
 }
@@ -69,32 +84,68 @@ function normalize(services) {
   const violations = [];
   const normalized = {};
   for (const [name, limits] of Object.entries(services)) {
-    const cpus = typeof limits.cpus === "string" ? Number(limits.cpus) : limits.cpus;
+    const cpus = positiveNumber(limits.cpus);
+    const shares = positiveNumber(limits.shares);
     const memoryGiB = limits.memoryGiB ?? parseMemoryGiB(limits.memory);
-    if (!Number.isFinite(cpus) || cpus <= 0 || !Number.isFinite(memoryGiB) || memoryGiB <= 0) {
+    if (cpus && shares) {
+      violations.push(`${name}: declare either limits.cpus or cpu_shares, not both`);
+      continue;
+    }
+    if ((!cpus && !shares) || !Number.isFinite(memoryGiB) || memoryGiB <= 0) {
       violations.push(`${name}: missing or invalid CPU/memory limits`);
       continue;
     }
-    normalized[name] = { cpus, memoryGiB };
+    normalized[name] = {
+      ...(cpus ? { cpus } : {}),
+      ...(shares ? { shares } : {}),
+      memoryGiB,
+      cgroupParent: String(limits.cgroupParent ?? "").trim(),
+    };
   }
   return { normalized, violations };
 }
 
-/** Returns totals and violations for a service->{cpus,memoryGiB} map. */
+/** Totals and violations for a service->{cpus|shares,memoryGiB,cgroupParent} map. */
 export function validateResourceBudget(services, { cpu = CPU_CEILING, memoryGiB = MEMORY_CEILING_GIB } = {}) {
   const { normalized, violations } = normalize(services);
-  const runtimeNames = Object.keys(normalized).filter((name) => RUNTIME_SERVICES.has(name));
-  const maintenanceNames = Object.keys(normalized).filter((name) => !RUNTIME_SERVICES.has(name) && !LEGACY_SERVICES.has(name));
-  const unknownNames = Object.keys(normalized).filter((name) => !RUNTIME_SERVICES.has(name) && !MAINTENANCE_SERVICES.has(name) && !LEGACY_SERVICES.has(name));
+  const names = Object.keys(normalized);
+  const runtimeNames = names.filter((name) => RUNTIME_SERVICES.has(name));
+  const maintenanceNames = names.filter((name) => !RUNTIME_SERVICES.has(name) && !LEGACY_SERVICES.has(name));
+  const unknownNames = names.filter((name) => !RUNTIME_SERVICES.has(name) && !MAINTENANCE_SERVICES.has(name) && !LEGACY_SERVICES.has(name));
   for (const name of unknownNames) violations.push(`${name}: not part of the approved allocation`);
-  const sum = (names) =>
-    names.reduce((total, name) => ({ cpu: total.cpu + normalized[name].cpus, memoryGiB: total.memoryGiB + normalized[name].memoryGiB }), { cpu: 0, memoryGiB: 0 });
+
+  const poolMode = runtimeNames.length > 0 && runtimeNames.every((name) => normalized[name].shares !== undefined);
+  const hardMode = runtimeNames.length > 0 && runtimeNames.every((name) => normalized[name].cpus !== undefined);
+  if (!poolMode && !hardMode) {
+    violations.push("mixed CPU control: use cpu_shares (pool) or limits.cpus (hard) for every runtime service");
+  }
+  if (poolMode) {
+    for (const name of runtimeNames) {
+      if (normalized[name].cgroupParent !== POOL_CGROUP_PARENT) {
+        violations.push(`${name}: cpu_shares requires cgroup_parent ${POOL_CGROUP_PARENT} for the aggregate cap`);
+      }
+    }
+  }
+
+  const sum = (list) =>
+    list.reduce(
+      (total, name) => ({
+        cpu: total.cpu + (normalized[name].cpus ?? 0),
+        shares: total.shares + (normalized[name].shares ?? 0),
+        memoryGiB: total.memoryGiB + normalized[name].memoryGiB,
+      }),
+      { cpu: 0, shares: 0, memoryGiB: 0 },
+    );
   const runtime = sum(runtimeNames);
   const maintenance = sum(maintenanceNames);
-  const concurrent = { cpu: runtime.cpu + maintenance.cpu, memoryGiB: runtime.memoryGiB + maintenance.memoryGiB };
-  if (concurrent.cpu > cpu) violations.push(`concurrent cpu ${concurrent.cpu.toFixed(2)} exceeds ceiling ${cpu}`);
+  const concurrent = {
+    cpu: runtime.cpu + maintenance.cpu,
+    shares: runtime.shares + maintenance.shares,
+    memoryGiB: runtime.memoryGiB + maintenance.memoryGiB,
+  };
+  if (hardMode && concurrent.cpu > cpu) violations.push(`concurrent cpu ${concurrent.cpu.toFixed(2)} exceeds ceiling ${cpu}`);
   if (memoryGiB != null && concurrent.memoryGiB > memoryGiB) violations.push(`concurrent memory ${concurrent.memoryGiB.toFixed(2)} GiB exceeds ceiling ${memoryGiB}`);
-  return { ok: violations.length === 0, violations, runtime, maintenance, concurrent };
+  return { ok: violations.length === 0, violations, mode: poolMode ? "pool" : hardMode ? "hard" : "invalid", runtime, maintenance, concurrent };
 }
 
 async function main() {
@@ -113,7 +164,10 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  console.log(`Resource budget ok: runtime ${result.runtime.cpu.toFixed(2)} CPU / ${result.runtime.memoryGiB} GiB; concurrent ${result.concurrent.cpu.toFixed(2)} CPU / ${result.concurrent.memoryGiB} GiB.`);
+  const cpuText = result.mode === "pool"
+    ? `${result.runtime.shares} shares (capped by ${POOL_CGROUP_PARENT} at ${CPU_CEILING} CPU)`
+    : `${result.runtime.cpu.toFixed(2)} CPU`;
+  console.log(`Resource budget ok (${result.mode} mode): runtime ${cpuText} / ${result.runtime.memoryGiB} GiB; concurrent ${result.concurrent.memoryGiB} GiB.`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

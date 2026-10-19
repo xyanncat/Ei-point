@@ -202,6 +202,34 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def mkldnn_enabled(mode: str | None, capability: str | None) -> bool:
+    """Decide whether oneDNN is usable on this CPU.
+
+    oneDNN needs SSE4.1-class kernels; PyTorch reports ``DEFAULT`` when only
+    baseline kernels are available (for example a qemu64 KVM vCPU). ``mode`` is
+    an explicit override: auto/on/off. The fallback stays available for verified
+    incompatible hosts while modern CPUs keep the optimized kernels.
+    """
+    normalized = (mode or "auto").strip().lower()
+    if normalized in {"1", "on", "true", "yes"}:
+        return True
+    if normalized in {"0", "off", "false", "no"}:
+        return False
+    return (capability or "").strip().upper() not in {"", "DEFAULT"}
+
+
+def _apply_mkldnn_policy(torch_module: Any) -> bool:
+    try:
+        capability = torch_module.backends.cpu.get_cpu_capability()
+    except Exception:
+        capability = "DEFAULT"
+    mode = os.environ.get("QWEN_TTS_MKLDNN", "auto")
+    enabled = mkldnn_enabled(mode, capability)
+    torch_module.backends.mkldnn.enabled = enabled
+    logger.info("oneDNN %s (cpu capability %s, mode %s)", "enabled" if enabled else "disabled", capability, mode)
+    return enabled
+
+
 @dataclass
 class RuntimeState:
     model: Any = None
@@ -236,10 +264,7 @@ class QwenRuntime:
             from qwen_tts import Qwen3TTSModel
 
             torch.set_num_threads(self.torch_threads)
-            # oneDNN requires SSE4.1+ kernels; on baseline-SSE2 KVM CPUs every
-            # conv primitive fails ("could not create a primitive"), so fall back
-            # to ATen's native implementations.
-            torch.backends.mkldnn.enabled = False
+            _apply_mkldnn_policy(torch)
             try:
                 torch.set_num_interop_threads(1)
             except RuntimeError:
@@ -309,13 +334,17 @@ class WorkItem:
 
 
 class TtsService:
-    def __init__(self, runtime: QwenRuntime, queue_max: int, request_timeout: float, hard_timeout: float | None = None):
+    def __init__(self, runtime: QwenRuntime, queue_max: int, request_timeout: float, hard_timeout: float | None = None, stuck_exit_after: float | None = None):
         self.runtime = runtime
         self.queue: queue.Queue[WorkItem] = queue.Queue(maxsize=queue_max)
         self.request_timeout = request_timeout
         # Hard deadline: a request that outlives it marks the worker stuck, degrades
         # readiness, and refuses new work until the stuck inference actually settles.
         self.hard_timeout = hard_timeout if hard_timeout is not None else request_timeout + 30.0
+        # A permanently blocked inference cannot be cancelled inside the worker thread.
+        # After this grace the process exits so the container supervisor (Docker
+        # restart policy) replaces it with a freshly loaded model.
+        self.stuck_exit_after = stuck_exit_after
         self.cache = BoundedAudioCache()
         self._lock = threading.Lock()
         self._requests: dict[str, int] = {"success": 0, "invalid": 0, "overload": 0, "timeout": 0, "failure": 0, "degraded": 0}
@@ -324,6 +353,7 @@ class TtsService:
         self._inference_active = False
         self._inference_started_at = 0.0
         self._worker_stuck = False
+        self._stuck_at: float | None = None
         self._shutdown = False
         self._worker = threading.Thread(target=self._run_worker, name="qwen-inference", daemon=True)
 
@@ -418,6 +448,7 @@ class TtsService:
                 with self._lock:
                     self._inference_active = False
                     self._worker_stuck = False
+                    self._stuck_at = None
                     self._inference_seconds_sum += elapsed
                     self._inference_count += 1
                 item.done.set()
@@ -434,8 +465,29 @@ class TtsService:
                 return False
             if self._inference_active and not self._worker_stuck and moment - self._inference_started_at > self.hard_timeout:
                 self._worker_stuck = True
+                self._stuck_at = moment
                 logger.error("TTS inference exceeded its hard deadline; readiness degraded until it settles")
-            return self._worker_stuck
+            stuck = self._worker_stuck
+        if stuck:
+            self.restart_if_stuck_expired(moment)
+        return stuck
+
+    def stuck_restart_due(self, now: float | None = None) -> bool:
+        """True when a stuck inference outlived the restart grace."""
+        moment = now if now is not None else time.monotonic()
+        with self._lock:
+            return bool(
+                self._inference_active
+                and self._worker_stuck
+                and self._stuck_at is not None
+                and self.stuck_exit_after is not None
+                and moment - self._stuck_at >= self.stuck_exit_after
+            )
+
+    def restart_if_stuck_expired(self, now: float | None = None) -> None:
+        if self.stuck_restart_due(now):
+            logger.error("TTS inference remained stuck past the restart grace; exiting for a supervised restart")
+            os._exit(1)
 
     def _count(self, result: str) -> None:
         with self._lock:
@@ -674,7 +726,14 @@ def main() -> None:
         hard_timeout = request_timeout + 30
     port = _positive_int("QWEN_TTS_PORT", 3120, 1024, 65535)
     runtime = QwenRuntime(model_dir, model_revision, reference_audio, reference_text, threads)
-    service = TtsService(runtime, queue_max=queue_max, request_timeout=request_timeout, hard_timeout=hard_timeout)
+    stuck_exit = _positive_int("QWEN_TTS_STUCK_EXIT_SECONDS", 60, 0, 3600)
+    service = TtsService(
+        runtime,
+        queue_max=queue_max,
+        request_timeout=request_timeout,
+        hard_timeout=hard_timeout,
+        stuck_exit_after=float(stuck_exit) if stuck_exit > 0 else None,
+    )
     service.start()
     server = BoundedHttpServer(("0.0.0.0", port), make_handler(service))
 
