@@ -64,7 +64,7 @@ services:
     networks:
       edge: {}
       app:
-        ipv4_address: ${TRUSTED_PROXY_IP:-172.29.10.2}
+        ipv4_address: ${TRUSTED_PROXY_IP:-172.29.10.250}
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
     cpu_shares: 256
@@ -91,7 +91,7 @@ services:
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
       OAUTH_REDIRECT_URL: ${OAUTH_REDIRECT_URL}
       COOKIE_SECURE: "true"
-      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_IP:-172.29.10.2}/32
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_IP:-172.29.10.250}/32
       DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN}
       DASHBOARD_ADMIN_IDS: ${DASHBOARD_ADMIN_IDS:-}
       VAULT_SECRET: ${VAULT_SECRET}
