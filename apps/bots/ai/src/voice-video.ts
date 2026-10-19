@@ -27,10 +27,13 @@ export interface VoiceVideoPaths {
   artPath: string;
   wavPath: string;
   outPath: string;
+  /** Actual speech duration; bounds the video to the audio instead of a frozen tail. */
+  durationSeconds?: number;
 }
 
 /** Argument array only; no shell, no user text. */
 export function buildVoiceVideoArgs(paths: VoiceVideoPaths): string[] {
+  const videoSeconds = paths.durationSeconds ? Math.min(paths.durationSeconds + 0.05, VOICE_VIDEO_MAX_SECONDS) : VOICE_VIDEO_MAX_SECONDS;
   return [
     "-hide_banner",
     "-loglevel",
@@ -61,7 +64,7 @@ export function buildVoiceVideoArgs(paths: VoiceVideoPaths): string[] {
     "-ar",
     "48000",
     "-t",
-    String(VOICE_VIDEO_MAX_SECONDS),
+    String(videoSeconds),
     "-shortest",
     "-movflags",
     "+faststart",
@@ -207,7 +210,7 @@ export async function renderVoiceVideo(wav: Uint8Array, options: RenderVoiceVide
     const outPath = join(directory, "cyrene.mp4");
     try {
       await writeFile(wavPath, wav, { mode: 0o600 });
-      await runFfmpeg(buildVoiceVideoArgs({ artPath, wavPath, outPath }), options.timeoutMs);
+      await runFfmpeg(buildVoiceVideoArgs({ artPath, wavPath, outPath, durationSeconds: duration ?? undefined }), options.timeoutMs);
       const info = await stat(outPath);
       if (!info.size) throw new VoiceVideoError("empty-video", "conversion produced an empty file");
       if (info.size > VOICE_VIDEO_MAX_BYTES) throw new VoiceVideoError("video-too-large", "converted video exceeds the size bound");

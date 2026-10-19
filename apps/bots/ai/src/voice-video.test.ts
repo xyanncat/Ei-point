@@ -40,6 +40,9 @@ test("video arguments are a bounded, shell-free H.264/AAC still-image encode", (
   assert.ok(args.includes(String(VOICE_VIDEO_MAX_SECONDS)));
   assert.ok(args.join(" ").includes(`scale=${VOICE_VIDEO_WIDTH}`));
   assert.equal(args[args.length - 1], "/tmp/cyrene.mp4");
+  const exact = buildVoiceVideoArgs({ artPath: "a", wavPath: "b", outPath: "c", durationSeconds: 12.5 });
+  assert.ok(exact.includes("12.55"), "video length follows the speech duration");
+  assert.ok(exact.includes("-t"));
 });
 
 test("WAV duration is derived from the actual byte rate", () => {
