@@ -8,6 +8,7 @@ import {
   Events,
   GatewayIntentBits,
   Options,
+  PermissionFlagsBits,
   Routes,
 } from "discord.js";
 import pg from "pg";
@@ -28,7 +29,7 @@ import { extractVoiceChatText, TTS_MAX_CHARS } from "@ei-point/module-tts";
 import { respondToTranslationCommand, translationCommandDefinition } from "./translate.js";
 import { prepareCyrenePersonaPrompt } from "./persona.js";
 
-const ALL_AI_COMMANDS = [...commonCommandDefinitions(), ...ttsCommandDefinitions, translationCommandDefinition];
+const ALL_AI_COMMANDS = [...commonCommandDefinitions(), ...aiCommandDefinitions, ...ttsCommandDefinitions, translationCommandDefinition];
 const TTS_NAMES = new Set(ttsCommandDefinitions.map((c) => c.name));
 const TRANSLATION_NAME = translationCommandDefinition.name;
 
@@ -89,6 +90,13 @@ async function startCyreneSession(guildId: string, voiceChannelId: string, adapt
   const owner = `tts-session:${guildId}:${randomUUID()}`;
   let connection: import("@discordjs/voice").VoiceConnection | undefined;
   try {
+    const channel = await client.channels.fetch(voiceChannelId);
+    const me = channel && "guild" in channel ? await channel.guild.members.fetchMe() : null;
+    const permissions = me && channel && "permissionsFor" in channel ? channel.permissionsFor(me) : null;
+    if (!permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak])) {
+      return { ok: false, reason: "missing-permissions" };
+    }
+    if (channel?.type === 13) return { ok: false, reason: "stage-channel" };
     if (!(await acquireVoiceLease(pool, owner))) return { ok: false, reason: "voice-full" };
     if (voiceSessions.size >= 2 && !voiceSessions.has(guildId)) {
       await pool.query("DELETE FROM ai.voice_leases WHERE owner=$1", [owner]);
@@ -96,8 +104,10 @@ async function startCyreneSession(guildId: string, voiceChannelId: string, adapt
     }
     const voice = await import("@discordjs/voice");
     connection = voice.joinVoiceChannel({ channelId: voiceChannelId, guildId, adapterCreator: adapterCreator as never });
+    connection.on("error", (error) => console.error("cyrene voice connection failed:", error.message));
     await voice.entersState(connection, voice.VoiceConnectionStatus.Ready, 15_000);
     const player = voice.createAudioPlayer();
+    player.on("error", (error) => console.error("cyrene audio player failed:", error.message));
     connection.subscribe(player);
     const leaseTimer = setInterval(() => {
       void pool.query("UPDATE ai.voice_leases SET expires_at=now()+interval '60 seconds' WHERE owner=$1", [owner]).then((result) => {
@@ -130,11 +140,11 @@ async function startCyreneSession(guildId: string, voiceChannelId: string, adapt
   } catch (err) {
     console.error("cyrene voice session failed:", err instanceof Error ? err.message : String(err));
     const session = cyreneVoiceSessions.get(guildId);
-    if (session?.connection === connection) {
+    if (session && session.connection === connection) {
       await stopCyreneSession(guildId);
     } else {
       if (voiceSessions.get(guildId) === connection) voiceSessions.delete(guildId);
-      connection?.destroy();
+      try { connection?.destroy(); } catch { /* Already destroyed during failed handshake. */ }
       await pool.query("DELETE FROM ai.voice_leases WHERE owner=$1", [owner]).catch(() => {
         console.error("cyrene voice lease cleanup deferred until reconciliation");
       });
@@ -161,12 +171,14 @@ async function playTtsAudio(
     if (voiceSessions.size >= 2 && !voiceSessions.has(guildId)) {
       return { ok: false, reason: "voice-full" };
     }
+    if (cyreneVoiceSessions.has(guildId)) return { ok: false, reason: "already-active-elsewhere" };
     connection = voice.joinVoiceChannel({
       channelId,
       guildId,
       adapterCreator: voiceAdapterCreator as never,
     });
     voiceSessions.set(guildId, connection);
+    await voice.entersState(connection as import("@discordjs/voice").VoiceConnection, voice.VoiceConnectionStatus.Ready, 15_000);
     const resource = voice.createAudioResource(Readable.from(Buffer.from(audio.bytes)), {
       inputType: voice.StreamType.Arbitrary,
     });
@@ -185,7 +197,7 @@ async function playTtsAudio(
     return { ok: false, reason: "play-failed" };
   } finally {
     try { connection?.destroy(); } catch { /* Already stopped by /tts-stop. */ }
-    voiceSessions.delete(guildId);
+    if (voiceSessions.get(guildId) === connection) voiceSessions.delete(guildId);
     pendingVoice.delete(guildId);
     await pool.query("DELETE FROM ai.voice_leases WHERE owner=$1", [owner]);
   }
@@ -538,10 +550,13 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         pool,
       );
     } catch (err) {
-      if (interaction.deferred) {
+      console.error(`cyrene command ${interaction.commandName} failed:`, err instanceof Error ? err.message : String(err));
+      if (interaction.deferred || interaction.replied) {
         await interaction
           .editReply({ content: "AI request failed. Check usage and conversation status before retrying." })
           .catch(() => {});
+      } else {
+        await interaction.reply({ content: "AI request failed. Please try again shortly.", ephemeral: true }).catch(() => {});
       }
     } finally {
       activeCommands--;

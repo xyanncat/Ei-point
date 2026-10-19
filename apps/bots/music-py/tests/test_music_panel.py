@@ -115,7 +115,8 @@ class PanelSourceContractTest(unittest.TestCase):
         }
         self.assertEqual(ids, CONTROLS)
         self.assertIn("class MusicPanelView(discord.ui.LayoutView):", self.text)
-        self.assertIn("Container(accent_colour=ROBIN_PANEL_COLOR)", self.text)
+        self.assertIn("discord.ui.Container()", self.text)
+        self.assertNotIn("accent_colour=ROBIN_PANEL_COLOR", self.text)
         self.assertIn("discord.ui.TextDisplay(", self.text)
         self.assertIn("discord.ui.MediaGallery(", self.text)
 
@@ -201,20 +202,14 @@ class PanelControlTest(unittest.IsolatedAsyncioTestCase):
 
 
 class RobinThemeTest(unittest.TestCase):
-    def test_embeds_use_the_robin_theme_and_themed_titles(self):
+    def test_views_use_the_robin_theme_and_a_colourless_container(self):
         ns = panel_namespace()
-        load_panel(ns, {"make_ei_embed"})
-        ns["make_ei_embed"]("Body", "Robin · Queue")
-        kwargs = ns["discord"].Embed.call_args.kwargs
-        self.assertEqual(kwargs["color"], 0x9078D8)
-        self.assertEqual(kwargs["title"], "★ Robin · Queue")
-        self.assertEqual(
-            ns["discord"].Embed.return_value.set_footer.call_args.kwargs["text"],
-            "★ Robin · Ei Point · powered by Ei-Flow",
-        )
-        ns["discord"].Embed.reset_mock()
-        ns["make_ei_embed"]("Body")
-        self.assertEqual(ns["discord"].Embed.call_args.kwargs["title"], "★ Robin · Ei Point")
+        load_panel(ns, {"make_ei_view"})
+        ns["make_ei_view"]("Body", "Robin · Queue")
+        self.assertNotIn("accent_colour", ns["discord"].ui.Container.call_args.kwargs)
+        texts = [call.args[0] for call in ns["discord"].ui.TextDisplay.call_args_list]
+        self.assertTrue(any("★ Robin · Queue" in text for text in texts))
+        self.assertTrue(any("powered by Ei-Flow" in text for text in texts))
 
 
 if __name__ == "__main__":

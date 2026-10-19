@@ -90,7 +90,10 @@ test("valid staff embed send preserves Discord limits, disables mentions and use
   assert.deepEqual(body.allowed_mentions, { parse: [] });
   assert.equal(body.nonce, "stable-job");
   assert.equal(body.enforce_nonce, true);
-  assert.equal(body.embeds[0].color, 0xabcdef);
-  assert.equal(body.embeds[0].author.icon_url, "https://example.org/icon.png");
-  assert.equal(body.components[0].components[0].style, 5);
+  assert.equal(body.flags, 32768);
+  assert.equal(body.embeds, undefined);
+  assert.equal(body.components[0].type, 17);
+  assert.equal(body.components[0].accent_color, undefined);
+  assert.equal(body.components[0].components[1].items[0].media.url, "https://example.org/icon.png");
+  assert.equal(body.components[0].components[2].components[0].style, 5);
 });

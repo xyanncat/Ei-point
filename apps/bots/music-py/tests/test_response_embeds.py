@@ -78,8 +78,9 @@ class RobinEmbedContractTest(unittest.TestCase):
             for node in self.tree.body
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         }
-        for required in ("respond", "make_ei_embed"):
+        for required in ("respond", "make_ei_view"):
             self.assertIn(required, functions)
+        self.assertIn("discord.ui.LayoutView", self.text)
 
     def test_no_interaction_reply_bypasses_the_helper(self):
         # Exemptions: `respond` routes every interaction reply, and

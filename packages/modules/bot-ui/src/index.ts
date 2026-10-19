@@ -1,21 +1,25 @@
 import {
   EmbedBuilder,
+  MessageFlags,
+  MessageFlagsBitField,
   SlashCommandBuilder,
   ContainerBuilder,
   TextDisplayBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   FileBuilder,
-  MessageFlags,
+  type APIContainerComponent,
   type ChatInputCommandInteraction,
   type Client,
+  type MessageMentionOptions,
 } from "discord.js";
 
 const DEFAULT_IMAGE =
   "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif";
 
 /** Per-identity character themes (owner request 2026-10-18), grounded in each
- *  bot's own artwork in `project assets/bots/<Bot>/embed.png`. */
+ *  bot's own artwork in `project assets/bots/<Bot>/embed.png`. Colours are retained
+ *  as identity data but are no longer sent: the owner asked for colourless cards. */
 export const IDENTITY_THEMES = {
   kafka: { color: 0xe0202f, emoji: "🕷️", name: "Kafka" },
   cyrene: { color: 0xce86e0, emoji: "🌸", name: "Cyrene" },
@@ -55,6 +59,8 @@ export function resolveEmbedImage(imageKey?: string): string {
   return process.env.EI_POINT_EMBED_IMAGE_URL?.trim() || DEFAULT_IMAGE;
 }
 
+/** Intermediate legacy builder; its data is converted to Components V2 before sending.
+ *  No colour is set, per the owner's "no colour" instruction. */
 export function createEiEmbed(options: EmbedReplyOptions): EmbedBuilder {
   const imageUrl = options.imageUrl ?? resolveEmbedImage(options.imageKey);
   const theme = identityTheme(options.imageKey);
@@ -110,16 +116,15 @@ export async function replyEiEmbed(
   const allowedMentions = allowOwnerPing && ownerId && /^\d{17,20}$/.test(ownerId)
     ? { users: [ownerId] }
     : { parse: [] as const };
-  const payload = {
-    embeds: [createEiEmbed(options)],
-    ephemeral: options.ephemeral ?? false,
-    allowedMentions,
-  };
+  const payload = toEiComponentPayload(
+    { embeds: [createEiEmbed(options)], allowedMentions },
+    options.imageKey,
+  );
   if (interaction.deferred || interaction.replied) {
-    await interaction.editReply({ embeds: payload.embeds, allowedMentions: payload.allowedMentions });
+    await interaction.editReply(payload as never);
     return;
   }
-  await interaction.reply(payload);
+  await interaction.reply({ ...payload, flags: payload.flags | (options.ephemeral ? MessageFlags.Ephemeral : 0) } as never);
 }
 
 export function commonCommandDefinitions() {
@@ -174,71 +179,88 @@ export async function respondToCommonCommand(
   return true;
 }
 
-export function toEiEmbedPayload(text: string, title = "Ei Point", imageKey?: string) {
-  return {
-    embeds: [createEiEmbed({ title, description: text.trim() ? text : "No additional details.", ...(imageKey ? { imageKey } : {}) })],
-    allowedMentions: { parse: [] as const },
-  };
+type Payload = Record<string, unknown>;
+
+function json(value: unknown): Payload {
+  if (value && typeof value === "object" && "toJSON" in value) return (value as { toJSON(): Payload }).toJSON();
+  return (value ?? {}) as Payload;
 }
 
-function payloadWithEiEmbed(input: unknown, imageKey?: string): unknown {
-  if (typeof input === "string") return toEiEmbedPayload(input, "Ei Point", imageKey);
-  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
-  const value = input as Record<string, unknown>;
-  // Components V2 messages own their layout (text, media, files, buttons inside one
-  // container): never inject embeds or rewrite them.
-  if (typeof value.flags === "number" && (value.flags & MessageFlags.IsComponentsV2) !== 0) return value;
-  const imageUrl = resolveEmbedImage(imageKey);
-  if (typeof value.content !== "string" || value.content.trim().length === 0) {
-    if (Array.isArray(value.embeds) && value.embeds.length > 0) {
-      const embeds = value.embeds.map((embed, index) => {
-        if (index !== 0 || !embed || typeof embed !== "object") return embed;
-        return EmbedBuilder.from(embed as never).setImage(imageUrl).toJSON();
-      });
-      return { ...value, embeds };
-    }
-    return { ...value, embeds: [createEiEmbed({ title: "Ei Point", description: "No additional details.", imageUrl, ...(imageKey ? { imageKey } : {}) })] };
+/** Compatibility name for callers; all output uses Components V2. */
+export function toEiEmbedPayload(text: string, title = "Ei Point", imageKey?: string) {
+  return toEiComponentPayload({ embeds: [createEiEmbed({ title, description: text.trim() ? text : "No additional details.", ...(imageKey ? { imageKey } : {}) })] }, imageKey);
+}
+
+/** Convert legacy replies at the boundary into a colourless Components V2 container,
+ *  retaining uploads, controls, mention policy and ephemeral flags. */
+export function toEiComponentPayload(input: string | Payload, imageKey?: string) {
+  const value: Payload = typeof input === "string" ? { content: input } : input;
+  const { content, embeds, ephemeral, flags, components, ...rest } = value;
+  const bits = flags === undefined ? 0 : typeof flags === "number" ? flags : new MessageFlagsBitField(flags as never).bitfield;
+  const allowedMentions = (value.allowedMentions ?? { parse: [] }) as MessageMentionOptions;
+  if (bits & MessageFlags.IsComponentsV2) {
+    // Idempotent: repeated wrapping must not duplicate containers.
+    return { ...rest, components: components as APIContainerComponent[], flags: bits | (ephemeral ? MessageFlags.Ephemeral : 0), allowedMentions };
   }
-  const existingEmbeds = Array.isArray(value.embeds) ? value.embeds : [];
-  const hasExistingEmbed = existingEmbeds.length > 0;
-  if (hasExistingEmbed) {
-    const [first, ...restEmbeds] = existingEmbeds;
-    const branded = first && typeof first === "object"
-      ? EmbedBuilder.from(first as never).setImage(imageUrl)
-      : createEiEmbed({ title: "Ei Point", description: value.content, imageUrl, ...(imageKey ? { imageKey } : {}) });
-    const data = branded.toJSON();
-    if (!data.description && value.content) branded.setDescription(String(value.content).slice(0, 4096));
-    const { content: _content, ...rest } = value;
-    const brandedEmbeds = [branded.toJSON(), ...restEmbeds];
-    if (data.description && value.content) {
-      brandedEmbeds.push(createEiEmbed({ title: "Ei Point", description: String(value.content), imageUrl, ...(imageKey ? { imageKey } : {}) }).toJSON());
-    }
-    return {
-      ...rest,
-      embeds: brandedEmbeds,
-      allowedMentions: value.allowedMentions ?? { parse: [] },
-    };
+
+  const children: APIContainerComponent["components"] = [];
+  let remaining = 3600; // Leave room for the footer within Discord's total text limit.
+  const text = (body: string) => {
+    const fitted = body.slice(0, remaining);
+    if (fitted.trim()) { children.push({ type: 10, content: fitted }); remaining -= fitted.length; }
+  };
+  if (typeof content === "string") text(content);
+  const images: string[] = [];
+  let footer: string | undefined;
+  for (const item of Array.isArray(embeds) ? embeds : []) {
+    const embed = json(item);
+    if (typeof embed.title === "string") text(`### ${embed.title}`);
+    if (typeof embed.description === "string") text(embed.description);
+    for (const field of Array.isArray(embed.fields) ? embed.fields : []) text(`**${field.name}**\n${field.value}`);
+    const image = embed.image as { url?: string } | undefined;
+    if (image?.url) images.push(image.url);
+    const embedFooter = embed.footer as { text?: string } | undefined;
+    if (!footer && embedFooter?.text) footer = embedFooter.text;
   }
-  const { content: _content, ...rest } = value;
+  if (!children.length) text("No additional details.");
+  const combinedText = children.map((child) => (child.type === 10 ? (child as { content: string }).content : "")).join("\n\n");
+  children.splice(0, children.length, { type: 10, content: combinedText });
+  if (!images.length) images.push(resolveEmbedImage(imageKey));
+  children.push({ type: 12, items: [...new Set(images)].slice(0, 10).map((url) => ({ media: { url } })) });
+  for (const file of Array.isArray(value.files) ? value.files : []) {
+    const data = json(file);
+    const name = typeof data.name === "string" ? data.name : typeof file === "string" ? file.split(/[\\/]/).pop() : undefined;
+    if (name) children.push({ type: 13, file: { url: `attachment://${name}` } });
+  }
+  children.push({ type: 14, divider: true, spacing: 1 });
+  const theme = identityTheme(imageKey);
+  children.push({ type: 10, content: `-# ${footer ?? (theme ? `${theme.emoji} ${theme.name} · Ei Point · powered by Ei-Flow` : "Ei Point · powered by Ei-Flow")}` });
+  const rows = (Array.isArray(components) ? components : []).map(json);
+  // Action rows fit inside the container; preserve other layouts at the top level.
+  const nestedRows = rows.filter((row) => row.type === 1) as unknown as APIContainerComponent["components"];
+  children.push(...nestedRows);
+  // No accent_color: the owner requested colourless cards.
+  const container: APIContainerComponent = { type: 17, components: children };
   return {
     ...rest,
-    embeds: [createEiEmbed({ title: "Ei Point", description: value.content, imageUrl, ...(imageKey ? { imageKey } : {}) })],
-    allowedMentions: value.allowedMentions ?? { parse: [] },
+    components: [container, ...rows.filter((row) => row.type !== 1)] as APIContainerComponent[],
+    flags: bits | MessageFlags.IsComponentsV2 | (ephemeral ? MessageFlags.Ephemeral : 0),
+    allowedMentions,
   };
 }
 
-/** Wrap Discord interaction reply methods so legacy text replies become branded embeds. */
+/** Wrap shared interaction responses, including edits and component updates. */
 export function withEiEmbedReplies<T extends object>(interaction: T, imageKey?: string): T {
   return new Proxy(interaction, {
-    get(target, property, receiver) {
+    get(target, property) {
       const method = Reflect.get(target, property, target);
-      if (property !== "reply" && property !== "editReply" && property !== "followUp") {
+      if (property !== "reply" && property !== "editReply" && property !== "followUp" && property !== "update") {
         return typeof method === "function" ? method.bind(target) : method;
       }
       if (typeof method !== "function") return method;
       return (...args: unknown[]) => {
-        if (args.length === 0) return Reflect.apply(method, target, args);
-        return Reflect.apply(method, target, [payloadWithEiEmbed(args[0], imageKey), ...args.slice(1)]);
+        if (!args.length) return Reflect.apply(method, target, args);
+        return Reflect.apply(method, target, [toEiComponentPayload(args[0] as string | Payload, imageKey), ...args.slice(1)]);
       };
     },
   });

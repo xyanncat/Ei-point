@@ -135,7 +135,16 @@ export async function respondToTtsCommand(
       return true;
     }
     const started = await ctx.startTts();
-    await ctx.reply(started.ok ? "Cyrene joined. New messages in this voice channel's text chat will be read aloud; use `/leave` to stop." : started.reason === "already-active-elsewhere" ? "Cyrene is already reading a different voice channel in this server. Use `/leave` there before starting another session." : started.reason === "no-humans" ? "No members remain in that voice channel, so Cyrene left." : "Cyrene could not start the voice session. Check voice permissions and try again.");
+    const failures: Record<string, string> = {
+      "already-active-elsewhere": "Cyrene is already reading a different voice channel in this server. Use `/leave` there before starting another session.",
+      "no-humans": "No members remain in that voice channel, so Cyrene left.",
+      "voice-full": "Cyrene's voice sessions are at capacity. Wait for a session to finish and try again.",
+      "missing-permissions": "Cyrene needs View Channel, Connect, and Speak permissions in your voice channel.",
+      "stage-channel": "Use a regular voice channel for Cyrene text reading. Stage channels are not supported.",
+    };
+    await ctx.reply(started.ok
+      ? "Cyrene joined. New messages in this voice channel's text chat will be read aloud; use `/leave` to stop."
+      : failures[started.reason] ?? "Cyrene could not establish a voice connection. Check the bot logs for the connection error and verify outbound Discord voice/UDP access.");
     return true;
   }
 

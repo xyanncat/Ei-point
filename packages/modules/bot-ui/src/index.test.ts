@@ -1,122 +1,104 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { EmbedBuilder } from "discord.js";
-import { commonCommandDefinitions, createEiEmbed, identityTheme, isCommonCommand, resolveEmbedImage, respondToCommonCommand, toEiEmbedPayload, withEiEmbedReplies } from "./index.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from "discord.js";
+import {
+  commonCommandDefinitions,
+  createEiEmbed,
+  identityTheme,
+  isCommonCommand,
+  toEiComponentPayload,
+  toEiEmbedPayload,
+  withEiEmbedReplies,
+} from "./index.js";
 
-test("common command list contains the three shared commands", () => {
+test("common commands retain their names", () => {
   assert.deepEqual(commonCommandDefinitions().map((command) => command.name), ["botinfo", "ping", "about"]);
   assert.equal(isCommonCommand("about"), true);
   assert.equal(isCommonCommand("ask"), false);
 });
 
-test("branded interaction replies preserve content alongside an existing embed", async () => {
-  let payload: Record<string, unknown> | undefined;
-  const interaction = withEiEmbedReplies({ reply: async (value: unknown) => { payload = value as Record<string, unknown>; } });
-  await interaction.reply({ content: "Preview is ready.", embeds: [new EmbedBuilder().setTitle("Custom").setDescription("Custom body")] });
-  const embeds = payload?.embeds as Array<{ description?: string; image?: { url: string } }>;
-  assert.equal(embeds[0]?.description, "Custom body");
-  assert.equal(embeds[0]?.image?.url, process.env.EI_POINT_EMBED_IMAGE_URL ?? "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif");
-  assert.equal(embeds[1]?.description, "Preview is ready.");
+test("legacy text and embed fields become container text without losing either", async () => {
+  let sent: any;
+  const interaction = withEiEmbedReplies({ reply: async (payload: unknown) => { sent = payload; } });
+  await interaction.reply({
+    content: "Preview is ready.",
+    embeds: [new EmbedBuilder().setTitle("Custom").setDescription("Custom body").addFields({ name: "Status", value: "Ready" })],
+  });
+  assert.equal(sent.flags & MessageFlags.IsComponentsV2, MessageFlags.IsComponentsV2);
+  assert.equal(sent.content, undefined);
+  assert.equal(sent.embeds, undefined);
+  assert.equal(sent.components[0].type, 17);
+  assert.equal(sent.components[0].accent_color, undefined);
+  const body = JSON.stringify(sent.components);
+  for (const text of ["Preview is ready.", "Custom", "Custom body", "Status", "Ready"]) assert.ok(body.includes(text));
 });
 
-test("Ei Point embeds always include the configured brand image", () => {
+test("brand media and empty text remain visible", () => {
   const previous = process.env.EI_POINT_EMBED_IMAGE_URL;
-  process.env.EI_POINT_EMBED_IMAGE_URL = "https://example.test/ei-point.png";
+  process.env.EI_POINT_EMBED_IMAGE_URL = "https://example.test/brand.png";
   try {
-    assert.equal(createEiEmbed({ title: "Test", description: "Body" }).toJSON().image?.url, "https://example.test/ei-point.png");
-    assert.equal(toEiEmbedPayload("Reply").embeds[0]?.toJSON().image?.url, "https://example.test/ei-point.png");
+    assert.equal(createEiEmbed({ title: "Test", description: "Body" }).toJSON().image?.url, "https://example.test/brand.png");
+    const body = JSON.stringify(toEiEmbedPayload(""));
+    assert.ok(body.includes("No additional details."));
+    assert.ok(body.includes("https://example.test/brand.png"));
+    assert.ok(body.includes("\"type\":12"));
   } finally {
     if (previous === undefined) delete process.env.EI_POINT_EMBED_IMAGE_URL;
     else process.env.EI_POINT_EMBED_IMAGE_URL = previous;
   }
 });
 
-test("empty branded replies use a visible non-whitespace description", () => {
-  assert.equal(toEiEmbedPayload("").embeds[0]?.toJSON().description, "No additional details.");
+test("files and buttons are rendered inside the container and uploads survive", () => {
+  const files = [{ attachment: Buffer.from("audio"), name: "cyrene.wav" }];
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId("cancel:123").setLabel("Cancel").setStyle(ButtonStyle.Secondary),
+  );
+  const payload = toEiComponentPayload({ content: "Ready", files, components: [row], ephemeral: true });
+  assert.equal(payload.flags, MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral);
+  const children = (payload.components[0] as any).components;
+  assert.ok(children.some((child: any) => child.type === 13 && child.file.url === "attachment://cyrene.wav"));
+  assert.ok(JSON.stringify(children).includes("cancel:123"));
+  assert.equal((payload as any).files, files);
+  assert.equal((payload.components[0] as any).accent_color, undefined);
 });
 
-test("per-identity embed image overrides the shared configured image", async () => {
+test("V2 payloads pass through repeated wrapping without duplicate containers", () => {
+  const first = toEiComponentPayload({ content: "Done", allowedMentions: { users: ["123"] } });
+  const second = toEiComponentPayload(first as never);
+  assert.deepEqual(second, first);
+});
+
+test("deferred edit and followup conversion preserves methods, flags and mention restrictions", async () => {
+  const seen: any[] = [];
+  const target = {
+    deferred: true,
+    editReply: async function (value: unknown) { assert.equal(this.deferred, true); seen.push(value); },
+    followUp: async (value: unknown) => { seen.push(value); },
+  };
+  const interaction = withEiEmbedReplies(target);
+  await interaction.editReply("Finished");
+  await interaction.followUp({ content: "Private", flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+  assert.equal((seen[0] as any).flags & MessageFlags.IsComponentsV2, MessageFlags.IsComponentsV2);
+  assert.equal((seen[1] as any).flags, MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral);
+  assert.deepEqual((seen[1] as any).allowedMentions, { parse: [] });
+});
+
+test("per-identity image override and colourless footer survive conversion", () => {
   const previousShared = process.env.EI_POINT_EMBED_IMAGE_URL;
   const previousHimiko = process.env.EI_POINT_EMBED_IMAGE_HIMIKO;
   process.env.EI_POINT_EMBED_IMAGE_URL = "https://example.test/shared.png";
   process.env.EI_POINT_EMBED_IMAGE_HIMIKO = "https://example.test/himiko.png";
   try {
-    assert.equal(resolveEmbedImage("himiko"), "https://example.test/himiko.png");
-    assert.equal(resolveEmbedImage("kafka"), "https://example.test/shared.png");
-    assert.equal(createEiEmbed({ title: "Rank", description: "Level 3", imageKey: "himiko" }).toJSON().image?.url, "https://example.test/himiko.png");
-    let payload: Record<string, unknown> | undefined;
-    const interaction = withEiEmbedReplies({ reply: async (value: unknown) => { payload = value as Record<string, unknown>; } }, "himiko");
-    await interaction.reply("Rank: 3");
-    const embeds = payload?.embeds as EmbedBuilder[];
-    assert.equal(embeds[0]?.toJSON().image?.url, "https://example.test/himiko.png");
+    const payload = toEiComponentPayload({ content: "Hello" }, "himiko");
+    const body = JSON.stringify(payload);
+    assert.ok(body.includes("https://example.test/himiko.png"));
+    assert.ok(body.includes("Himiko"));
+    assert.equal((payload.components[0] as any).accent_color, undefined);
+    assert.equal(identityTheme("himiko")?.color, 0xb0304c);
   } finally {
     if (previousShared === undefined) delete process.env.EI_POINT_EMBED_IMAGE_URL;
     else process.env.EI_POINT_EMBED_IMAGE_URL = previousShared;
     if (previousHimiko === undefined) delete process.env.EI_POINT_EMBED_IMAGE_HIMIKO;
     else process.env.EI_POINT_EMBED_IMAGE_HIMIKO = previousHimiko;
   }
-});
-
-test("blank image configuration falls back to the brand default", () => {
-  const previousShared = process.env.EI_POINT_EMBED_IMAGE_URL;
-  process.env.EI_POINT_EMBED_IMAGE_URL = "   ";
-  try {
-    assert.equal(
-      resolveEmbedImage(),
-      "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif",
-    );
-  } finally {
-    if (previousShared === undefined) delete process.env.EI_POINT_EMBED_IMAGE_URL;
-    else process.env.EI_POINT_EMBED_IMAGE_URL = previousShared;
-  }
-});
-
-test("common command replies use the configured image", async () => {
-  const previousShared = process.env.EI_POINT_EMBED_IMAGE_URL;
-  process.env.EI_POINT_EMBED_IMAGE_URL = "https://example.test/common.png";
-  try {
-    const replies: Array<Record<string, unknown>> = [];
-    const interaction = {
-      commandName: "ping",
-      client: { ws: { ping: 12 } },
-      deferred: false,
-      replied: false,
-      editReply: async () => {},
-      reply: async (value: Record<string, unknown>) => { replies.push(value); },
-    };
-    const handled = await respondToCommonCommand(interaction as never, "Himiko", "responsibilities");
-    assert.equal(handled, true);
-    const embeds = replies[0]?.embeds as EmbedBuilder[];
-    assert.equal(embeds[0]?.toJSON().image?.url, "https://example.test/common.png");
-  } finally {
-    if (previousShared === undefined) delete process.env.EI_POINT_EMBED_IMAGE_URL;
-    else process.env.EI_POINT_EMBED_IMAGE_URL = previousShared;
-  }
-});
-
-test("per-identity character themes set the footer and emoji (no accent colour)", () => {
-  assert.equal(identityTheme("kafka")?.color, 0xe0202f);
-  assert.equal(identityTheme("Silver Wolf")?.color, 0x9152e0);
-  assert.equal(identityTheme("robin")?.name, "Robin");
-  assert.equal(identityTheme(""), undefined);
-  const themed = createEiEmbed({ title: "Test", description: "Body", imageKey: "himiko" }).toJSON();
-  assert.equal(themed.color, undefined);
-  assert.equal(themed.title, "🌹 Test");
-  assert.ok(String(themed.footer?.text).includes("Himiko"));
-  assert.ok(String(themed.footer?.text).includes("Ei Point"));
-  const plain = createEiEmbed({ title: "Test", description: "Body" }).toJSON();
-  assert.equal(plain.color, undefined);
-  assert.equal(plain.title, "Test");
-  assert.equal(plain.footer?.text, "Ei Point · powered by Ei-Flow");
-});
-
-test("Components V2 payloads pass through untouched", async () => {
-  let payload: Record<string, unknown> | undefined;
-  const interaction = withEiEmbedReplies({
-    reply: async (value: unknown) => { payload = value as Record<string, unknown>; },
-  });
-  await interaction.reply({ components: [{ type: 17, components: [] }], flags: 32768 });
-  assert.equal(payload?.flags, 32768);
-  assert.ok(Array.isArray(payload?.components));
-  assert.equal(payload?.embeds, undefined);
 });

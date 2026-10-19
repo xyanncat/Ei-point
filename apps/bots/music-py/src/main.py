@@ -1162,23 +1162,25 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     await end_music_session(str(member.guild.id))
 
 
-async def respond(interaction: discord.Interaction, message: str, ephemeral: bool = False, title: str = "Ei Point", edit: bool = False, **kwargs):
-    """Safely respond to an interaction whether deferred or not.
+async def respond(interaction: discord.Interaction, message: str, ephemeral: bool = False, title: str = "Ei Point", edit: bool = False, view=None, **kwargs):
+    """Render Robin responses through a colourless Components V2 container.
 
     ``edit=True`` replaces the original (deferred) response in place — used by
     component callbacks that must clear their own view instead of posting a
     second message.
     """
-    if "embed" not in kwargs and "embeds" not in kwargs:
-        kwargs["embed"] = make_ei_embed(message, title)
+    payload_view = make_ei_view(message, title, view)
+    kwargs.pop("embed", None)
+    kwargs.pop("embeds", None)
+    kwargs.setdefault("allowed_mentions", discord.AllowedMentions.none())
     if edit:
-        return await interaction.edit_original_response(**kwargs)
+        return await interaction.edit_original_response(content=None, embeds=[], view=payload_view, **kwargs)
     if interaction.response.is_done():
-        return await interaction.followup.send(ephemeral=ephemeral, **kwargs)
-    return await interaction.response.send_message(ephemeral=ephemeral, **kwargs)
+        return await interaction.followup.send(view=payload_view, ephemeral=ephemeral, **kwargs)
+    return await interaction.response.send_message(view=payload_view, ephemeral=ephemeral, **kwargs)
 
 
-def make_ei_embed(message: str, title: str = "Ei Point") -> discord.Embed:
+def make_ei_view(message: str, title: str = "Ei Point", controls=None) -> discord.ui.LayoutView:
     clean = (title or "Ei Point").strip()
     if clean.startswith(ROBIN_EMBLEM):
         themed = clean
@@ -1186,10 +1188,21 @@ def make_ei_embed(message: str, title: str = "Ei Point") -> discord.Embed:
         themed = f"{ROBIN_EMBLEM} {clean}"
     else:
         themed = f"{ROBIN_EMBLEM} Robin · {clean}"
-    embed = discord.Embed(title=themed[:256], description=(message or " ")[:4096])
-    embed.set_image(url=panel_image_url())
-    embed.set_footer(text=f"{ROBIN_EMBLEM} Robin · Ei Point · powered by Ei-Flow")
-    return embed
+    view = discord.ui.LayoutView(timeout=controls.timeout if controls is not None else 60.0)
+    # No accent colour: the owner requested colourless cards.
+    container = discord.ui.Container()
+    container.add_item(discord.ui.TextDisplay(f"### {themed[:250]}\n{(message or 'No additional details.')[:3400]}"))
+    image = panel_image_url()
+    if image:
+        container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(image)))
+    if controls is not None:
+        for child in list(controls.children):
+            controls.remove_item(child)
+            container.add_item(discord.ui.ActionRow(child))
+    container.add_item(discord.ui.Separator())
+    container.add_item(discord.ui.TextDisplay(f"-# {ROBIN_EMBLEM} Robin · Ei Point · powered by Ei-Flow"))
+    view.add_item(container)
+    return view
 
 
 # Every Robin reply (success, error, empty state and component callback) routes

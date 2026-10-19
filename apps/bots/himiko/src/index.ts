@@ -17,7 +17,7 @@ import { himikoCommandDefinitions, validateAnnounceInput, buildAnnouncePayload }
 import { COMMUNITY_ADMIN_COMMANDS, communityCommandDefinitions, respondToCommunityCommand } from "./community-commands.js";
 import { eligibleVoiceXpUsers, voiceXpEventKey } from "./voice-xp.js";
 import { CommunityService } from "@ei-point/module-community";
-import { commonCommandDefinitions, createEiEmbed, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
+import { commonCommandDefinitions, createEiEmbed, toEiComponentPayload, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 
 const botKey = process.env.BOT_KEY ?? "himiko";
 const url = process.env.DATABASE_URL;
@@ -191,8 +191,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
           await deliverAnnouncement(async(sql,args)=>(await pool.query(sql,args)).rows, interaction.id,
             { ...payload, by: interaction.user.id, guild_id: interaction.guildId }, async nonce => {
               await target.send({
-                ...(payload.content ? { content: payload.content } : {}),
-                embeds: [embed],
+                ...toEiComponentPayload({ content: payload.content ?? "", embeds: [embed] }, "himiko"),
                 allowedMentions: payload.content ? { roles: [checked.value.pingRoleId!] } : { parse: [] },
                 nonce, enforceNonce: true,
               });
@@ -380,7 +379,7 @@ async function updateStatus(): Promise<void> {
         throw new Error("channel-unavailable");
       const mention = payload.content.match(/<@!?(\d{17,20})>/)?.[1];
       await channel.send({
-        embeds: [createEiEmbed({ title: "Himiko · Community", description: payload.content })],
+        ...toEiComponentPayload({ embeds: [createEiEmbed({ title: "Himiko · Community", description: payload.content })] }, "himiko"),
         allowedMentions: mention ? { users: [mention], roles: [], parse: [] } : { parse: [] },
         nonce,
         enforceNonce: true,

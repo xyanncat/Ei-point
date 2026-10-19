@@ -57,22 +57,24 @@ export async function sendDashboardEmbed(
       ...(payload.author.url ? { url: payload.author.url } : {}),
       ...(payload.author.iconUrl ? { icon_url: payload.author.iconUrl } : {}),
     };
-  const components = payload.buttons?.length
-    ? [
-        {
-          type: 1,
-          components: payload.buttons.map((b: any) => ({
-            type: 2,
-            style: 5,
-            label: b.label,
-            url: b.url,
-          })),
-        },
-      ]
-    : [];
+  const text = [
+    embed.author?.url ? `[${embed.author.name}](${embed.author.url})` : embed.author?.name,
+    embed.title ? `### ${embed.url ? `[${embed.title}](${embed.url})` : embed.title}` : undefined,
+    embed.description,
+    ...(embed.fields ?? []).map((field: any) => `**${field.name}**\n${field.value}`),
+    embed.footer?.text ? `-# ${embed.footer.text}` : undefined,
+  ].filter(Boolean).join("\n\n").slice(0, 4000) || "No additional details.";
+  const children: Record<string, any>[] = [{ type: 10, content: text }];
+  const images = [embed.image?.url, embed.thumbnail?.url, embed.author?.icon_url].filter(Boolean);
+  if (images.length) children.push({ type: 12, items: images.map((url: string) => ({ media: { url } })) });
+  if (payload.buttons?.length) children.push({
+    type: 1,
+    components: payload.buttons.map((button: any) => ({ type: 2, style: 5, label: button.label, url: button.url })),
+  });
   await request(`/channels/${payload.channel_id}/messages`, {
-    embeds: [embed],
-    components,
+    flags: 1 << 15,
+    // No accent_color: the owner requested colourless cards.
+    components: [{ type: 17, components: children }],
     allowed_mentions: { parse: [] },
     nonce: payload.delivery_nonce,
     enforce_nonce: true,

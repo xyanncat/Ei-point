@@ -124,7 +124,10 @@ describe("Cyrene /tts and /leave session contract", () => {
       [{ ok: true }, /joined/i],
       [{ ok: false, reason: "already-active-elsewhere" }, /already reading/i],
       [{ ok: false, reason: "no-humans" }, /no members/i],
-      [{ ok: false, reason: "voice-full" }, /could not start/i],
+      [{ ok: false, reason: "voice-full" }, /capacity/i],
+      [{ ok: false, reason: "missing-permissions" }, /View Channel, Connect, and Speak/i],
+      [{ ok: false, reason: "stage-channel" }, /Stage channels are not supported/i],
+      [{ ok: false, reason: "voice-unavailable" }, /could not establish a voice connection/i],
     ];
     for (const [result, pattern] of cases) {
       const replies: string[] = [];

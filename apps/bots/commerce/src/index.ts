@@ -12,7 +12,7 @@ import {
 import pg from "pg";
 import { catalogChoices, commerceCommandDefinitions, respondToCommerceCommand } from "./commands.js";
 import { canSettleCommerce } from "./authorization.js";
-import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
+import { commonCommandDefinitions, respondToCommonCommand, toEiComponentPayload, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 
 const botKey = process.env.BOT_KEY ?? "cipher";
 const url = process.env.DATABASE_URL;
@@ -216,7 +216,11 @@ async function deliverStaffNotifications(): Promise<void> {
     pool,
     allowed,
     async (payload, nonce) => {
-      await channel.send({ embeds: [staffNotificationEmbed(payload)], nonce, enforceNonce: true });
+      await channel.send({
+        ...toEiComponentPayload({ embeds: [staffNotificationEmbed(payload)] }, botKey),
+        nonce,
+        enforceNonce: true,
+      });
     },
     botKey,
   );
