@@ -345,17 +345,7 @@ const voiceXpTimer = setInterval(() => guarded("voice-xp", async () => {
 }), 60_000);
 
 client.on(Events.GuildCreate, (guild) => {
-  if (!allowed.includes(guild.id)) {
-    guarded("leave-unapproved", () => guild.leave());
-    return;
-  }
-  if (identityVerified && client.user) {
-    guarded("guild-create-setup", async () => {
-      await client.rest.put(Routes.applicationGuildCommands(client.user!.id, guild.id), {
-        body: [...commonCommandDefinitions(), ...himikoCommandDefinitions, ...communityCommandDefinitions].map((c) => c.toJSON()),
-      });
-    });
-  }
+  if (!allowed.includes(guild.id)) guarded("leave-unapproved", () => guild.leave());
 });
 
 async function updateStatus(): Promise<void> {
@@ -458,18 +448,12 @@ client.once(Events.ClientReady, () => {
     identityVerified = true;
     for (const guild of client.guilds.cache.values()) {
       try {
-        if (!allowed.includes(guild.id)) {
-          await guild.leave();
-          continue;
-        }
-        await client.rest.put(Routes.applicationGuildCommands(client.user!.id, guild.id), {
-          body: [...commonCommandDefinitions(), ...himikoCommandDefinitions, ...communityCommandDefinitions].map((c) => c.toJSON()),
-        });
+        if (!allowed.includes(guild.id)) await guild.leave();
       } catch (err) {
         console.error(`Failed setup for guild ${guild.id}:`, err);
       }
     }
-    // Global copy unlocks the "Supports Commands" badge; guild commands override it here.
+    // Single source of truth: global registration only (no guild copies).
     await client.rest.put(Routes.applicationCommands(client.user!.id), {
       body: [...commonCommandDefinitions(), ...himikoCommandDefinitions, ...communityCommandDefinitions].map((c) => c.toJSON()),
     });

@@ -650,16 +650,10 @@ client.once(Events.ClientReady, () => {
     if (registry.rows[0]?.application_id !== client.user!.id) throw new Error("Registered application identity mismatch");
     identityVerified = true;
     for (const guild of client.guilds.cache.values()) {
-      if (!allowed.includes(guild.id)) {
-        await guild.leave();
-        continue;
-      }
-      await client.rest.put(Routes.applicationGuildCommands(client.user!.id, guild.id), {
-        body: ALL_AI_COMMANDS.map((c) => c.toJSON()),
-      });
+      if (!allowed.includes(guild.id)) await guild.leave();
     }
-    // Global registration unlocks Discord's "Supports Commands" ({/}) badge; guild
-    // commands above still override these for instant propagation in allowed servers.
+    // Single source of truth: global registration only. Guild-scoped copies caused
+    // duplicate menu entries; the runtime allowlist still enforces authorization.
     await client.rest.put(Routes.applicationCommands(client.user!.id), {
       body: ALL_AI_COMMANDS.map((c) => c.toJSON()),
     });

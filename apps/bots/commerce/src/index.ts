@@ -280,15 +280,9 @@ client.once(Events.ClientReady, () => {
     if(identity?.application_id!==client.user!.id){await shutdown();return;}
     identityVerified = true;
     for (const guild of client.guilds.cache.values()) {
-      if (!allowed.includes(guild.id)) {
-        await guild.leave();
-        continue;
-      }
-      await client.rest.put(Routes.applicationGuildCommands(client.user!.id, guild.id), {
-        body: [...commonCommandDefinitions(), ...commerceCommandDefinitions].map((c) => c.toJSON()),
-      });
+      if (!allowed.includes(guild.id)) await guild.leave();
     }
-    // Global copy unlocks the "Supports Commands" badge; guild commands override it here.
+    // Single source of truth: global registration only (no guild copies).
     await client.rest.put(Routes.applicationCommands(client.user!.id), {
       body: [...commonCommandDefinitions(), ...commerceCommandDefinitions].map((c) => c.toJSON()),
     });

@@ -266,23 +266,9 @@ client.once(Events.ClientReady, () =>
     }
     identityVerified = true;
     for (const guild of client.guilds.cache.values()) {
-      if (!allowed.includes(guild.id)) {
-        await guild.leave();
-        continue;
-      }
-      const approved = (
-        await pool.query(
-          "SELECT approved FROM access.guilds WHERE guild_id=$1",
-          [guild.id],
-        )
-      ).rows[0]?.approved;
-      if (approved !== true) continue;
-      await client.rest.put(
-        Routes.applicationGuildCommands(client.user!.id, guild.id),
-        { body: [...commonCommandDefinitions(), ...commandDefinitions.filter((c) => ["rank", "cards", "inventory", "balance", "packs", "open", "buy", "sell", "market", "trade"].includes(c.name))].map((c) => c.toJSON()) },
-      );
+      if (!allowed.includes(guild.id)) await guild.leave();
     }
-    // Global copy unlocks the "Supports Commands" badge; guild commands override it here.
+    // Single source of truth: global registration only (no guild copies).
     await client.rest.put(Routes.applicationCommands(client.user!.id), {
       body: [...commonCommandDefinitions(), ...commandDefinitions.filter((c) => ["rank", "cards", "inventory", "balance", "packs", "open", "buy", "sell", "market", "trade"].includes(c.name))].map((c) => c.toJSON()),
     });

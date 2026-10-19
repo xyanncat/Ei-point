@@ -458,17 +458,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
 });
 
 client.on(Events.GuildCreate, (guild) => {
-  if (!allowed.includes(guild.id)) {
-    guarded("leave-unapproved", () => guild.leave());
-    return;
-  }
-  if (identityVerified && client.user) {
-    guarded("guild-create-setup", async () => {
-      await client.rest.put(Routes.applicationGuildCommands(client.user!.id, guild.id), {
-        body: ALL_COMMANDS.map((c) => c.toJSON()),
-      });
-    });
-  }
+  if (!allowed.includes(guild.id)) guarded("leave-unapproved", () => guild.leave());
 });
 
 // --- Maintenance: expiry reconciliation + service status (kafka + legacy keys) ---
@@ -641,18 +631,12 @@ client.once(Events.ClientReady, () => {
     identityVerified = true;
     for (const guild of client.guilds.cache.values()) {
       try {
-        if (!allowed.includes(guild.id)) {
-          await guild.leave();
-          continue;
-        }
-        await client.rest.put(Routes.applicationGuildCommands(client.user!.id, guild.id), {
-          body: ALL_COMMANDS.map((c) => c.toJSON()),
-        });
+        if (!allowed.includes(guild.id)) await guild.leave();
       } catch (err) {
         console.error(`Failed setup for guild ${guild.id}:`, err);
       }
     }
-    // Global copy unlocks the "Supports Commands" badge; guild commands override it here.
+    // Single source of truth: global registration only (no guild copies).
     await client.rest.put(Routes.applicationCommands(client.user!.id), {
       body: ALL_COMMANDS.map((c) => c.toJSON()),
     });
