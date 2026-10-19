@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "discord.js": "14.27.0",
-    "@discordjs/voice": "0.18.0",
+    "@discordjs/voice": "0.19.2",
     "@ei-point/flow": "workspace:*",
     "@ei-point/contracts": "workspace:*",
     "@ei-point/module-ai": "workspace:*",
