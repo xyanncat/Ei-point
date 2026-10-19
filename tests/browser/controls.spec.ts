@@ -111,6 +111,17 @@ test("settings save with version and CSRF; system accounts manage end to end", a
   await page.goto("/dashboard/moderation/protection");
   await expect(page).toHaveTitle(/Ei point/);
   await page.getByLabel("AI warnings", { exact: true }).uncheck();
+  await expect(
+    page.getByRole("button", { name: "Save configuration", exact: true }),
+  ).toBeVisible();
+  // Discard clears the draft without touching the API…
+  await page.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Save configuration", exact: true }),
+  ).toHaveCount(0);
+  expect(mutations.length).toBe(0);
+  // …and a fresh change still saves with version + CSRF.
+  await page.getByLabel("AI warnings", { exact: true }).uncheck();
   await page
     .getByRole("button", { name: "Save configuration", exact: true })
     .click();

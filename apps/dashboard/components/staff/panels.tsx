@@ -346,6 +346,17 @@ export function ModuleConfig({ guildId, modules, canOperate }: { guildId: string
   const notices = useNotices(load);
   const disabled = notices.busy || loading || !canOperate || !config;
   const dirty = config ? JSON.stringify(draft) !== JSON.stringify(config.value) : false;
+  // Unsaved-change handling: the save bar is the in-page signal; while a draft
+  // differs from the saved version, a browser-level guard covers refresh/close.
+  useEffect(() => {
+    if (!dirty) return;
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [dirty]);
   return (
     <Panel
       title="Module configuration"
@@ -496,7 +507,7 @@ export function ModuleConfig({ guildId, modules, canOperate }: { guildId: string
   );
 }
 
-export function JobsPanel({ guildId, title = "Delivery history" }: { guildId: string; title?: string }) {
+export function JobsPanel({ guildId, title = "Delivery history", refreshKey = 0 }: { guildId: string; title?: string; refreshKey?: number }) {
   const base = `/api/guilds/${encodeURIComponent(guildId)}`;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -516,7 +527,7 @@ export function JobsPanel({ guildId, title = "Delivery history" }: { guildId: st
   }, [base]);
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
   return (
     <Panel title={title} detail="Queue acknowledgement means accepted for delivery; it is not proof of a Discord send.">
       {error && <p className="sf-note sf-error" role="alert">{error}</p>}

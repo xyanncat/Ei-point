@@ -15,6 +15,7 @@ export function AnnouncementComposer({ guildId, canOperate }: { guildId: string;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [jobsKey, setJobsKey] = useState(0);
   const [composer, setComposer] = useState({ bot_id: "", channel_id: "", title: "", description: "", color: "#bf6b94", url: "", image: "", thumbnail: "", footer: "", authorName: "", authorUrl: "", authorIcon: "" });
   const [fields, setFields] = useState<{ name: string; value: string; inline: boolean }[]>([]);
   const [buttons, setButtons] = useState<{ label: string; url: string }[]>([]);
@@ -36,6 +37,7 @@ export function AnnouncementComposer({ guildId, canOperate }: { guildId: string;
     <label className="sf-field" key={key}>
       <span>{label}</span>
       <input
+        type={["url", "image", "thumbnail", "authorUrl", "authorIcon"].includes(key) ? "url" : "text"}
         required={required}
         maxLength={key === "title" ? 256 : 2048}
         disabled={disabled}
@@ -71,6 +73,7 @@ export function AnnouncementComposer({ guildId, canOperate }: { guildId: string;
                 });
                 if (!result.queued || !result.job_id) throw new Error("No durable queue acknowledgement received.");
                 setNotice("Embed accepted by the durable delivery queue. See delivery history below.");
+                setJobsKey((value) => value + 1);
               } catch (cause) {
                 setError(cause instanceof ApiError && cause.status === 403 ? `Access denied: ${cause.message}` : cause instanceof Error ? cause.message : "Queue failed.");
               } finally {
@@ -154,7 +157,7 @@ export function AnnouncementComposer({ guildId, canOperate }: { guildId: string;
       </div>
       {!canOperate && <p className="sf-dim">Read-only: full guild access is required to queue announcements.</p>}
       {!bots.length && <Empty title="No registered bots" detail="Announcements need a registered sending bot for this server." />}
-      <JobsPanel guildId={guildId} />
+      <JobsPanel guildId={guildId} refreshKey={jobsKey} />
     </Panel>
   );
 }
