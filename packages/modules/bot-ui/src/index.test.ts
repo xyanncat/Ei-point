@@ -94,18 +94,29 @@ test("common command replies use the configured image", async () => {
   }
 });
 
-test("per-identity character themes set the accent color and footer", () => {
+test("per-identity character themes set the footer and emoji (no accent colour)", () => {
   assert.equal(identityTheme("kafka")?.color, 0xe0202f);
   assert.equal(identityTheme("Silver Wolf")?.color, 0x9152e0);
   assert.equal(identityTheme("robin")?.name, "Robin");
   assert.equal(identityTheme(""), undefined);
   const themed = createEiEmbed({ title: "Test", description: "Body", imageKey: "himiko" }).toJSON();
-  assert.equal(themed.color, 0xb0304c);
+  assert.equal(themed.color, undefined);
   assert.equal(themed.title, "🌹 Test");
   assert.ok(String(themed.footer?.text).includes("Himiko"));
   assert.ok(String(themed.footer?.text).includes("Ei Point"));
   const plain = createEiEmbed({ title: "Test", description: "Body" }).toJSON();
-  assert.equal(plain.color, 0x8f2938);
+  assert.equal(plain.color, undefined);
   assert.equal(plain.title, "Test");
   assert.equal(plain.footer?.text, "Ei Point · powered by Ei-Flow");
+});
+
+test("Components V2 payloads pass through untouched", async () => {
+  let payload: Record<string, unknown> | undefined;
+  const interaction = withEiEmbedReplies({
+    reply: async (value: unknown) => { payload = value as Record<string, unknown>; },
+  });
+  await interaction.reply({ components: [{ type: 17, components: [] }], flags: 32768 });
+  assert.equal(payload?.flags, 32768);
+  assert.ok(Array.isArray(payload?.components));
+  assert.equal(payload?.embeds, undefined);
 });

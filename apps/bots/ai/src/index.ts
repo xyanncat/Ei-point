@@ -11,7 +11,7 @@ import {
   Routes,
 } from "discord.js";
 import pg from "pg";
-import { commonCommandDefinitions, respondToCommonCommand, toEiEmbedPayload, withEiEmbedReplies } from "@ei-point/module-bot-ui";
+import { commonCommandDefinitions, createVoiceCard, respondToCommonCommand, toEiEmbedPayload, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 import {
   createRouter,
   makeHttpProvider,
@@ -473,9 +473,16 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
             },
             sendAudio: async (audio) => {
               const ext = audio.mime.includes("wav") ? "wav" : "mp3";
+              const fileName = `cyrene.${ext}`;
+              const card = createVoiceCard({
+                title: "Cyrene · Voice file",
+                description: "Your Cyrene audio file is ready.",
+                fileUrl: `attachment://${fileName}`,
+                imageKey: "cyrene",
+              });
               await interaction.editReply({
-                ...toEiEmbedPayload("Your Cyrene audio file is ready.", "Cyrene · Voice file"),
-                files: [{ attachment: Buffer.from(audio.bytes), name: `cyrene.${ext}` }],
+                ...card,
+                files: [{ attachment: Buffer.from(audio.bytes), name: fileName }],
               });
             },
             startTts: async () => {

@@ -1,13 +1,18 @@
 import {
   EmbedBuilder,
   SlashCommandBuilder,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  FileBuilder,
+  MessageFlags,
   type ChatInputCommandInteraction,
   type Client,
 } from "discord.js";
 
 const DEFAULT_IMAGE =
   "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif";
-const BRAND = 0x8f2938;
 
 /** Per-identity character themes (owner request 2026-10-18), grounded in each
  *  bot's own artwork in `project assets/bots/<Bot>/embed.png`. */
@@ -54,7 +59,6 @@ export function createEiEmbed(options: EmbedReplyOptions): EmbedBuilder {
   const imageUrl = options.imageUrl ?? resolveEmbedImage(options.imageKey);
   const theme = identityTheme(options.imageKey);
   const embed = new EmbedBuilder()
-    .setColor(options.color ?? theme?.color ?? BRAND)
     .setTitle(theme ? `${theme.emoji} ${options.title.slice(0, 250)}` : options.title.slice(0, 256))
     .setDescription(options.description.slice(0, 4096))
     .setImage(imageUrl)
@@ -68,6 +72,33 @@ export function createEiEmbed(options: EmbedReplyOptions): EmbedBuilder {
     })));
   }
   return embed;
+}
+
+/** Components V2 voice card: text, artwork and the uploaded file live inside one
+ *  container. No accent colour is set, so Discord renders no coloured side bar. */
+export interface VoiceCardOptions {
+  title: string;
+  description: string;
+  /** attachment://… URL of the file uploaded with the same message. */
+  fileUrl: string;
+  imageKey?: string;
+}
+
+export function createVoiceCard(options: VoiceCardOptions) {
+  const theme = identityTheme(options.imageKey);
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `### ${theme ? `${theme.emoji} ` : ""}${options.title}\n${options.description}`,
+      ),
+    )
+    .addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL(resolveEmbedImage(options.imageKey)),
+      ),
+    )
+    .addFileComponents(new FileBuilder().setURL(options.fileUrl));
+  return { components: [container], flags: MessageFlags.IsComponentsV2 as number };
 }
 
 export async function replyEiEmbed(
@@ -154,6 +185,9 @@ function payloadWithEiEmbed(input: unknown, imageKey?: string): unknown {
   if (typeof input === "string") return toEiEmbedPayload(input, "Ei Point", imageKey);
   if (!input || typeof input !== "object" || Array.isArray(input)) return input;
   const value = input as Record<string, unknown>;
+  // Components V2 messages own their layout (text, media, files, buttons inside one
+  // container): never inject embeds or rewrite them.
+  if (typeof value.flags === "number" && (value.flags & MessageFlags.IsComponentsV2) !== 0) return value;
   const imageUrl = resolveEmbedImage(imageKey);
   if (typeof value.content !== "string" || value.content.trim().length === 0) {
     if (Array.isArray(value.embeds) && value.embeds.length > 0) {

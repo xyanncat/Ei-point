@@ -755,7 +755,6 @@ guild_panels: dict[str, discord.Message] = {}
 
 
 # Robin's palette and emblem come from her own artwork (project assets/bots/Robin/embed.png).
-ROBIN_PANEL_COLOR = 0x9078D8
 ROBIN_EMBLEM = "🕊️"
 
 
@@ -803,7 +802,7 @@ class MusicPanelView(discord.ui.LayoutView):
     def __init__(self, guild_id: str | None = None):
         super().__init__(timeout=None)
         self.guild_id = guild_id
-        container = discord.ui.Container(accent_colour=ROBIN_PANEL_COLOR)
+        container = discord.ui.Container()
         if guild_id is not None:
             container.add_item(discord.ui.TextDisplay(panel_text(guild_id)))
             image = panel_image_url()
@@ -941,7 +940,7 @@ async def close_music_panel(guild_id: str):
     if not message:
         return
     ended = discord.ui.LayoutView(timeout=None)
-    container = discord.ui.Container(accent_colour=ROBIN_PANEL_COLOR)
+    container = discord.ui.Container()
     container.add_item(discord.ui.TextDisplay(
         f"### {ROBIN_EMBLEM} Robin · Session ended\n"
         "The queue was cleared — use `/play` to start a new session."
@@ -1187,7 +1186,7 @@ def make_ei_embed(message: str, title: str = "Ei Point") -> discord.Embed:
         themed = f"{ROBIN_EMBLEM} {clean}"
     else:
         themed = f"{ROBIN_EMBLEM} Robin · {clean}"
-    embed = discord.Embed(title=themed[:256], description=(message or " ")[:4096], color=ROBIN_PANEL_COLOR)
+    embed = discord.Embed(title=themed[:256], description=(message or " ")[:4096])
     embed.set_image(url=panel_image_url())
     embed.set_footer(text=f"{ROBIN_EMBLEM} Robin · Ei Point · powered by Ei-Flow")
     return embed
