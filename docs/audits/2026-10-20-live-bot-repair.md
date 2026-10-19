@@ -1,128 +1,108 @@
 # Live bot repair — 2026-10-20
 
-Status: **source implementation complete, built and tested locally; deployment and live
-Discord acceptance are blocked by the hosting provider's serial console.** Nothing in this
-document claims live verification for the changes below.
+Status: **deployed and live-verified for infrastructure, identity, registration, model
+services and V2 payloads. Audible voice playback and the Discord UI checks require the
+owner's client and remain pending.** No check below is inferred from a running container.
 
 ## Inputs reviewed
 
-- `EI_POINT_VPS_REPAIR_AGENT_PROMPT.md` (handoff, read in full).
-- `EI_POINT_BOT_REPAIR.patch` (base revision `9864875`, reviewed hunk by hunk).
+- `EI_POINT_VPS_REPAIR_AGENT_PROMPT.md` (read in full).
+- `EI_POINT_BOT_REPAIR.patch` (base `9864875`) — already ported on this branch (see below).
 - `EI_POINT_COMPLETION_BUILD_PLAN.md`, `docs/product/bot-command-and-runtime-spec.md`,
   `docs/feature-matrix.md`, `docs/phase-gates.md`, `docs/operations-release.md`,
   `docs/audits/2026-10-15-*`, `docs/audits/2026-10-20-bot-runtime-repair.md`.
-- Current source: `apps/bots/*`, `packages/modules/bot-ui`, `packages/flow`,
-  `infra/docker`, `infra/postgres`, deployment scripts.
+- Deployed source, compose labels, container images, migrations and service configuration.
 
 ## Skills
 
-Loaded through this environment's skill registry (actual instructions read):
-`verification-before-completion`, `systematic-debugging`, `deep-research`, `ponytail`,
-`discord-bots`.
+Loaded and read through this environment's skill registry: `verification-before-completion`,
+`systematic-debugging`, `deep-research`, `ponytail`, `discord-bots`, plus
+`docker-best-practices` and `release-management` for the deployment package. The remaining
+task-specific names exist in this environment but were not mechanically loaded; equivalent
+workflows were used. No unavailable skill was claimed.
 
-The task-specific names in the handoff exist in this environment but were not all mechanically
-loaded: `codebase-onboarding`, `executing-plans`, `error-handling`, `local-llms`,
-`ui-design-systems`, `accessibility`, `api-security`, `data-validation`,
-`postgres-best-practices`, `api-design`, `playwright-e2e`, `docker-best-practices`,
-`dependency-upgrades`, `release-management`, `runbooks`, `monitoring`. Equivalent workflows
-were used; no unavailable skill was claimed.
+## Patch reconciliation
 
-## Patch reconciliation (ported, not blindly applied)
+The handoff patch targets `9864875` in a different checkout and conflicts with the newer work
+on `feat/completion-plan` (`@discordjs/voice` 0.19.2, per-identity artwork, global command
+registration, no-colour instruction). It was ported deliberately (commits `7b94f22`,
+`931d871`, `00bc773`):
 
-The patch was prepared against `9864875` in a different checkout and conflicts with newer work
-on this branch (`voice 0.19.2`, per-identity artwork, global command registration, the owner's
-"no colour" and Components V2 requirements). It was ported deliberately:
+- Shared Components V2 converter for all interaction replies (text, media, files, action rows,
+  mention policy, ephemeral flags, idempotent wrapping, no accent colour).
+- Dashboard delivery and Himiko announcements/community sends converted to V2 with identity,
+  guild and nonce checks preserved.
+- Cyrene voice: permission checks (View Channel/Connect/Speak), Stage-channel rejection,
+  connection/player error listeners, underlying-error logging, failed-start lease cleanup,
+  one-shot playback no longer tears down an active reading session, distinct failure reasons.
+- Persona enforced at the documented **16 KiB** bound with behavioural-section priority
+  (measured 16,383 / 16,384 bytes) — the local 24 KiB variant was retired.
+- Robin uses `discord.py[voice]` 2.7.1 (DAVE) with LayoutView containers and its search
+  callback preserved.
+- Global command copies registered for all five Node bots (Supports Commands badge).
+- Resource pooling: hard CPU quotas removed, weighted CFS shares, TTS threads 8.
 
-- Kept `@discordjs/voice` **0.19.2** (newer than the patch's 0.19.1) with `@snazzah/davey`.
-- Ported the shared **Components V2** converter and made all interaction reply paths V2.
-- **No accent colour anywhere** (owner instruction), including the patch's original
-  `accent_color`/`accent_colour` additions and dashboard delivery.
-- Kept per-identity blurred artwork (`embed-blur.png`) as the card media.
-- Kept global command registration (Supports Commands badge) in addition to guild commands.
-- Enforced the documented **16 KiB** persona bound with priority-based selection instead of
-  the local 24 KiB variant.
+## Deployment executed (2026-10-20)
 
-## Implemented
+- Checkpoint branch created at the pre-deploy revision (`vps-checkpoint-*`); previous images
+  remain on the host for rollback.
+- Deployment root `/opt/ei-point`; compose project `ei-point`; deployed revision **`c87d3da`**.
+- Build + up completed with `docker compose -f infra/docker/compose.yml --env-file .env`.
+- Image IDs (short):
+  api `6c13bf775d1a`, workers `03fb38201dcc`, bot-ai `e38909cbfd07`, bot-kafka `29a2f3003339`,
+  bot-commerce `65fee926aa2a`, bot-community `8751a976e05b`, bot-himiko `93d58cea6a44`,
+  bot-music `901785626e7c`.
 
-- Shared V2 converter (`packages/modules/bot-ui/src/index.ts`): text/embeds → text display,
-  media gallery, file components, action rows, footer, mention policy, ephemeral flags,
-  idempotent wrapping, `update` support.
-- Dashboard delivery (`packages/flow/src/embed-delivery.ts`): V2 container, media + link
-  buttons, nonce, identity/guild checks preserved, no accent colour.
-- Cyrene runtime (`apps/bots/ai/src/index.ts`, `tts.ts`):
-  - restored `aiCommandDefinitions` to registration;
-  - View Channel/Connect/Speak permission check, explicit Stage-channel rejection;
-  - connection/player error listeners; underlying-error logging;
-  - failed-start lease cleanup and safe destroy; one-shot playback no longer tears down an
-    active reading session; Ready awaited before playback;
-  - distinct capacity/permission/stage/empty-session failure messages.
-- Persona (`apps/bots/ai/src/persona.ts`): 16 KiB bound with behavioural sections prioritised;
-  measured real file output **16,383 bytes** (limit 16,384) with the core directive retained.
-- Himiko announcements/community sends and commerce staff notifications: V2 containers.
-- Robin (`apps/bots/music-py/src/main.py`): colourless `LayoutView`/`Container` responses;
-  existing search select, ownership check and timeout preserved; panel containers colourless.
-- Global command copies for all five Node bots (badge eligibility).
-- Resource pooling (`infra/docker/compose.yml`): hard CPU quotas removed; weighted CFS shares
-  (TTS 8192, models/DB 2048, API/web/workers 1024, bots 512, nginx 256); TTS threads 8.
+### Incident found and fixed during deployment
 
-## Verification performed (fresh runs)
+`nginx` exited with `host not found in upstream "api:3001"` and then failed to start with
+`Address already in use`: the dynamic `workers` container had taken the statically reserved
+trusted-proxy IP `172.29.10.2`. Fixed in `c87d3da` by reserving `172.29.10.250` for the proxy
+(compose + `.env`), recreating `api` and `nginx`. nginx then started healthy and
+`http://127.0.0.1:8080/` returned **200**.
 
-| Command | Evidence |
-|---|---|
-| `pnpm --filter @ei-point/flow test` | 24 pass, 0 fail |
-| `pnpm --filter @ei-point/module-bot-ui test` | 7 pass, 0 fail |
-| `pnpm --filter @ei-point/bot-ai test` | 19 pass, 0 fail |
-| `python -m unittest discover -s apps/bots/music-py/tests` | 57 pass, 0 fail |
-| Builds (`bot-ai`, `bot-kafka`, `bot-commerce`, `bot-community`, `bot-himiko`, `api`, `workers`) | `tsc` exit 0 |
-| Real persona check | 16,383 / 16,384 bytes, core directive present |
-| Compose YAML parse | 16 services, parses |
+## Live verification evidence
 
-Local host is Windows/Node 24.21; the deployed target is Linux/Node 24.8.0. Linux image builds
-and live Discord behavior remain unverified.
-
-## Deployment gate (precise)
-
-- Host `Ei-POINT` is running; containers were healthy at the last inspection
-  (api/web/workers/nginx/postgres/models/bots).
-- The provider's xTerm console repeatedly fails: new sessions hang at
-  `starting serial terminal on interface serial0`; a VM restart or Stop/Start restores a single
-  session only intermittently, and input/output freeze again within minutes.
-- Root login with the owner password (`Cattrix@121`) succeeded during the last working window.
-  The password was restored to exactly that value through the hosting panel and must not be
-  changed.
-- The public Cloudflare quick tunnel is down after the most recent power cycle.
-- No VPS files, services, migrations, volumes or data were changed by this repair session.
-
-Staged deployment (run as root; builds the affected images, applies pooling, restarts the
-fleet, re-opens the tunnel):
-
-```bash
-cd /opt/ei-point && git pull --ff-only &&
-sed -i 's|^QWEN_TTS_TORCH_THREADS=.*|QWEN_TTS_TORCH_THREADS=8|' .env &&
-docker compose -f infra/docker/compose.yml --env-file .env build api workers bot-ai bot-kafka bot-commerce bot-community bot-himiko bot-music &&
-docker compose -f infra/docker/compose.yml --env-file .env up -d
-nohup cloudflared tunnel --url http://127.0.0.1:8080 --no-autoupdate >/root/cf.log 2>&1 &
-sleep 10; grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' /root/cf.log | head -1
-```
+| Check | Command / probe | Result |
+|---|---|---|
+| Deployed revision | `git log --oneline -1` | `c87d3da` |
+| Service health | `docker compose ps` | 13/13 healthy (api, web, workers, nginx, postgres, hy-mt2, tts-qwen, six bots) |
+| Public dashboard | `curl -w '%{http_code}' https://shipped-learners-scotland-garbage.trycloudflare.com/` | **200**; browser title `Ei point — Command Center`, hero renders |
+| Bots logged in | container logs | Kafka, Cyrene, Cipher, Silver Wolf (command registration), Himiko, Robin logged in |
+| Global commands (badge) | Discord API per app | Kafka 13, Cyrene 13, Robin 7, Cipher 6, Silver Wolf 13, Himiko 11 |
+| Guild commands | Discord API (dev guild) | Kafka 13, Cyrene 13, Robin 0 (global by design), Cipher 6, Silver Wolf 13, Himiko 11 |
+| DAVE voice stack | package metadata in image | `@discordjs/voice 0.19.2`, `@snazzah/davey ^0.1.9`; Robin `discord.py 2.7.1` |
+| TTS model | timed `/v1/audio/speech` in container | HTTP 200, 122,924 bytes, **14.44 s** (was 46.39 s before pooling/threads) |
+| Translation model | real Hy-MT2 request from bot container | HTTP 200, 10.8 s, output `Bonjour, bienvenue à Ei Point.` |
+| V2 payload | deployed `createVoiceCard` + `toEiComponentPayload` serialization | Container `type 17` + TextDisplay + MediaGallery (`embed-blur.png`) + File `attachment://cyrene.wav`, flags `32768` |
+| Runtime errors | `docker logs --since 6m` per bot | none |
+| Controlled restart | `docker restart ei-point-bot-ai-1` | healthy in 20 s, `bot-ai ready as Ei | Cyrene#8519 across 1 guilds` |
 
 ## Per-bot status
 
-| Bot | Source | Local tests/build | Live |
+| Bot | Deployed | Live-verified | Pending (owner/Discord UI) |
 |---|---|---|---|
-| Kafka | repaired (V2 replies, global commands) | pass | deployed? no — blocked |
-| Cyrene | repaired (DAVE voice, permissions, failure messages, 16 KiB persona, AI commands) | pass | blocked |
-| Robin | repaired (discord.py 2.7.1/DAVE, LayoutView V2, search callback preserved) | 57 pass | blocked |
-| Cipher | repaired (V2 replies, staff notification V2, global commands) | build pass | blocked |
-| Silver Wolf | repaired (V2 replies, global commands) | build pass | blocked |
-| Himiko | repaired (announcements/community/dashboard V2) | build pass | blocked |
+| Kafka | yes | login, 13 global + 13 guild commands, V2 shared path, no errors | moderation dry-runs in a disposable guild (real sanctions are out of scope) |
+| Cyrene | yes | login, 13 + 13 commands, DAVE stack, TTS 200/14.44 s, translation 200/10.8 s, V2 card JSON | `/tts` audible reading + `/leave`, `/speak` V2 card rendering in Discord |
+| Robin | yes | login, 7 global commands, discord.py 2.7.1 (DAVE) | search/select, playback, queue/controls in a voice channel |
+| Cipher | yes | login, 6 + 6 commands, shared V2 path | order/payment flows need sandbox; no live charges |
+| Silver Wolf | yes | login, 13 + 13 commands, shared V2 path | card/economy flows in the test guild |
+| Himiko | yes | login, 11 + 11 commands, shared V2 path | announcement/welcome/XP delivery in the test guild |
 
-## Unresolved / gated items
+The Supports Commands badge is granted by Discord asynchronously once global commands are
+registered; all six now qualify. It cannot be forced from the application.
 
-- Live acceptance: `/ping` per bot, Cyrene `/speak` + `/tts` audible reading + `/leave`,
-  Robin search/playback/controls, V2 rendering in Discord.
-- `/search` for Cyrene: still requires an approved search source; truthful unavailable
-  response remains the correct behavior until one is authorized.
-- Historical findings (A01–A20) were not all reproduced live; this session covered the
-  concrete runtime/V2 defects in the handoff and the newer work on this branch.
-- Linux image build, native DAVE packaging, FFmpeg/Opus behavior, moderation dry-runs,
-  checkout sandbox tests, backup restores, soak/load gates remain open.
+## Remaining gates (honest)
+
+- `/tts` audible playback and `/speak` V2 rendering require the owner's Discord client.
+- `/search` remains correctly unavailable until an approved source is configured.
+- Kafka sanction/expiry effects require a disposable guild; no destructive test was run.
+- Razorpay sandbox, backup restores, load/soak and 72-hour observation remain open.
+- TTS remains CPU-bound on the no-AVX host (14.4 s for a short sentence); 1–2 s requires a GPU
+  or a lighter engine.
+
+## Rollback
+
+- Deploy-time checkpoint branch on the VPS plus the previous image IDs on the host.
+- Application rollback: check out the checkpoint revision and rebuild/up the affected services.
+- No migrations were added by this repair; database contents and volumes were preserved.
