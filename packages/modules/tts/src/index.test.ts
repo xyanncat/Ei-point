@@ -4,8 +4,10 @@ import {
   createTtsQueue,
   extractVoiceChatText,
   normalizeVoice,
+  splitSpeechChunks,
   ttsCacheKey,
   validateTtsInput,
+  TTS_CHUNK_CHARS,
   TTS_MAX_CHARS,
 } from "./index.js";
 
@@ -145,4 +147,31 @@ it("enforces the TTS deadline for a provider that ignores AbortSignal", async ()
   const queue = createTtsQueue({provider:"test",synthesize:()=>new Promise(()=>{}),deadlineMs:5});
   assert.deepEqual(await queue.synthesize("hello","default"),{ok:false,reason:"all-failed"});
   assert.equal(queue.inFlight(),0);
+});
+
+describe("splitSpeechChunks", () => {
+  it("starts playback after a sentence-sized first chunk", () => {
+    const text = "Hello there. This is the second sentence of the message and it continues for a while.";
+    const chunks = splitSpeechChunks(text);
+    assert.ok(chunks.length >= 1);
+    assert.equal(chunks[0], "Hello there.");
+    assert.equal(chunks.join(" ").replace(/\s+/g, " "), text);
+  });
+
+  it("keeps every chunk within the bound", () => {
+    const text = "word ".repeat(200).trim();
+    const chunks = splitSpeechChunks(text);
+    assert.ok(chunks.length > 1);
+    for (const chunk of chunks) assert.ok(chunk.length <= TTS_CHUNK_CHARS, `${chunk.length} > ${TTS_CHUNK_CHARS}`);
+  });
+
+  it("hard-splits a single unpunctuated sentence", () => {
+    const chunks = splitSpeechChunks("a".repeat(TTS_CHUNK_CHARS * 2 + 5));
+    assert.ok(chunks.length >= 3);
+    for (const chunk of chunks) assert.ok(chunk.length <= TTS_CHUNK_CHARS);
+  });
+
+  it("returns no chunks for empty text", () => {
+    assert.deepEqual(splitSpeechChunks("   "), []);
+  });
 });

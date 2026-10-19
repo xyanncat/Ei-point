@@ -25,7 +25,7 @@ import {
   processConversation,
 } from "./commands.js";
 import { synthesizeSpeech, ttsCommandDefinitions, respondToTtsCommand } from "./tts.js";
-import { extractVoiceChatText, TTS_MAX_CHARS } from "@ei-point/module-tts";
+import { extractVoiceChatText, splitSpeechChunks, TTS_MAX_CHARS } from "@ei-point/module-tts";
 import { respondToTranslationCommand, translationCommandDefinition } from "./translate.js";
 import { prepareCyrenePersonaPrompt } from "./persona.js";
 
@@ -68,11 +68,25 @@ async function drainCyreneQueue(session: CyreneVoiceSession): Promise<void> {
     while (session.queue.length && cyreneVoiceSessions.get(session.guildId) === session) {
       const text = session.queue.shift()!;
       try {
-        const audio = await synthesizeSpeech(text, session.guildId, pool);
-        if (cyreneVoiceSessions.get(session.guildId) !== session) return;
         const voice = await import("@discordjs/voice");
-        session.player.play(voice.createAudioResource(Readable.from(Buffer.from(audio.bytes)), { inputType: voice.StreamType.Arbitrary }));
-        await voice.entersState(session.player, voice.AudioPlayerStatus.Idle, 120_000);
+        const chunks = splitSpeechChunks(text);
+        const prefetch = (chunk: string) => {
+          const task = synthesizeSpeech(chunk, session.guildId, pool);
+          // The session can end before a prefetched chunk is awaited; keep that
+          // rejection from surfacing as an unhandled promise.
+          task.catch(() => {});
+          return task;
+        };
+        // Start the first chunk, then keep exactly one synthesis in flight while
+        // the previous chunk plays so audio starts before the whole message is ready.
+        let pending: Promise<{ bytes: Uint8Array }> | null = chunks.length ? prefetch(chunks[0]!) : null;
+        for (let index = 0; index < chunks.length; index++) {
+          const audio = pending ? await pending : null;
+          pending = index + 1 < chunks.length ? prefetch(chunks[index + 1]!) : null;
+          if (!audio || cyreneVoiceSessions.get(session.guildId) !== session) return;
+          session.player.play(voice.createAudioResource(Readable.from(Buffer.from(audio.bytes)), { inputType: voice.StreamType.Arbitrary }));
+          await voice.entersState(session.player, voice.AudioPlayerStatus.Idle, 120_000);
+        }
       } catch (err) {
         console.error("cyrene voice chat message was not spoken:", err instanceof Error ? err.message : String(err));
       }

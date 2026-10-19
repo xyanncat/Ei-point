@@ -28,6 +28,61 @@ export type TtsSynthesizeFn = (
   signal: AbortSignal,
 ) => Promise<TtsAudio>;
 
+/**
+ * Split speakable text into sentence-sized chunks so playback can start after the
+ * first chunk while later chunks synthesize. Long sentences are split at word
+ * boundaries. Every returned chunk is non-empty and <= maxChars.
+ */
+export const TTS_CHUNK_CHARS = 140;
+
+export function splitSpeechChunks(text: string, maxChars = TTS_CHUNK_CHARS): string[] {
+  const normalized = text.trim().replace(/\s+/g, " ");
+  if (!normalized) return [];
+  if (maxChars < 1) return [normalized];
+  const sentences = normalized.match(/[^.!?…]+[.!?…]+|[^.!?…]+$/g) ?? [normalized];
+  const chunks: string[] = [];
+  let current = "";
+  const flush = () => {
+    const value = current.trim();
+    if (value) chunks.push(value);
+    current = "";
+  };
+  // Emit the first sentence alone so playback can start before the rest is ready;
+  // later short sentences are grouped to bound the number of requests.
+  let start = 0;
+  if (sentences.length > 1) {
+    const first = sentences[0]!.trim();
+    if (first && first.length <= maxChars) {
+      chunks.push(first);
+      start = 1;
+    }
+  }
+  for (let index = start; index < sentences.length; index++) {
+    const sentence = sentences[index]!.trim();
+    if (!sentence) continue;
+    if (sentence.length > maxChars) {
+      flush();
+      let rest = sentence;
+      while (rest.length > maxChars) {
+        const space = rest.lastIndexOf(" ", maxChars);
+        const cut = space > 0 ? space : maxChars;
+        chunks.push(rest.slice(0, cut).trim());
+        rest = rest.slice(cut).trim();
+      }
+      current = rest;
+      continue;
+    }
+    if (!current) current = sentence;
+    else if (current.length + 1 + sentence.length <= maxChars) current += " " + sentence;
+    else {
+      flush();
+      current = sentence;
+    }
+  }
+  flush();
+  return chunks;
+}
+
 export function validateTtsInput(text: string): { ok: true; text: string } | { ok: false; reason: string } {
   const trimmed = text.trim().replace(/\s+/g, " ");
   if (trimmed.length === 0) return { ok: false, reason: "empty" };
