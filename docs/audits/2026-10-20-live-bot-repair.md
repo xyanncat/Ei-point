@@ -77,6 +77,7 @@ trusted-proxy IP `172.29.10.2`. Fixed in `c87d3da` by reserving `172.29.10.250` 
 | Translation model | real Hy-MT2 request from bot container | HTTP 200, 10.8 s, output `Bonjour, bienvenue à Ei Point.` |
 | V2 payload | deployed `createVoiceCard` + `toEiComponentPayload` serialization | Container `type 17` + TextDisplay + MediaGallery (`embed-blur.png`) + File `attachment://cyrene.wav`, flags `32768` |
 | Common-command identity | deployed `respondToCommonCommand` serialization | `/ping`, `/botinfo`, `/about` now emit the calling bot's art (`Cyrene/embed-blur.png`, `Cipher/embed-blur.png`) and identity footer (`f5de21e`) |
+| Artwork update | owner request, commit `39cf2cd` | all six bots configured to their original `project assets/bots/<Bot>/embed.png`; takes effect on the next container recreate |
 | Runtime errors | `docker logs --since 6m` per bot | none |
 | Controlled restart | `docker restart ei-point-bot-ai-1` | healthy in 20 s, `bot-ai ready as Ei | Cyrene#8519 across 1 guilds` |
 
