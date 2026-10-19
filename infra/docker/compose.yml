@@ -336,7 +336,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=1g,uid=10001,gid=10001
-    deploy: { resources: { limits: { cpus: "0.75", memory: 8G } } }
+    deploy: { resources: { limits: { cpus: "${QWEN_TTS_CPUS:-0.75}", memory: 8G } } }
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3120/health/ready')"]
       interval: 20s
