@@ -1,7 +1,8 @@
 import { SUPPORTED_LEASE_SQL, scheduleCommerceExpiry, runCommerceExpiry, recoverExhaustedJobs, publishWorkerHeartbeat } from "./jobs.js";
 // Phase 3: job recovery worker — LISTEN + periodic reconciliation (§5).
 // SQL maintenance leases only supported kinds; unknown jobs remain visible for operator action.
-import { Client } from "pg";
+import pg from "pg";
+const { Client } = pg;
 import { nextBackoffMs } from "@ei-point/flow";
 import {
   installRejectionHandler,
