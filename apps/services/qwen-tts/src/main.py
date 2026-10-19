@@ -236,6 +236,10 @@ class QwenRuntime:
             from qwen_tts import Qwen3TTSModel
 
             torch.set_num_threads(self.torch_threads)
+            # oneDNN requires SSE4.1+ kernels; on baseline-SSE2 KVM CPUs every
+            # conv primitive fails ("could not create a primitive"), so fall back
+            # to ATen's native implementations.
+            torch.backends.mkldnn.enabled = False
             try:
                 torch.set_num_interop_threads(1)
             except RuntimeError:
