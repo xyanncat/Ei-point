@@ -6,6 +6,7 @@ import {
   createEiEmbed,
   identityTheme,
   isCommonCommand,
+  respondToCommonCommand,
   toEiComponentPayload,
   toEiEmbedPayload,
   withEiEmbedReplies,
@@ -15,6 +16,34 @@ test("common commands retain their names", () => {
   assert.deepEqual(commonCommandDefinitions().map((command) => command.name), ["botinfo", "ping", "about"]);
   assert.equal(isCommonCommand("about"), true);
   assert.equal(isCommonCommand("ask"), false);
+});
+
+test("common commands carry the calling bot's identity art and footer", async () => {
+  const previousShared = process.env.EI_POINT_EMBED_IMAGE_URL;
+  const previousCyrene = process.env.EI_POINT_EMBED_IMAGE_CYRENE;
+  process.env.EI_POINT_EMBED_IMAGE_URL = "https://example.test/shared.png";
+  process.env.EI_POINT_EMBED_IMAGE_CYRENE = "https://example.test/cyrene.png";
+  try {
+    let payload: any;
+    const interaction = {
+      commandName: "ping",
+      deferred: false,
+      replied: false,
+      client: { ws: { ping: 123 } },
+      reply: async (value: unknown) => { payload = value; },
+    };
+    const handled = await respondToCommonCommand(interaction as never, "Cyrene", "AI bot");
+    assert.equal(handled, true);
+    const body = JSON.stringify(payload);
+    assert.ok(body.includes("https://example.test/cyrene.png"));
+    assert.ok(body.includes("Cyrene"));
+    assert.ok(!body.includes("https://example.test/shared.png"));
+  } finally {
+    if (previousShared === undefined) delete process.env.EI_POINT_EMBED_IMAGE_URL;
+    else process.env.EI_POINT_EMBED_IMAGE_URL = previousShared;
+    if (previousCyrene === undefined) delete process.env.EI_POINT_EMBED_IMAGE_CYRENE;
+    else process.env.EI_POINT_EMBED_IMAGE_CYRENE = previousCyrene;
+  }
 });
 
 test("legacy text and embed fields become container text without losing either", async () => {

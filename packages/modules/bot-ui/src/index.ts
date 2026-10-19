@@ -143,13 +143,17 @@ export async function respondToCommonCommand(
   interaction: ChatInputCommandInteraction,
   botName: string,
   responsibilities: string,
+  imageKey?: string,
 ): Promise<boolean> {
   if (!isCommonCommand(interaction.commandName)) return false;
+  // Common commands must still carry the calling bot's identity art/footer.
+  const identityKey = imageKey ?? botName.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
   if (interaction.commandName === "ping") {
     await replyEiEmbed(interaction, {
       title: "Ei Point · Pong!",
       description: `Discord gateway latency: **${Math.max(0, Math.round(interaction.client.ws.ping))} ms**`,
+      ...(identityKey ? { imageKey: identityKey } : {}),
     });
     return true;
   }
@@ -159,6 +163,7 @@ export async function respondToCommonCommand(
     await replyEiEmbed(interaction, {
       title: `${botName} · Bot information`,
       description: responsibilities,
+      ...(identityKey ? { imageKey: identityKey } : {}),
       fields: [
         { name: "Identity", value: client.user.tag, inline: true },
         { name: "Servers", value: String(client.guilds.cache.size), inline: true },
@@ -175,6 +180,7 @@ export async function respondToCommonCommand(
   await replyEiEmbed(interaction, {
     title: "About Ei Point",
     description: `**Ei Point** is a coordinated Discord platform for community, moderation, games, commerce, music, and voice. **Ei-Flow** provides shared interaction controls, lifecycle handling, and reliable domain workflows.\n\nProject owner: ${ownerMention}`,
+    ...(identityKey ? { imageKey: identityKey } : {}),
   }, Boolean(ownerId && /^\d{17,20}$/.test(ownerId)));
   return true;
 }
