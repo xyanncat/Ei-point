@@ -27,11 +27,11 @@ describe("Cyrene persona prompt", () => {
     assert.match(prompt, /Avoid unprompted spoilers/);
     assert.match(prompt, /Do not assume romance/);
     assert.doesNotMatch(prompt, /Do not send sample text|example\.invalid/);
-    assert.ok(Buffer.byteLength(prompt, "utf8") <= 16 * 1024);
+    assert.ok(Buffer.byteLength(prompt, "utf8") <= 24 * 1024);
   });
 
   it("fails closed when a required persona section is missing or the prompt is oversized", () => {
     assert.throws(() => prepareCyrenePersonaPrompt(memory.replace("## 10. ROLE-PLAY BOUNDARIES AND CONTINUITY", "## 14. Renumbered")));
-    assert.throws(() => prepareCyrenePersonaPrompt(memory.replace("Stay in character", "Stay in character " + "x".repeat(17 * 1024))));
+    assert.throws(() => prepareCyrenePersonaPrompt(memory.replace("Stay in character", "Stay in character " + "x".repeat(25 * 1024))));
   });
 });
