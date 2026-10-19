@@ -46,7 +46,8 @@ registration, no-colour instruction). It was ported deliberately (commits `7b94f
 
 - Checkpoint branch created at the pre-deploy revision (`vps-checkpoint-*`); previous images
   remain on the host for rollback.
-- Deployment root `/opt/ei-point`; compose project `ei-point`; deployed revision **`c87d3da`**.
+- Deployment root `/opt/ei-point`; compose project `ei-point`; deployed revision **`c87d3da`**
+  (Cyrene later rebuilt from **`baefbf5`** for the voice-chat chunking fix).
 - Build + up completed with `docker compose -f infra/docker/compose.yml --env-file .env`.
 - Image IDs (short):
   api `6c13bf775d1a`, workers `03fb38201dcc`, bot-ai `e38909cbfd07`, bot-kafka `29a2f3003339`,
@@ -91,6 +92,20 @@ trusted-proxy IP `172.29.10.2`. Fixed in `c87d3da` by reserving `172.29.10.250` 
 
 The Supports Commands badge is granted by Discord asynchronously once global commands are
 registered; all six now qualify. It cannot be forced from the application.
+
+## Voice-chat latency (`/tts`)
+
+Measured on the live host (8 threads, no CPU quota): **9.35 s** for “Hello there.”,
+**32.04 s** for 109 characters (≈4.9 s fixed + 0.25 s/char). The previous pump synthesized the
+whole message before playback, so the listener waited for the entire message.
+
+Fixed in `baefbf5`: speech is split at sentence boundaries (`splitSpeechChunks`, 140-char
+bound, first sentence emitted alone) and the next chunk is synthesized **while** the current
+one plays. Live verification: the deployed splitter returned
+`["Hey everyone, how are you doing today?", "I hope you are all …"]`; the first chunk
+synthesized in **14.11 s** and playback starts at that point instead of after the full message
+(previously up to ~2.5 minutes at the 500-character cap). Remaining limit: synthesis itself is
+CPU-bound on the no-AVX host; 1–2 s would require a GPU or a lighter engine.
 
 ## Remaining gates (honest)
 
