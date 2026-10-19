@@ -7,7 +7,6 @@ import {
   TextDisplayBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
-  FileBuilder,
   type APIContainerComponent,
   type ChatInputCommandInteraction,
   type Client,
@@ -80,17 +79,17 @@ export function createEiEmbed(options: EmbedReplyOptions): EmbedBuilder {
   return embed;
 }
 
-/** Components V2 voice card: text, artwork and the uploaded file live inside one
- *  container. No accent colour is set, so Discord renders no coloured side bar. */
-export interface VoiceCardOptions {
+/** Components V2 card whose media is played with Discord's native controls
+ *  (video/audio media inside a Media Gallery), with no file-download tile. */
+export interface VoiceMediaCardOptions {
   title: string;
   description: string;
-  /** attachment://… URL of the file uploaded with the same message. */
-  fileUrl: string;
+  /** attachment://… URL of the media uploaded with the same message. */
+  mediaUrl: string;
   imageKey?: string;
 }
 
-export function createVoiceCard(options: VoiceCardOptions) {
+export function createVoiceMediaCard(options: VoiceMediaCardOptions) {
   const theme = identityTheme(options.imageKey);
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
@@ -100,10 +99,11 @@ export function createVoiceCard(options: VoiceCardOptions) {
     )
     .addMediaGalleryComponents(
       new MediaGalleryBuilder().addItems(
-        new MediaGalleryItemBuilder().setURL(resolveEmbedImage(options.imageKey)),
+        new MediaGalleryItemBuilder()
+          .setURL(options.mediaUrl)
+          .setDescription("Cyrene voice clip with still artwork"),
       ),
-    )
-    .addFileComponents(new FileBuilder().setURL(options.fileUrl));
+    );
   return { components: [container], flags: MessageFlags.IsComponentsV2 as number };
 }
 

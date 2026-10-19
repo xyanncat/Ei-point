@@ -4,6 +4,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlag
 import {
   commonCommandDefinitions,
   createEiEmbed,
+  createVoiceMediaCard,
   identityTheme,
   isCommonCommand,
   respondToCommonCommand,
@@ -16,6 +17,24 @@ test("common commands retain their names", () => {
   assert.deepEqual(commonCommandDefinitions().map((command) => command.name), ["botinfo", "ping", "about"]);
   assert.equal(isCommonCommand("about"), true);
   assert.equal(isCommonCommand("ask"), false);
+});
+
+test("voice media card embeds playable media without a file tile or accent colour", () => {
+  const payload = createVoiceMediaCard({
+    title: "Cyrene · Voice",
+    description: "Press Play to listen.",
+    mediaUrl: "attachment://cyrene.mp4",
+    imageKey: "cyrene",
+  });
+  assert.equal(payload.flags, 32768);
+  const container = (payload.components[0] as { toJSON(): any }).toJSON();
+  assert.equal(container.type, 17);
+  assert.equal(container.accent_color, undefined);
+  assert.equal(container.components.some((component: any) => component.type === 13), false);
+  const gallery = container.components.find((component: any) => component.type === 12);
+  assert.ok(gallery, "media gallery must be present");
+  assert.equal(gallery.items[0].media.url, "attachment://cyrene.mp4");
+  assert.ok(gallery.items[0].description);
 });
 
 test("common commands carry the calling bot's identity art and footer", async () => {

@@ -6,6 +6,9 @@ coverage
 project assets/*
 !project assets/services
 !project assets/Cards
+!project assets/bots
+!project assets/bots/Cyrene
+!project assets/bots/Cyrene/embed.png
 tests
 **/node_modules
 **/dist

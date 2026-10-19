@@ -9,6 +9,7 @@ FROM node:24.8.0-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build --chown=node:node /release /app
+COPY --chown=node:node ["project assets/bots/Cyrene/embed.png", "/app/assets/cyrene-art.png"]
 USER node
 ENV NODE_ENV=production
 CMD ["node", "dist/index.js"]

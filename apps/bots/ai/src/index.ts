@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { acquireVoiceLease } from "./voice-lease.js";
+import { renderVoiceVideo } from "./voice-video.js";
 import { isControlEnabled, responsePolicy } from "@ei-point/flow";
 import { createServer } from "node:http";
 import {
@@ -12,7 +13,7 @@ import {
   Routes,
 } from "discord.js";
 import pg from "pg";
-import { commonCommandDefinitions, createVoiceCard, respondToCommonCommand, toEiEmbedPayload, withEiEmbedReplies } from "@ei-point/module-bot-ui";
+import { commonCommandDefinitions, createVoiceMediaCard, respondToCommonCommand, toEiEmbedPayload, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 import {
   createRouter,
   makeHttpProvider,
@@ -498,18 +499,29 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
               await interaction.editReply({ content: fitDiscord(text), allowedMentions: { parse: [] } });
             },
             sendAudio: async (audio) => {
-              const ext = audio.mime.includes("wav") ? "wav" : "mp3";
-              const fileName = `cyrene.${ext}`;
-              const card = createVoiceCard({
-                title: "Cyrene · Voice file",
-                description: "Your Cyrene audio file is ready.",
-                fileUrl: `attachment://${fileName}`,
-                imageKey: "cyrene",
-              });
-              await interaction.editReply({
-                ...card,
-                files: [{ attachment: Buffer.from(audio.bytes), name: fileName }],
-              });
+              try {
+                // Reuse the already generated speech; package it with the still
+                // Cyrene frame so Discord's native media player can play it.
+                const video = await renderVoiceVideo(audio.bytes);
+                const card = createVoiceMediaCard({
+                  title: "Cyrene · Voice",
+                  description: "Press Play to listen.",
+                  mediaUrl: "attachment://cyrene.mp4",
+                  imageKey: "cyrene",
+                });
+                await interaction.editReply({
+                  ...card,
+                  files: [{ attachment: video, name: "cyrene.mp4" }],
+                });
+              } catch (err) {
+                console.error(
+                  "cyrene /speak media conversion failed:",
+                  err instanceof Error ? err.message : String(err),
+                );
+                await interaction.editReply(
+                  toEiEmbedPayload("Cyrene's voice clip could not be prepared. Please try again.", "Cyrene", "cyrene"),
+                );
+              }
             },
             startTts: async () => {
               if (!voiceChannelId) return { ok: false as const, reason: "voice-unavailable" };
