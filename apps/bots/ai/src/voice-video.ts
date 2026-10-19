@@ -210,7 +210,8 @@ export async function renderVoiceVideo(wav: Uint8Array, options: RenderVoiceVide
     const outPath = join(directory, "cyrene.mp4");
     try {
       await writeFile(wavPath, wav, { mode: 0o600 });
-      await runFfmpeg(buildVoiceVideoArgs({ artPath, wavPath, outPath, durationSeconds: duration ?? undefined }), options.timeoutMs);
+      const paths = { artPath, wavPath, outPath, ...(duration !== null ? { durationSeconds: duration } : {}) };
+      await runFfmpeg(buildVoiceVideoArgs(paths), options.timeoutMs);
       const info = await stat(outPath);
       if (!info.size) throw new VoiceVideoError("empty-video", "conversion produced an empty file");
       if (info.size > VOICE_VIDEO_MAX_BYTES) throw new VoiceVideoError("video-too-large", "converted video exceeds the size bound");
