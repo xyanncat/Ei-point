@@ -127,7 +127,8 @@ async function startCyreneSession(guildId: string, voiceChannelId: string, adapt
       return { ok: false, reason: "no-humans" };
     }
     return { ok: true };
-  } catch {
+  } catch (err) {
+    console.error("cyrene voice session failed:", err instanceof Error ? err.message : String(err));
     const session = cyreneVoiceSessions.get(guildId);
     if (session?.connection === connection) {
       await stopCyreneSession(guildId);
