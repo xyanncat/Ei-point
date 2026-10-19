@@ -85,7 +85,12 @@ test('definition comparison ignores scope IDs but catches contract changes', () 
   assert.equal(definitionsMatch(slash({ id: 'a' }), slash({ id: 'b', application_id: 'other' })), true);
   assert.equal(definitionsMatch(slash(), slash({ description: 'different' })), false);
   assert.equal(definitionsMatch(slash(), slash({ nsfw: true })), false);
-  assert.equal(definitionsMatch(slash(), slash({ contexts: [0, 1, 2] })), false);
+  assert.equal(definitionsMatch(slash(), slash({ options: [{ type: 3, name: 'extra', description: 'x' }] })), false);
+  // Discord reports these scope-only defaults differently on guild copies.
+  assert.equal(
+    definitionsMatch(slash({ dm_permission: true, integration_types: [0, 1], contexts: [0, 1, 2] }), slash({ dm_permission: null, integration_types: null, contexts: null })),
+    true,
+  );
 });
 
 test('active bot sources register globally and never write guild-scoped commands', () => {

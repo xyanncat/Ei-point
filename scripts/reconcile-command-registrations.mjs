@@ -38,7 +38,9 @@ export function commandKey(command) {
   return `${command.type}:${command.name}`;
 }
 
-/** Only fields that define the user-visible command contract. IDs/versions differ per scope. */
+/** Only fields that define the user-visible command contract. Scope metadata that
+ *  Discord reports differently per scope (dm_permission / contexts / integration_types
+ *  are null on guild copies) is kept in snapshots but excluded from equivalence. */
 export function comparableDefinition(command) {
   return {
     type: command.type,
@@ -46,9 +48,6 @@ export function comparableDefinition(command) {
     description: command.description ?? "",
     options: command.options ?? [],
     default_member_permissions: command.default_member_permissions ?? null,
-    dm_permission: command.dm_permission ?? null,
-    contexts: command.contexts ?? null,
-    integration_types: command.integration_types ?? null,
     nsfw: command.nsfw ?? false,
   };
 }
