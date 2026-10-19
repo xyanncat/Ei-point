@@ -282,6 +282,10 @@ client.once(Events.ClientReady, () =>
         { body: [...commonCommandDefinitions(), ...commandDefinitions.filter((c) => ["rank", "cards", "inventory", "balance", "packs", "open", "buy", "sell", "market", "trade"].includes(c.name))].map((c) => c.toJSON()) },
       );
     }
+    // Global copy unlocks the "Supports Commands" badge; guild commands override it here.
+    await client.rest.put(Routes.applicationCommands(client.user!.id), {
+      body: [...commonCommandDefinitions(), ...commandDefinitions.filter((c) => ["rank", "cards", "inventory", "balance", "packs", "open", "buy", "sell", "market", "trade"].includes(c.name))].map((c) => c.toJSON()),
+    });
     await pump();
   }),
 );

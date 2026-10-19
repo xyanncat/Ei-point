@@ -629,6 +629,11 @@ client.once(Events.ClientReady, () => {
         body: ALL_AI_COMMANDS.map((c) => c.toJSON()),
       });
     }
+    // Global registration unlocks Discord's "Supports Commands" ({/}) badge; guild
+    // commands above still override these for instant propagation in allowed servers.
+    await client.rest.put(Routes.applicationCommands(client.user!.id), {
+      body: ALL_AI_COMMANDS.map((c) => c.toJSON()),
+    });
     await updateStatus();
     console.log(`bot-ai ready as ${client.user?.tag} across ${client.guilds.cache.size} guilds`);
   });

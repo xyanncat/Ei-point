@@ -470,6 +470,10 @@ client.once(Events.ClientReady, () => {
         console.error(`Failed setup for guild ${guild.id}:`, err);
       }
     }
+    // Global copy unlocks the "Supports Commands" badge; guild commands override it here.
+    await client.rest.put(Routes.applicationCommands(client.user!.id), {
+      body: [...commonCommandDefinitions(), ...himikoCommandDefinitions, ...communityCommandDefinitions].map((c) => c.toJSON()),
+    });
     try {
       const reg = await pool.query("SELECT bot_key FROM config.bots WHERE bot_key = $1", [botKey]);
       if ((reg.rowCount ?? 0) === 0) console.warn(`himiko registry row missing for BOT_KEY=${botKey}`);

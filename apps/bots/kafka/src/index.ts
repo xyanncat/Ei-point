@@ -652,6 +652,10 @@ client.once(Events.ClientReady, () => {
         console.error(`Failed setup for guild ${guild.id}:`, err);
       }
     }
+    // Global copy unlocks the "Supports Commands" badge; guild commands override it here.
+    await client.rest.put(Routes.applicationCommands(client.user!.id), {
+      body: ALL_COMMANDS.map((c) => c.toJSON()),
+    });
     // Registry self-check: warn if the kafka row is missing.
     try {
       const reg = await pool.query("SELECT bot_key FROM config.bots WHERE bot_key = $1", [botKey]);

@@ -284,6 +284,10 @@ client.once(Events.ClientReady, () => {
         body: [...commonCommandDefinitions(), ...commerceCommandDefinitions].map((c) => c.toJSON()),
       });
     }
+    // Global copy unlocks the "Supports Commands" badge; guild commands override it here.
+    await client.rest.put(Routes.applicationCommands(client.user!.id), {
+      body: [...commonCommandDefinitions(), ...commerceCommandDefinitions].map((c) => c.toJSON()),
+    });
     await updateStatus();
     console.log(`bot-commerce ready as ${client.user?.tag} across ${client.guilds.cache.size} guilds`);
   });
