@@ -17,9 +17,11 @@ services:
       - ../backup/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
     networks: [data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 2048
     deploy:
       resources:
-        limits: { cpus: "1.25", memory: 6G }
+        limits: { memory: 6G }
         reservations: { memory: 4G }
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -41,7 +43,9 @@ services:
       APPLICATION_DATABASE_URL: ${DATABASE_URL}
     networks: [data]
     depends_on: { postgres: { condition: service_healthy } }
-    deploy: { resources: { limits: { cpus: "0.25", memory: 256M } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 256
+    deploy: { resources: { limits: { memory: 256M } } }
 
   nginx:
     image: "nginx:1.27.3-alpine"
@@ -62,9 +66,11 @@ services:
       app:
         ipv4_address: ${TRUSTED_PROXY_IP:-172.29.10.2}
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 256
     deploy:
       resources:
-        limits: { cpus: "0.15", memory: 512M }
+        limits: { memory: 512M }
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
       interval: 15s
@@ -123,9 +129,11 @@ services:
       retries: 3
       start_period: 30s
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 1024
     deploy:
       resources:
-        limits: { cpus: "0.35", memory: 1G }
+        limits: { memory: 1G }
     depends_on: { postgres: { condition: service_healthy } }
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
@@ -144,9 +152,11 @@ services:
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
     networks: [app]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 1024
     deploy:
       resources:
-        limits: { cpus: "0.30", memory: 1G }
+        limits: { memory: 1G }
     depends_on: [api]
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
@@ -163,7 +173,9 @@ services:
     networks: [app, data]
     ports: ["127.0.0.1:3101:3101"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
-    deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 512
+    deploy: { resources: { limits: { memory: 2G } } }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3101/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -185,7 +197,9 @@ services:
     networks: [app, data]
     ports: ["127.0.0.1:3102:3102"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
-    deploy: { resources: { limits: { cpus: "1.00", memory: 2G } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 512
+    deploy: { resources: { limits: { memory: 2G } } }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3102/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -219,7 +233,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    deploy: { resources: { limits: { cpus: "0.40", memory: 2G } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 512
+    deploy: { resources: { limits: { memory: 2G } } }
     depends_on: { postgres: { condition: service_healthy } }
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
@@ -258,7 +274,9 @@ services:
     networks: [app, data, tts, translation]
     ports: ["127.0.0.1:3104:3104"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
-    deploy: { resources: { limits: { cpus: "0.50", memory: 2G } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 512
+    deploy: { resources: { limits: { memory: 2G } } }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3104/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -292,7 +310,9 @@ services:
     security_opt: ["no-new-privileges:true"]
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=128m,uid=10001,gid=10001
-    deploy: { resources: { limits: { cpus: "1.00", memory: 4G } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 2048
+    deploy: { resources: { limits: { memory: 4G } } }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3121/health"]
       interval: 20s
@@ -336,7 +356,9 @@ services:
     security_opt: ["no-new-privileges:true"]
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=1g,uid=10001,gid=10001
-    deploy: { resources: { limits: { cpus: "${QWEN_TTS_CPUS:-0.75}", memory: 8G } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 8192
+    deploy: { resources: { limits: { memory: 8G } } }
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3120/health/ready')"]
       interval: 20s
@@ -362,7 +384,9 @@ services:
     ports: ["127.0.0.1:3105:3105"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
     volumes: ["music-cache:/srv/music-cache"]
-    deploy: { resources: { limits: { cpus: "0.75", memory: 2G } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 512
+    deploy: { resources: { limits: { memory: 2G } } }
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:3105/health/ready')\" || exit 1"]
       interval: 15s
@@ -394,7 +418,9 @@ services:
     networks: [app, data]
     ports: ["127.0.0.1:3106:3106"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
-    deploy: { resources: { limits: { cpus: "0.40", memory: 1536M } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 512
+    deploy: { resources: { limits: { memory: 1536M } } }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3106/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -420,7 +446,9 @@ services:
     networks: [app, data]
     ports: ["127.0.0.1:3108:3108"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
-    deploy: { resources: { limits: { cpus: "0.75", memory: 1536M } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 512
+    deploy: { resources: { limits: { memory: 1536M } } }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3108/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -445,7 +473,9 @@ services:
     networks: [app, data]
     ports: ["127.0.0.1:3107:3107"]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
-    deploy: { resources: { limits: { cpus: "0.35", memory: 1536M } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 512
+    deploy: { resources: { limits: { memory: 1536M } } }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3107/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -482,7 +512,9 @@ services:
       BOT_TOKEN: ${EMBED_WORKER_BOT_TOKEN:-}
     networks: [app, data]
     dns: ["10.0.0.1", "8.8.8.8", "9.9.9.9"]
-    deploy: { resources: { limits: { cpus: "0.50", memory: 1536M } } }
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 1024
+    deploy: { resources: { limits: { memory: 1536M } } }
     depends_on: { postgres: { condition: service_healthy } }
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
