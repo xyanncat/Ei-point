@@ -202,7 +202,7 @@ async function main() {
   }
   await snapshot(directory, "plan.json", report);
   console.log(JSON.stringify(report, null, 2));
-  console.log(`Snapshot directory: ${directory}`);
+  console.error(`Snapshot directory: ${directory}`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
