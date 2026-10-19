@@ -216,7 +216,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
       EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
-      EI_POINT_EMBED_IMAGE_SILVERWOLF: ${EI_POINT_EMBED_IMAGE_SILVERWOLF:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Silver%20Wolf/embed-blur.png}
+      EI_POINT_EMBED_IMAGE_SILVERWOLF: ${EI_POINT_EMBED_IMAGE_SILVERWOLF:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Silver%20Wolf/embed.png}
       BOT_KEY: silverwolf
       BOT_TOKEN: ${DISCORD_SILVERWOLF_BOT_TOKEN:-${DISCORD_COMMUNITY_BOT_TOKEN:-}}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
@@ -246,7 +246,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
       EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
-      EI_POINT_EMBED_IMAGE_CYRENE: ${EI_POINT_EMBED_IMAGE_CYRENE:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Cyrene/embed-blur.png}
+      EI_POINT_EMBED_IMAGE_CYRENE: ${EI_POINT_EMBED_IMAGE_CYRENE:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Cyrene/embed.png}
       BOT_KEY: cyrene
       BOT_TOKEN: ${DISCORD_CYRENE_BOT_TOKEN:-${DISCORD_AI_BOT_TOKEN:-}}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
@@ -374,7 +374,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
       EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
-      EI_POINT_EMBED_IMAGE_ROBIN: ${EI_POINT_EMBED_IMAGE_ROBIN:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Robin/embed-blur.png}
+      EI_POINT_EMBED_IMAGE_ROBIN: ${EI_POINT_EMBED_IMAGE_ROBIN:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Robin/embed.png}
       BOT_KEY: robin
       BOT_TOKEN: ${DISCORD_ROBIN_BOT_TOKEN:-${DISCORD_MUSIC_BOT_TOKEN:-}}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
@@ -403,7 +403,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
       EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
-      EI_POINT_EMBED_IMAGE_CIPHER: ${EI_POINT_EMBED_IMAGE_CIPHER:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Cipher/embed-blur.png}
+      EI_POINT_EMBED_IMAGE_CIPHER: ${EI_POINT_EMBED_IMAGE_CIPHER:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Cipher/embed.png}
       BOT_KEY: cipher
       PAYMENT_ORIGIN: ${PAYMENT_ORIGIN}
       UPI_PAYEE_VPA: ${UPI_PAYEE_VPA:-}
@@ -438,7 +438,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
       EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
-      EI_POINT_EMBED_IMAGE_KAFKA: ${EI_POINT_EMBED_IMAGE_KAFKA:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Kafka/embed-blur.png}
+      EI_POINT_EMBED_IMAGE_KAFKA: ${EI_POINT_EMBED_IMAGE_KAFKA:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Kafka/embed.png}
       BOT_KEY: kafka
       BOT_TOKEN: ${DISCORD_KAFKA_BOT_TOKEN:-}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
@@ -465,7 +465,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       EI_POINT_OWNER_ID: ${EI_POINT_OWNER_ID:-}
       EI_POINT_EMBED_IMAGE_URL: ${EI_POINT_EMBED_IMAGE_URL:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif}
-      EI_POINT_EMBED_IMAGE_HIMIKO: ${EI_POINT_EMBED_IMAGE_HIMIKO:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Himiko/embed-blur.png}
+      EI_POINT_EMBED_IMAGE_HIMIKO: ${EI_POINT_EMBED_IMAGE_HIMIKO:-https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Himiko/embed.png}
       BOT_KEY: himiko
       BOT_TOKEN: ${DISCORD_HIMIKO_BOT_TOKEN:-}
       GUILD_ALLOWLIST: ${DISCORD_TEST_GUILD_ID},${DISCORD_MAIN_GUILD_ID}
