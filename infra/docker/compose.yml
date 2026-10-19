@@ -305,7 +305,7 @@ services:
     environment:
       HOME: /tmp
       XDG_CACHE_HOME: /tmp
-    command: ["--model", "/models/Hy-MT2-1.8B-Q4_K_M.gguf", "--ctx-size", "2048", "--parallel", "1", "--threads", "${HY_MT2_THREADS:-4}", "--threads-batch", "${HY_MT2_THREADS:-4}", "--n-predict", "700", "--metrics", "--no-webui", "--host", "0.0.0.0", "--port", "3121"]
+    command: ["--model", "/models/Hy-MT2-1.8B-Q4_K_M.gguf", "--ctx-size", "2048", "--parallel", "1", "--threads", "${HY_MT2_THREADS:-6}", "--threads-batch", "${HY_MT2_THREADS:-6}", "--n-predict", "700", "--metrics", "--no-webui", "--host", "0.0.0.0", "--port", "3121"]
     networks: [translation]
     ports: ["127.0.0.1:3121:3121"]
     volumes:
