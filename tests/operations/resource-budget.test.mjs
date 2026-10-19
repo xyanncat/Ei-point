@@ -76,7 +76,7 @@ test('mixed CPU controls and invalid values are rejected', () => {
 test('compose extraction reads cpu_shares, memory and cgroup_parent', () => {
   const compose = {
     services: {
-      tts: { cpu_shares: 8192, cgroup_parent: 'ei-point.slice', deploy: { resources: { limits: { memory: '8G' } } } },
+      tts: { cpu_shares: 8192, cgroup_parent: 'ei-point.slice', deploy: { resources: { limits: { memory: '8589934592' } } } },
       api: { deploy: { resources: { limits: { cpus: '0.35', memory: '1G' } } } },
       nginx: {},
     },

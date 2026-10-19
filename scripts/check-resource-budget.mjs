@@ -42,9 +42,15 @@ const MAINTENANCE_SERVICES = new Set(Object.keys(APPROVED_MAINTENANCE));
 const LEGACY_SERVICES = new Set(["bot-security", "bot-moderation"]);
 
 function parseMemoryGiB(value) {
-  if (typeof value === "number") return value > 0 ? value : null;
+  // Rendered Compose emits byte counts (string or number); the in-repo contract uses GiB.
+  if (typeof value === "number") return value > 0 ? value / 1024 ** 3 : null;
   if (typeof value !== "string") return null;
-  const match = /^([0-9.]+)\s*(G|GiB|M|MiB|m)?$/u.exec(value.trim());
+  const trimmed = value.trim();
+  if (/^\d+$/u.test(trimmed)) {
+    const bytes = Number(trimmed);
+    return bytes > 0 ? bytes / 1024 ** 3 : null;
+  }
+  const match = /^([0-9.]+)\s*(G|GiB|M|MiB|m)?$/u.exec(trimmed);
   if (!match) return null;
   const amount = Number(match[1]);
   if (!Number.isFinite(amount) || amount <= 0) return null;
