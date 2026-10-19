@@ -109,10 +109,45 @@ synthesized in **14.11 s** and playback starts at that point instead of after th
 (previously up to ~2.5 minutes at the 500-character cap). Remaining limit: synthesis itself is
 CPU-bound on the no-AVX host; 1–2 s would require a GPU or a lighter engine.
 
+## DeepSeek latency-review follow-up (2026-10-20)
+
+Review source: `docs/audits/2026-10-20-deepseek-model-latency-review.md`.
+
+- **P1 release validator / pool contract — fixed.** `scripts/check-resource-budget.mjs`
+  now validates the pool model: every runtime service needs a memory limit and exactly one
+  CPU control (`cpu_shares` weights or hard `limits.cpus`), and share-based services must
+  declare `cgroup_parent: ei-point.slice`. Memory totals are parsed from rendered byte
+  counts. All 16 Compose services now carry the cgroup parent; the slice is installed at
+  `/etc/systemd/system/ei-point.slice` with `CPUQuota=900%` (persisted drop-in). Live proof:
+  `systemctl show` → `CPUQuotaPerSecUSec=9s`; `/sys/fs/cgroup/ei.slice/ei-point.slice/cpu.max`
+  → `900000 100000`; 38 processes in the child scopes; all 13 containers report
+  `CgroupParent=ei-point.slice`. Host Node 24.8.0 installed so the documented release path
+  runs natively: `Resource budget ok (pool mode): runtime 18688 shares / 32.5 GiB`.
+- **P1 stuck inference — terminable recovery added.** `QWEN_TTS_STUCK_EXIT_SECONDS` (60 s)
+  exits the service after the hard deadline plus grace, so the Docker restart policy replaces
+  the stuck worker; readiness stays degraded until then. Regression: permanently blocked
+  fake inference becomes restart-due after the grace (`18/18` Python tests).
+- **P2 oneDNN fallback — capability-aware.** `QWEN_TTS_MKLDNN=auto|on|off`; auto disables
+  oneDNN only when PyTorch reports `DEFAULT` (this host). Live log:
+  `oneDNN disabled (cpu capability DEFAULT, mode auto)`. Modern hosts keep the optimized
+  kernels; the override allows the benchmark the review asked for.
+- **P2 chunking vs streaming — measured, not relabelled.** The endpoint returns a completed
+  WAV, so no incremental synthesis exists; sentence chunking stays a bounded fallback with
+  prefetch. Live measurements: first chunk **14.11 s**; 39-character samples **16.20/16.91 s**
+  (RTF **5.19/5.03**); repeated/cached input **0.0025 s**.
+- **P2 thread evidence — swept and corrected.** TTS defaults now 8 threads (compose + env).
+  Translation sweep: 2 threads → 3.82 s / **217 ms per output token**; 4 threads →
+  **1.52 s / 111 ms per token** (≈2×). `HY_MT2_THREADS=4` is now the default.
+- **Hardware.** `lscpu`: Common KVM processor, KVM full virtualization; PyTorch capability
+  `DEFAULT` (no AVX-class kernels). Provider review of the guest CPU model is the only way to
+  change that; it cannot be fixed by an application flag.
+
 ## Remaining gates (honest)
 
 - `/tts` audible playback and `/speak` V2 rendering require the owner's Discord client.
 - `/search` remains correctly unavailable until an approved source is configured.
+- TTS remains CPU-bound (RTF ≈5; first chunk ≈14 s). A TTS thread sweep and true incremental
+  synthesis remain open; the completed-WAV endpoint cannot stream.
 - Kafka sanction/expiry effects require a disposable guild; no destructive test was run.
 - Razorpay sandbox, backup restores, load/soak and 72-hour observation remain open.
 - TTS remains CPU-bound on the no-AVX host (14.4 s for a short sentence); 1–2 s requires a GPU
