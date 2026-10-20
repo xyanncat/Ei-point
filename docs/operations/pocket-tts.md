@@ -54,8 +54,9 @@ runtime needs only the prepared cache and voice state.
 
 - `POST /v1/audio/speech` with `{"text": "...", "voice": "default", "format": "wav"}`
   returns a complete WAV (the `/speak` media converter consumes this).
-- `/tts` uses the same endpoint per bounded sentence chunk; the existing bot
-  queue and `/leave` cleanup are unchanged.
+- `/tts` uses the same endpoint; short messages are synthesized in one request
+  so Pocket does not restart its voice at every sentence. Only messages over
+  140 characters split into bounded sentence chunks.
 - 500-character input cap, queue max 2, 75 s request timeout, 105 s hard timeout,
   60 s stuck-worker exit, 4 GiB memory, 4096 CPU shares, `ei-point.slice` cap.
 - `/health/live`, `/health/ready`, and `/metrics` (`ei_tts_*`) expose readiness,

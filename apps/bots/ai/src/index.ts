@@ -26,7 +26,7 @@ import {
   processConversation,
 } from "./commands.js";
 import { synthesizeSpeech, ttsCommandDefinitions, respondToTtsCommand } from "./tts.js";
-import { extractVoiceChatText, splitSpeechChunks, TTS_MAX_CHARS } from "@ei-point/module-tts";
+import { extractVoiceChatText, splitSpeechChunks, TTS_CHUNK_CHARS, TTS_MAX_CHARS } from "@ei-point/module-tts";
 import { respondToTranslationCommand, translationCommandDefinition } from "./translate.js";
 import { prepareCyrenePersonaPrompt } from "./persona.js";
 
@@ -70,7 +70,10 @@ async function drainCyreneQueue(session: CyreneVoiceSession): Promise<void> {
       const text = session.queue.shift()!;
       try {
         const voice = await import("@discordjs/voice");
-        const chunks = splitSpeechChunks(text);
+        // Pocket is fast enough to speak a short message in one request. Using
+        // one request avoids restarting its voice/prosody at every sentence;
+        // only over-limit messages fall back to bounded sentence chunks.
+        const chunks = text.length <= TTS_CHUNK_CHARS ? [text] : splitSpeechChunks(text);
         const prefetch = (chunk: string) => {
           const task = synthesizeSpeech(chunk, session.guildId, pool);
           // The session can end before a prefetched chunk is awaited; keep that
