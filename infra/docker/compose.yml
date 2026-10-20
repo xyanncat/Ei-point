@@ -267,10 +267,10 @@ services:
       AI_CONCURRENT: ${AI_CONCURRENT:-2}
       AI_QUEUE_MAX: ${AI_QUEUE_MAX:-20}
       AI_DEADLINE_MS: ${AI_DEADLINE_MS:-60000}
-      QWEN_TTS_URL: http://tts-qwen:3120/v1/audio/speech
+      TTS_URL: ${TTS_URL:-http://tts:3120/v1/audio/speech}
       HY_MT2_URL: http://hy-mt2:3121/v1/chat/completions
       CYRENE_PERSONA_MEMORY_PATH: /persona/Cyrene_Chat_Roleplay_Memory.md
-      # Release manifests add the local URL only when tts-qwen is part of that release.
+      # Release manifests add the local TTS URL only when tts is part of that release.
       TTS_PROVIDER_URL: ${TTS_PROVIDER_URL:-}
       TTS_PROVIDER_KEY: ${TTS_PROVIDER_KEY:-}
       TTS_PROVIDER_NAME: ${TTS_PROVIDER_NAME:-default}
@@ -294,7 +294,7 @@ services:
       start_period: 30s
     depends_on:
       postgres: { condition: service_healthy }
-      tts-qwen: { condition: service_started }
+      tts: { condition: service_started }
       hy-mt2: { condition: service_started }
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
@@ -331,7 +331,59 @@ services:
       start_period: 15m
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
+  tts:
+    image: "ei-point/tts-pocket:local"
+    build: { context: ../.., dockerfile: apps/services/pocket-tts/Dockerfile }
+    restart: unless-stopped
+    environment:
+      POCKET_TTS_CONFIG: ${POCKET_TTS_CONFIG:-english}
+      POCKET_TTS_MODEL_REVISION: ${POCKET_TTS_MODEL_REVISION:-983151f13aaeab1b13c1e5e3c2c383d49a9edf3f}
+      POCKET_TTS_VOICE_STATE: /voice/cyrene-voice.safetensors
+      POCKET_TTS_VOICE_SHA256: ${POCKET_TTS_VOICE_SHA256:-c053f46f4a4004f13da28a7e3af88a5b8c86f074db145d2b54fccf6db3de4028}
+      POCKET_TTS_TORCH_THREADS: ${POCKET_TTS_TORCH_THREADS:-1}
+      POCKET_TTS_QUEUE_MAX: ${POCKET_TTS_QUEUE_MAX:-2}
+      POCKET_TTS_REQUEST_TIMEOUT_SECONDS: ${POCKET_TTS_REQUEST_TIMEOUT_SECONDS:-75}
+      POCKET_TTS_HARD_TIMEOUT_SECONDS: ${POCKET_TTS_HARD_TIMEOUT_SECONDS:-105}
+      POCKET_TTS_STUCK_EXIT_SECONDS: ${POCKET_TTS_STUCK_EXIT_SECONDS:-60}
+      POCKET_TTS_PORT: 3120
+      POCKET_TTS_MKLDNN: ${POCKET_TTS_MKLDNN:-auto}
+      POCKET_TTS_QUANTIZE: ${POCKET_TTS_QUANTIZE:-0}
+      HF_HOME: /models/hf-cache
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    volumes:
+      - type: bind
+        source: ${POCKET_TTS_VOICE_STATE_PATH:-../../.models/pocket-cyrene-voice.safetensors}
+        target: /voice/cyrene-voice.safetensors
+        read_only: true
+      - type: bind
+        source: ${POCKET_TTS_HF_CACHE_PATH:-../../.models/pocket-hf-cache}
+        target: /models/hf-cache
+        read_only: true
+    networks: [tts]
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,uid=10001,gid=10001
+    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
+    cpu_shares: 4096
+    cgroup_parent: ei-point.slice
+    deploy: { resources: { limits: { memory: 4G } } }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3120/health/ready')"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 5m
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
+
+  # Recoverable Qwen fallback. Stopped by default; start explicitly with
+  # `docker compose --profile qwen-fallback up -d tts-qwen` and set
+  # TTS_URL=http://tts-qwen:3120/v1/audio/speech for bot-ai when rolling back.
   tts-qwen:
+    profiles: ["qwen-fallback"]
     image: "ei-point/tts-qwen:local"
     build: { context: ../.., dockerfile: apps/services/qwen-tts/Dockerfile }
     restart: unless-stopped
@@ -362,7 +414,6 @@ services:
         target: /reference/cyrene-reference.mp3
         read_only: true
     networks: [tts]
-    ports: ["127.0.0.1:3120:3120"]
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]

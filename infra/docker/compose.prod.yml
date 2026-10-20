@@ -7,7 +7,7 @@ services:
   migrate: {build: null, image: "${RELEASE_API_IMAGE:?immutable image required}"}
   web: {build: null, image: "${RELEASE_WEB_IMAGE:?immutable image required}"}
   workers: {build: null, image: "${RELEASE_WORKERS_IMAGE:?immutable image required}"}
-  tts-qwen: {build: null, image: "${RELEASE_TTS_QWEN_IMAGE:?immutable local Qwen TTS image required}"}
+  tts: {build: null, image: "${RELEASE_TTS_IMAGE:?immutable local Pocket TTS image required}"}
   hy-mt2: {build: null, image: "${RELEASE_HY_MT2_IMAGE:?immutable local Hy-MT2 image required}"}
   bot-kafka: {build: null, image: "${RELEASE_KAFKA_IMAGE:?immutable image required}"}
   bot-himiko: {build: null, image: "${RELEASE_HIMIKO_IMAGE:?immutable image required}"}

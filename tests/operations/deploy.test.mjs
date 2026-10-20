@@ -19,10 +19,10 @@ test('deploy uses immutable images, stops overlapping handlers, gates readiness 
   await writeFile(join(backup,'backup.json'),JSON.stringify({version:1,createdAt:new Date().toISOString(),database:'ei_point',files}));
   async function mock(name,body){const p=join(bin,name);await writeFile(p,'#!/usr/bin/env bash\nset -euo pipefail\n'+body+'\n');await chmod(p,0o755);}
   await mock('docker',`printf 'DOCKER %s\n' "$*" >> "$MOCK_LOG"
-if [[ "$*" == *'ps -q tts-qwen'* ]]; then echo tts-id
+if [[ "$*" == *'ps -q tts'* ]]; then echo tts-id
 elif [[ "$*" == *'ps -q hy-mt2'* ]]; then echo hy-id
 elif [[ "$*" == *'config --format json'* ]]; then
-  echo '{"services":{"postgres":{"deploy":{"resources":{"limits":{"cpus":"1.25","memory":"6G"}}}},"nginx":{"deploy":{"resources":{"limits":{"cpus":"0.15","memory":"512M"}}}},"api":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1G"}}}},"web":{"deploy":{"resources":{"limits":{"cpus":"0.30","memory":"1G"}}}},"workers":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"1536M"}}}},"tts-qwen":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"8G"}}}},"hy-mt2":{"deploy":{"resources":{"limits":{"cpus":"1.00","memory":"4G"}}}},"bot-kafka":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"1536M"}}}},"bot-himiko":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1536M"}}}},"bot-community":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"2G"}}}},"bot-ai":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"2G"}}}},"bot-music":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"2G"}}}},"bot-commerce":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"1536M"}}}}}}'
+  echo '{"services":{"postgres":{"deploy":{"resources":{"limits":{"cpus":"1.25","memory":"6G"}}}},"nginx":{"deploy":{"resources":{"limits":{"cpus":"0.15","memory":"512M"}}}},"api":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1G"}}}},"web":{"deploy":{"resources":{"limits":{"cpus":"0.30","memory":"1G"}}}},"workers":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"1536M"}}}},"tts":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"8G"}}}},"hy-mt2":{"deploy":{"resources":{"limits":{"cpus":"1.00","memory":"4G"}}}},"bot-kafka":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"1536M"}}}},"bot-himiko":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1536M"}}}},"bot-community":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"2G"}}}},"bot-ai":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"2G"}}}},"bot-music":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"2G"}}}},"bot-commerce":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"1536M"}}}}}}'
 elif [[ "$1" == ps ]]; then echo api-id
 elif [[ "$*" == *'ps -q postgres'* ]]; then echo pg-id; fi`);
   await mock('node',`if [[ "$1" == *scripts/health-fleet.mjs ]]; then echo '{"ok":true}'; exit "\${MOCK_HEALTH_EXIT:-0}"; fi
@@ -39,9 +39,9 @@ exec "$REAL_NODE" "$@"`);
   await writeFile(log,'');result=run('scripts/rollback.sh');assert.equal(result.status,0,result.stderr);calls=await readFile(log,'utf8');assert.doesNotMatch(calls,/\bdown\b|pg_restore|migrate|postgres.*up/);assert.match(calls,/up -d --no-build/);
   await writeFile(join(backup,'backup.json'),JSON.stringify({version:1,createdAt:new Date(Date.now()-60*60*1000).toISOString(),database:'ei_point',files}));await writeFile(log,'');result=run('scripts/deploy.sh',{DEPLOY_BACKUP_MAX_AGE_HOURS:'0.01'});assert.notEqual(result.status,0);assert.equal(await readFile(log,'utf8'),'');assert.equal(await readFile(join(state,'current.json'),'utf8'),saved);
   await writeFile(join(backup,'backup.json'),JSON.stringify({version:1,createdAt:new Date().toISOString(),database:'ei_point',files}));
-  const oldImages=Object.fromEntries(releaseServices.filter(service=>!['tts-qwen','hy-mt2'].includes(service)).map(service=>[service,`example/${service}@sha256:${'e'.repeat(64)}`]));
+  const oldImages=Object.fromEntries(releaseServices.filter(service=>!['tts','hy-mt2'].includes(service)).map(service=>[service,`example/${service}@sha256:${'e'.repeat(64)}`]));
   const oldRelease=join(dir,'old-release.json');await writeFile(oldRelease,JSON.stringify({id:'old-release',images:oldImages}));
-  await writeFile(log,'');result=run('scripts/rollback.sh',{},oldRelease);assert.equal(result.status,0,result.stderr);calls=await readFile(log,'utf8');assert.match(calls,/stop tts-qwen/);assert.match(calls,/stop hy-mt2/);
+  await writeFile(log,'');result=run('scripts/rollback.sh',{},oldRelease);assert.equal(result.status,0,result.stderr);calls=await readFile(log,'utf8');assert.match(calls,/stop tts/);assert.match(calls,/stop hy-mt2/);
   await writeFile(release,JSON.stringify({id:'bad',images:{}}));await writeFile(log,'');result=run('scripts/deploy.sh');assert.notEqual(result.status,0);assert.equal(await readFile(log,'utf8'),'');
  }finally{await rm(dir,{recursive:true,force:true});}
 });

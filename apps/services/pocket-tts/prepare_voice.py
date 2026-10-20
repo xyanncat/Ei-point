@@ -23,7 +23,7 @@ if torch.backends.cpu.get_cpu_capability().upper() == "DEFAULT":
 from pocket_tts import TTSModel
 from pocket_tts.models.model_state import export_model_state
 
-DEFAULT_REVISION = "7f364c05d1be3faf2b234cdbe4cbb68a026d4218"
+DEFAULT_REVISION = "983151f13aaeab1b13c1e5e3c2c383d49a9edf3f"
 
 
 def sha256(path: Path) -> str:

@@ -44,7 +44,7 @@ test('public weights are reprovisionable by pinned hash, not backed up as unique
   const models = DURABLE_ASSETS.filter((asset) => asset.classification === 'reprovisionable');
   assert.ok(models.length >= 2, 'Qwen and Hy-MT2 weights are reprovisionable');
   for (const asset of models) {
-    assert.match(asset.provisioning, /prepare_(qwen|hymt2)_model\.py/, `${asset.id} must name its provisioning command`);
+    assert.match(asset.provisioning, /prepare_(qwen|hymt2|pocket)_model\.py/, `${asset.id} must name its provisioning command`);
     assert.ok(!asset.backup.some((method) => /restic/.test(method)), `${asset.id} must not be a unique restic asset`);
   }
 });
@@ -81,16 +81,18 @@ test('the real off-host backup includes private paths through the shared invento
   const directory = await mkdtemp(join(tmpdir(), 'ei-durable-'));
   const reference = join(directory, 'cyrene-reference.mp3');
   const persona = join(directory, 'persona.md');
+  const voiceState = join(directory, 'cyrene-voice.safetensors');
   const envFile = join(directory, 'deployment.env');
   await writeFile(reference, 'reference-bytes');
   await writeFile(persona, 'persona');
+  await writeFile(voiceState, 'voice-state');
   await writeFile(envFile, 'POSTGRES_ADMIN_PASSWORD=test-only\n');
   const base = { ENV_FILE: envFile };
-  const good = listBackedUpPaths({ ...base, CYRENE_REFERENCE_AUDIO_PATH: reference, CYRENE_PERSONA_MEMORY_FILE: persona });
+  const good = listBackedUpPaths({ ...base, CYRENE_REFERENCE_AUDIO_PATH: reference, CYRENE_PERSONA_MEMORY_FILE: persona, POCKET_TTS_VOICE_STATE_PATH: voiceState });
   assert.deepEqual(good.missing, []);
-  assert.ok(good.paths.includes(reference) && good.paths.includes(persona), 'private paths must be backed up');
+  assert.ok(good.paths.includes(reference) && good.paths.includes(persona) && good.paths.includes(voiceState), 'private paths must be backed up');
 
-  const incomplete = listBackedUpPaths({ ...base, CYRENE_REFERENCE_AUDIO_PATH: join(directory, 'gone.mp3'), CYRENE_PERSONA_MEMORY_FILE: persona });
+  const incomplete = listBackedUpPaths({ ...base, CYRENE_REFERENCE_AUDIO_PATH: join(directory, 'gone.mp3'), CYRENE_PERSONA_MEMORY_FILE: persona, POCKET_TTS_VOICE_STATE_PATH: voiceState });
   assert.deepEqual(incomplete.missing.map((entry) => entry.id).sort(), ['cyrene-reference-audio'], 'a missing required private asset must be reported');
 });
 
@@ -119,16 +121,18 @@ test('the proposed RPO/RTO targets match the plan and are documented', () => {
 test('the list-private CLI reports missing required assets as a failure', async () => {
   const { spawnSync } = await import('node:child_process');
   const cli = join(root, 'infra/backup/durable-assets.mjs');
-  const empty = spawnSync(process.execPath, [cli, '--list-private'], { encoding: 'utf8', env: { ...process.env, ENV_FILE: '', CYRENE_REFERENCE_AUDIO_PATH: '', CYRENE_PERSONA_MEMORY_FILE: '' } });
+  const empty = spawnSync(process.execPath, [cli, '--list-private'], { encoding: 'utf8', env: { ...process.env, ENV_FILE: '', CYRENE_REFERENCE_AUDIO_PATH: '', CYRENE_PERSONA_MEMORY_FILE: '', POCKET_TTS_VOICE_STATE_PATH: '' } });
   assert.notEqual(empty.status, 0, 'unset required private assets must fail the backup');
   const directory = await mkdtemp(join(tmpdir(), 'ei-durable-cli-'));
   const reference = join(directory, 'ref.mp3');
   await writeFile(reference, 'x');
   const persona = join(directory, 'p.md');
   await writeFile(persona, 'y');
+  const voiceState = join(directory, 'voice.safetensors');
+  await writeFile(voiceState, 'z');
   const envFile = join(directory, 'deployment.env');
   await writeFile(envFile, 'POSTGRES_ADMIN_PASSWORD=test-only\n');
-  const ok = spawnSync(process.execPath, [cli, '--list-private'], { encoding: 'utf8', env: { ...process.env, ENV_FILE: envFile, CYRENE_REFERENCE_AUDIO_PATH: reference, CYRENE_PERSONA_MEMORY_FILE: persona } });
+  const ok = spawnSync(process.execPath, [cli, '--list-private'], { encoding: 'utf8', env: { ...process.env, ENV_FILE: envFile, CYRENE_REFERENCE_AUDIO_PATH: reference, CYRENE_PERSONA_MEMORY_FILE: persona, POCKET_TTS_VOICE_STATE_PATH: voiceState } });
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(ok.stdout, /ref\.mp3/);
 });

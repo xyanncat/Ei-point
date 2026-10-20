@@ -22,7 +22,7 @@ services.migrate=pinned('migrate',release.images.api);
 // Wire only client keys the bot consumes, and only for bot services actually in this release.
 if(services['bot-ai']){
  const aiEnvironment={};
- if(release.images['tts-qwen'])aiEnvironment.QWEN_TTS_URL='http://tts-qwen:3120/v1/audio/speech';
+ if(release.images['tts'])aiEnvironment.TTS_URL='http://tts:3120/v1/audio/speech';
  if(release.images['hy-mt2'])aiEnvironment.HY_MT2_URL='http://hy-mt2:3121/v1/chat/completions';
  if(Object.keys(aiEnvironment).length)services['bot-ai'].environment=aiEnvironment;
 }
@@ -30,6 +30,6 @@ await mkdir(dirname(resolve(output)),{recursive:true});
 await writeFile(output,JSON.stringify({services},null,2)+'\n',{mode:0o600});
 console.log(`Validated immutable release ${release.id}; ${Object.keys(release.images).length} services`);
 await writeFile(`${output}.bots`,release.bots.map(bot=>bot.service).join('\n')+'\n',{mode:0o600});
-await writeFile(`${output}.tts`,release.images['tts-qwen']?'1\n':'0\n',{mode:0o600});
+await writeFile(`${output}.tts`,release.images['tts']?'1\n':'0\n',{mode:0o600});
 await writeFile(`${output}.hy-mt2`,release.images['hy-mt2']?'1\n':'0\n',{mode:0o600});
 await writeFile(`${output}.roster.json`,JSON.stringify(release),{mode:0o600});

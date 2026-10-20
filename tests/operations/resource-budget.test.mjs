@@ -16,18 +16,18 @@ test('approved pool allocation validates with the aggregate cgroup cap', () => {
   const result = validateResourceBudget(approved());
   assert.equal(result.ok, true, JSON.stringify(result.violations));
   assert.equal(result.mode, 'pool');
-  assert.equal(result.runtime.shares, 18688);
-  assert.equal(result.runtime.memoryGiB, 32.5);
-  assert.equal(result.concurrent.shares, 19200);
-  assert.equal(result.concurrent.memoryGiB, 33.75);
+  assert.equal(result.runtime.shares, 14592);
+  assert.equal(result.runtime.memoryGiB, 28.5);
+  assert.equal(result.concurrent.shares, 23296);
+  assert.equal(result.concurrent.memoryGiB, 37.75);
 });
 
 test('pool mode requires the aggregate cgroup parent on every runtime service', () => {
   const services = approved();
-  delete services['tts-qwen'].cgroupParent;
+  delete services['tts'].cgroupParent;
   const result = validateResourceBudget(services);
   assert.equal(result.ok, false);
-  assert.ok(result.violations.some((v) => v.includes('tts-qwen') && v.includes(POOL_CGROUP_PARENT)));
+  assert.ok(result.violations.some((v) => v.includes('tts') && v.includes(POOL_CGROUP_PARENT)));
 });
 
 test('memory stays mandatory and an explicit ceiling is still enforced', () => {
@@ -38,7 +38,7 @@ test('memory stays mandatory and an explicit ceiling is still enforced', () => {
   assert.ok(invalid.violations.some((v) => v.includes('workers')));
 
   const heavy = approved();
-  heavy['tts-qwen'].memoryGiB = 100;
+  heavy['tts'].memoryGiB = 100;
   const capped = validateResourceBudget(heavy, { memoryGiB: 40 });
   assert.equal(capped.ok, false);
   assert.ok(capped.violations.some((v) => v.includes('memory')));
@@ -54,7 +54,7 @@ test('hard-cpu mode remains validated against the 9 CPU ceiling', () => {
   assert.equal(ok.ok, true, JSON.stringify(ok.violations));
   assert.equal(ok.mode, 'hard');
 
-  const over = { ...hard, 'tts-qwen': { cpus: 20, memoryGiB: 8 } };
+  const over = { ...hard, 'tts': { cpus: 20, memoryGiB: 8 } };
   const bad = validateResourceBudget({ ...over, ...APPROVED_MAINTENANCE });
   assert.equal(bad.ok, false);
   assert.ok(bad.violations.some((v) => v.includes('cpu')));

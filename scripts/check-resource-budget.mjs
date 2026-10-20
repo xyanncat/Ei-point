@@ -23,7 +23,7 @@ export const APPROVED_RUNTIME = {
   "bot-community": { shares: 512, memoryGiB: 2, cgroupParent: POOL_CGROUP_PARENT },
   "bot-ai": { shares: 512, memoryGiB: 2, cgroupParent: POOL_CGROUP_PARENT },
   "hy-mt2": { shares: 2048, memoryGiB: 4, cgroupParent: POOL_CGROUP_PARENT },
-  "tts-qwen": { shares: 8192, memoryGiB: 8, cgroupParent: POOL_CGROUP_PARENT },
+  tts: { shares: 4096, memoryGiB: 4, cgroupParent: POOL_CGROUP_PARENT },
   "bot-music": { shares: 512, memoryGiB: 2, cgroupParent: POOL_CGROUP_PARENT },
   "bot-kafka": { shares: 512, memoryGiB: 1.5, cgroupParent: POOL_CGROUP_PARENT },
   "bot-himiko": { shares: 512, memoryGiB: 1.5, cgroupParent: POOL_CGROUP_PARENT },
@@ -35,6 +35,7 @@ export const APPROVED_RUNTIME = {
 export const APPROVED_MAINTENANCE = {
   migrate: { shares: 256, memoryGiB: 0.25, cgroupParent: POOL_CGROUP_PARENT },
   backup: { shares: 256, memoryGiB: 1, cgroupParent: POOL_CGROUP_PARENT },
+  "tts-qwen": { shares: 8192, memoryGiB: 8, cgroupParent: POOL_CGROUP_PARENT },
 };
 
 const RUNTIME_SERVICES = new Set(Object.keys(APPROVED_RUNTIME));

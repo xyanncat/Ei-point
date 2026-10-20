@@ -41,7 +41,7 @@ const MAX_TTS_AUDIO_BYTES = 8 * 1024 * 1024;
 const WAV_MIME_TYPES = new Set(["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"]);
 
 function makeTtsProvider(): TtsSynthesizeFn {
-  const apiUrl = process.env.QWEN_TTS_URL ?? "http://127.0.0.1:3120/v1/audio/speech";
+  const apiUrl = process.env.TTS_URL ?? process.env.QWEN_TTS_URL ?? "http://127.0.0.1:3120/v1/audio/speech";
   return async (text, voice, signal) => {
     const res = await fetch(apiUrl, {
       method: "POST",
@@ -50,19 +50,19 @@ function makeTtsProvider(): TtsSynthesizeFn {
       signal,
     });
     if (res.status === 429) {
-      const error = new Error("qwen-tts-queue-full");
+      const error = new Error("pocket-tts-queue-full");
       Object.assign(error, { code: "TTS_QUEUE_FULL" });
       throw error;
     }
-    if (!res.ok) throw new Error(`qwen-tts-${res.status}`);
+    if (!res.ok) throw new Error(`tts-${res.status}`);
     const mime = res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
-    if (!mime || !WAV_MIME_TYPES.has(mime)) throw new Error("qwen-tts-invalid-content-type");
+    if (!mime || !WAV_MIME_TYPES.has(mime)) throw new Error("tts-invalid-content-type");
     const contentLength = Number(res.headers.get("content-length"));
     if (Number.isFinite(contentLength) && contentLength > MAX_TTS_AUDIO_BYTES) {
       await res.body?.cancel();
-      throw new Error("qwen-tts-audio-too-large");
+      throw new Error("tts-audio-too-large");
     }
-    if (!res.body) throw new Error("qwen-tts-empty-audio");
+    if (!res.body) throw new Error("tts-empty-audio");
     const reader = res.body.getReader();
     const chunks: Uint8Array[] = [];
     let size = 0;
@@ -72,11 +72,11 @@ function makeTtsProvider(): TtsSynthesizeFn {
       size += value.byteLength;
       if (size > MAX_TTS_AUDIO_BYTES) {
         await reader.cancel();
-        throw new Error("qwen-tts-audio-too-large");
+        throw new Error("tts-audio-too-large");
       }
       chunks.push(value);
     }
-    if (size === 0) throw new Error("qwen-tts-empty-audio");
+    if (size === 0) throw new Error("tts-empty-audio");
     const bytes = new Uint8Array(size);
     let offset = 0;
     for (const chunk of chunks) {
@@ -88,7 +88,7 @@ function makeTtsProvider(): TtsSynthesizeFn {
 }
 
 const ttsQueue = createTtsQueue({
-  provider: "qwen3-local",
+  provider: "pocket-local",
   synthesize: makeTtsProvider(),
 });
 
