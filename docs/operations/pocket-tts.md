@@ -73,10 +73,11 @@ runtime needs only the prepared cache and voice state.
   verified as 24 kHz mono PCM16.
 - Peak RSS ≈ 0.76–1.4 GiB; no WAV clipping in the measured samples.
 
-The owner reported that delivered audio sometimes sounds segmented and the
-speaking pace feels fast. The generated WAVs measured the same duration as the
-prior engine for the same sentence and showed no clipping; pacing/segmentation
-tuning remains an explicit open acceptance item, not a solved claim.
+The owner accepted the 0.90 pacing after the one-request short-message fix.
+Clone similarity and clarity remain an explicit open item: a silence-trimmed
+reference and the 24-layer English model were both judged **not closer** and
+were reverted. Pocket's 100M clone is an approximation of the reference, not a
+certified reproduction, and no second engine is configured.
 
 ## Failure and rollback
 
