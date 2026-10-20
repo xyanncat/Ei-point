@@ -82,7 +82,7 @@ describe("tts queue", () => {
   });
   it("returns the overload result when the local service rejects its bounded queue", async () => {
     const q = createTtsQueue({
-      provider: "qwen3-local",
+      provider: "pocket-local",
       synthesize: async () => {
         const error = new Error("queue-full");
         Object.assign(error, { code: "TTS_QUEUE_FULL" });

@@ -41,7 +41,7 @@ const MAX_TTS_AUDIO_BYTES = 8 * 1024 * 1024;
 const WAV_MIME_TYPES = new Set(["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"]);
 
 function makeTtsProvider(): TtsSynthesizeFn {
-  const apiUrl = process.env.TTS_URL ?? process.env.QWEN_TTS_URL ?? "http://127.0.0.1:3120/v1/audio/speech";
+  const apiUrl = process.env.TTS_URL ?? "http://127.0.0.1:3120/v1/audio/speech";
   return async (text, voice, signal) => {
     const res = await fetch(apiUrl, {
       method: "POST",

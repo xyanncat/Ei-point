@@ -9,7 +9,7 @@
 | Bot | Modules | Required Discord permissions (least-privilege) | Guild access | Secret refs |
 |---|---|---|---|---|
 | kafka (Security+Moderation) | security, moderation, logging | ViewAuditLog, ManageGuild (lockdown only), ModerateMembers, ManageMessages, BanMembers, KickMembers | approved guilds only | DISCORD_KAFKA_BOT_TOKEN |
-| cyrene (AI+TTS+translate) | ai, search, tts, translate | SendMessages, EmbedLinks, AttachFiles, Connect, Speak (TTS only) | approved guilds only | DISCORD_CYRENE_BOT_TOKEN + AI_PROVIDER_* for mention chat + local Qwen/Hy-MT2 model and persona/reference mounts |
+| cyrene (AI+TTS+translate) | ai, search, tts, translate | SendMessages, EmbedLinks, AttachFiles, Connect, Speak (TTS only) | approved guilds only | DISCORD_CYRENE_BOT_TOKEN + AI_PROVIDER_* for mention chat + local Pocket/Hy-MT2 model and persona/reference mounts |
 | robin (Music) | music | Connect, Speak, UseVAD, SendMessages, EmbedLinks | approved guilds only | DISCORD_ROBIN_BOT_TOKEN |
 | cipher (Commerce) | commerce | SendMessages, EmbedLinks, AttachFiles | approved guilds only | DISCORD_CIPHER_BOT_TOKEN + UPI/USDT config |
 | silverwolf (Games) | games | SendMessages, EmbedLinks, AddReactions | approved guilds only | DISCORD_SILVERWOLF_BOT_TOKEN |

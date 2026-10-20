@@ -379,58 +379,6 @@ services:
       start_period: 5m
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
-  # Recoverable Qwen fallback. Stopped by default; start explicitly with
-  # `docker compose --profile qwen-fallback up -d tts-qwen` and set
-  # TTS_URL=http://tts-qwen:3120/v1/audio/speech for bot-ai when rolling back.
-  tts-qwen:
-    profiles: ["qwen-fallback"]
-    image: "ei-point/tts-qwen:local"
-    build: { context: ../.., dockerfile: apps/services/qwen-tts/Dockerfile }
-    restart: unless-stopped
-    environment:
-      QWEN_TTS_MODEL_DIR: /models/qwen3-tts-12hz-0.6b-base
-      QWEN_TTS_MODEL_REVISION: ${QWEN_TTS_MODEL_REVISION:-}
-      QWEN_TTS_REFERENCE_AUDIO: /reference/cyrene-reference.mp3
-      QWEN_TTS_REFERENCE_TEXT: "${QWEN_TTS_REFERENCE_TEXT:-Ah, there you are! Hehe, were you looking for me? Oh, don't look so surprised. I'm simply happy you're here. You know, even the smallest moments can become precious memories. So, shall we make another one together?}"
-      QWEN_TTS_TORCH_THREADS: ${QWEN_TTS_TORCH_THREADS:-8}
-      QWEN_TTS_QUEUE_MAX: ${QWEN_TTS_QUEUE_MAX:-2}
-      QWEN_TTS_REQUEST_TIMEOUT_SECONDS: ${QWEN_TTS_REQUEST_TIMEOUT_SECONDS:-75}
-      QWEN_TTS_PORT: 3120
-      QWEN_TTS_STUCK_EXIT_SECONDS: ${QWEN_TTS_STUCK_EXIT_SECONDS:-60}
-      QWEN_TTS_MKLDNN: ${QWEN_TTS_MKLDNN:-auto}
-      # The rootfs is read-only, so numba (via librosa) needs a writable JIT cache.
-      NUMBA_CACHE_DIR: /tmp
-      HF_HUB_OFFLINE: "1"
-      TRANSFORMERS_OFFLINE: "1"
-      OMP_NUM_THREADS: ${QWEN_TTS_TORCH_THREADS:-8}
-      MKL_NUM_THREADS: ${QWEN_TTS_TORCH_THREADS:-8}
-    volumes:
-      - type: bind
-        source: ${QWEN_TTS_MODEL_PATH:-../../.models/qwen3-tts-12hz-0.6b-base}
-        target: /models/qwen3-tts-12hz-0.6b-base
-        read_only: true
-      - type: bind
-        source: ${CYRENE_REFERENCE_AUDIO_PATH:-../../.models/cyrene-reference.mp3}
-        target: /reference/cyrene-reference.mp3
-        read_only: true
-    networks: [tts]
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
-    tmpfs:
-      - /tmp:rw,nosuid,nodev,size=1g,uid=10001,gid=10001
-    # ponytail: no hard CPU cap; weighted shares only arbitrate under contention
-    cpu_shares: 8192
-    cgroup_parent: ei-point.slice
-    deploy: { resources: { limits: { memory: 8G } } }
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3120/health/ready')"]
-      interval: 20s
-      timeout: 5s
-      retries: 3
-      start_period: 15m
-    logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
-
   bot-music:
     build: { context: ../.., dockerfile: apps/bots/music-py/Dockerfile }
     restart: unless-stopped

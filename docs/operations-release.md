@@ -6,11 +6,11 @@ These procedures require Linux, Docker Compose, Bash, Node.js, Python 3, GNU tim
 
 Build every application image and the custom PostgreSQL image from this checkout on Linux. Publish them and record their actual repository digests. The PostgreSQL image must come from `infra/backup/Dockerfile`, because a plain upstream image lacks the configured pgBackRest executable. Do not use sample or invented digests.
 
-Create a root-readable release JSON with `id`, `images` and optional `bots`. `images` maps every selected Compose service to its published `repository@sha256:<64 hexadecimal characters>` reference. Required foundation services are `postgres`, `nginx`, `api`, `web`, `workers`, `tts-qwen`, and `hy-mt2`. Include each selected bot service as well. Omitting `bots` selects the six currently implemented identities:
+Create a root-readable release JSON with `id`, `images` and optional `bots`. `images` maps every selected Compose service to its published `repository@sha256:<64 hexadecimal characters>` reference. Required foundation services are `postgres`, `nginx`, `api`, `web`, `workers`, `tts`, and `hy-mt2`. Include each selected bot service as well. Omitting `bots` selects the six currently implemented identities:
 
 | Compose service | Registry key | Readiness port |
 |---|---|---:|
-| tts-qwen | local Qwen TTS runtime | 3120 |
+| tts | local Pocket TTS runtime | 3120 |
 | hy-mt2 | local Hy-MT2 translation runtime | 3121 |
 | bot-kafka | kafka | 3108 |
 | bot-himiko | himiko | 3107 |
@@ -29,7 +29,7 @@ node scripts/release-manifest.mjs /secure/release.json /secure/release.compose.j
 
 Set `ENV_FILE` explicitly. Use separate administrative `MIGRATION_DATABASE_URL` and least-privilege `DATABASE_URL`, both pointing to `ei_point` on the same server. The application username must be `ei_point_app`; its URL-encoded password must contain at least 24 characters and no placeholder. The migration service runs schema migrations and provisions application-role credentials/grants. Administrative credentials belong only to this one-shot service and PostgreSQL bootstrap.
 
-Configure OAuth, approved registry identities/guilds, tokens, payment destinations and provider URLs/keys/models. AI primary URL/key/model are required for direct-mention chat; a fallback needs its URL/model and may use a key. Cyrene TTS and translation require the pinned local Qwen/Hy-MT2 weights, reference audio and persona memory described in the [Qwen TTS](operations/qwen-tts.md) and [Hy-MT2 translation](operations/hy-mt2.md) guides; model services start offline. Set the real UPI payee and payment origin before exposing checkout. Configure public TLS and ingress separately; nginx binds loopback port 8080 in this Compose setup. Set the trusted proxy IP/subnet consistently if changing the default network.
+Configure OAuth, approved registry identities/guilds, tokens, payment destinations and provider URLs/keys/models. AI primary URL/key/model are required for direct-mention chat; a fallback needs its URL/model and may use a key. Cyrene TTS and translation require the pinned local Pocket/Hy-MT2 weights, voice state, reference audio and persona memory described in the [Pocket TTS](operations/pocket-tts.md) and [Hy-MT2 translation](operations/hy-mt2.md) guides; model services start offline. Set the real UPI payee and payment origin before exposing checkout. Configure public TLS and ingress separately; nginx binds loopback port 8080 in this Compose setup. Set the trusted proxy IP/subnet consistently if changing the default network.
 
 ## First provisioning and later releases
 

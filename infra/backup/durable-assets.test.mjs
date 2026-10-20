@@ -42,9 +42,9 @@ test('every unique/private asset has an encrypted off-host copy, an integrity ha
 
 test('public weights are reprovisionable by pinned hash, not backed up as unique assets', () => {
   const models = DURABLE_ASSETS.filter((asset) => asset.classification === 'reprovisionable');
-  assert.ok(models.length >= 2, 'Qwen and Hy-MT2 weights are reprovisionable');
+  assert.ok(models.length >= 2, 'Pocket and Hy-MT2 weights are reprovisionable');
   for (const asset of models) {
-    assert.match(asset.provisioning, /prepare_(qwen|hymt2|pocket)_model\.py/, `${asset.id} must name its provisioning command`);
+    assert.match(asset.provisioning, /prepare_(hymt2|pocket)_model\.py/, `${asset.id} must name its provisioning command`);
     assert.ok(!asset.backup.some((method) => /restic/.test(method)), `${asset.id} must not be a unique restic asset`);
   }
 });
@@ -75,7 +75,7 @@ test('the real off-host backup includes private paths through the shared invento
   // Wire-through: the restic script must resolve the private set from the inventory.
   assert.match(restic, /durable-assets\.mjs/, 'restic-backup.sh must use the durable-asset inventory');
   assert.match(restic, /--list-private/, 'restic-backup.sh must request the private/secret paths');
-  for (const publicDir of ['qwen3-tts', 'hy-mt2'])
+  for (const publicDir of ['pocket-hf-cache', 'hy-mt2'])
     assert.doesNotMatch(restic, new RegExp(publicDir), 'public weights are reprovisioned, not backed up as unique assets');
 
   const directory = await mkdtemp(join(tmpdir(), 'ei-durable-'));

@@ -26,7 +26,7 @@ export function gatePlan(pinned) {
     { id: "node-runtime", label: "pinned Node runtime (.nvmrc)", kind: "runtime", mandatory: true, pinned },
     { id: "pnpm-toolchain", label: "pnpm toolchain", command: "pnpm", args: ["--version"], mandatory: true, tool: "pnpm", expectStdout: /^9\./ },
     { id: "python-music", label: "music bot unit tests", command: "python", args: ["-m", "unittest", "discover", "-s", "apps/bots/music-py/tests", "-p", "test_*.py"], mandatory: true, tool: "python" },
-    { id: "python-qwen", label: "qwen TTS service unit tests", command: "python", args: ["-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], cwd: "apps/services/qwen-tts", mandatory: true, tool: "python" },
+    { id: "python-pocket", label: "Pocket TTS service unit tests", command: "python", args: ["-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], cwd: "apps/services/pocket-tts", mandatory: true, tool: "python" },
     { id: "feature-coverage", label: "legacy feature coverage (structural)", command: "node", args: ["scripts/check-feature-coverage.mjs", "--mode", "structural"], mandatory: true },
     // §10A: strict release coverage. The legacy map is fully reconciled
     // (86 verified + 93 approved replacements) and this gate passes; it is

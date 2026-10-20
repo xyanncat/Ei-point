@@ -18,8 +18,8 @@ test('approved pool allocation validates with the aggregate cgroup cap', () => {
   assert.equal(result.mode, 'pool');
   assert.equal(result.runtime.shares, 14592);
   assert.equal(result.runtime.memoryGiB, 28.5);
-  assert.equal(result.concurrent.shares, 23296);
-  assert.equal(result.concurrent.memoryGiB, 37.75);
+  assert.equal(result.concurrent.shares, 15104);
+  assert.equal(result.concurrent.memoryGiB, 29.75);
 });
 
 test('pool mode requires the aggregate cgroup parent on every runtime service', () => {

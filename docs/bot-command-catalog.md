@@ -80,7 +80,7 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 - Route AI mentions through a configured OpenAI-compatible primary provider and optional fallback; local compatible endpoints may omit API keys.
 - Keep guild/user conversation threads, recent messages, summaries, persona preferences, and usage records in PostgreSQL.
 - Read new messages from the active voice channel's text chat, enforce Ei-Flow authorization, rate and queue limits, and coordinate voice admission with Robin through database leases.
-- Synthesize through the private, offline local Qwen service. Provisioning model weights and target-VPS CPU/audible acceptance remain open.
+- Synthesize through the private, offline local Pocket service. Provisioning model weights and target-VPS CPU/audible acceptance remain open.
 - Translate through a separate offline local Hy-MT2 service with one inference slot, eight waiting requests and a 60-second request deadline. Translation text is not stored in Cyrene's conversation history; pinned model provisioning, target-VPS performance and language-quality acceptance remain open.
 
 ## Robin

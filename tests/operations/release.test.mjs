@@ -106,7 +106,7 @@ test('Kafka-only and Robin-only rosters render without attempting a Cyrene envir
   }
  }finally{await rm(dir,{recursive:true,force:true});}
 });
-test('Cyrene-only roster wires Qwen and Hy-MT2 client keys for the one bot',async()=>{
+test('Cyrene-only roster wires Pocket and Hy-MT2 client keys for the one bot',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'ei-release-cyrene-'));
  try{
   const script=fileURLToPath(new URL('../../scripts/release-manifest.mjs',import.meta.url));

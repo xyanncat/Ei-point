@@ -20,7 +20,7 @@ print(json.dumps({
  'cpu_capability':torch.backends.cpu.get_cpu_capability(),
  'fresh_process_mkldnn_default':torch.backends.mkldnn.enabled,
  'note':'Fresh Python process, application may override backend settings',
- 'threads':{k:os.environ.get(k) for k in ['POCKET_TTS_TORCH_THREADS','QWEN_TTS_TORCH_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS']},
+ 'threads':{k:os.environ.get(k) for k in ['POCKET_TTS_TORCH_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS']},
  'cpu_max':Path('/sys/fs/cgroup/cpu.max').read_text() if Path('/sys/fs/cgroup/cpu.max').exists() else None,
  'cpu_stat':Path('/sys/fs/cgroup/cpu.stat').read_text() if Path('/sys/fs/cgroup/cpu.stat').exists() else None
 }))

@@ -35,7 +35,6 @@ export const APPROVED_RUNTIME = {
 export const APPROVED_MAINTENANCE = {
   migrate: { shares: 256, memoryGiB: 0.25, cgroupParent: POOL_CGROUP_PARENT },
   backup: { shares: 256, memoryGiB: 1, cgroupParent: POOL_CGROUP_PARENT },
-  "tts-qwen": { shares: 8192, memoryGiB: 8, cgroupParent: POOL_CGROUP_PARENT },
 };
 
 const RUNTIME_SERVICES = new Set(Object.keys(APPROVED_RUNTIME));
