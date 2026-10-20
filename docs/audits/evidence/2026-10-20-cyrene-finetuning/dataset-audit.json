@@ -1,0 +1,62 @@
+{
+  "audit": "cyrene-six-layer-finetune",
+  "date": "2026-10-20",
+  "status": "insufficient_data",
+  "reference": {
+    "description": "Owner-supplied Cyrene conditioning reference; already tracked in the repository before this task",
+    "sha256": "73A3B7AEDBC95BCDD0ADF4A6304DD3C47EC7A69D06BA6182F77945B32C031561",
+    "duration_seconds": 15.569,
+    "channels": 1,
+    "sample_rate_hz": 44100,
+    "utterances": 1,
+    "source_groups": 1,
+    "transcript_reviewed": false,
+    "permission_basis_recorded": false,
+    "usable_training_clips": 0
+  },
+  "dataset_gate": {
+    "project_target_unique_minutes_min": 20,
+    "project_target_unique_minutes_max": 60,
+    "current_unique_minutes": 0.259,
+    "additional_unique_minutes_needed_min": 19.741,
+    "minimum_independent_source_groups": 5,
+    "current_independent_source_groups": 1,
+    "independent_validation_test_available": false,
+    "split_written": false,
+    "verdict": "insufficient_data"
+  },
+  "missing_data_request": [
+    "20-60 minutes total of clean, varied, single-speaker English Cyrene speech authorized for adaptation; the known reference contributes only 0.259 minutes.",
+    "At least five independent source groups/sessions for an 80/10/10 source-group split, or a separate independent validation/test set; one recording cannot make train and test independent.",
+    "Human-reviewed transcripts for every selected utterance, with exact spoken words and no invented persona lines.",
+    "Recorded permission basis and provenance for each source; no scraped, generated, or third-party voice audio.",
+    "Coverage of neutral, gentle, playful, reflective, question, name, number and punctuation deliveries; avoid a single breathy line as the only sample.",
+    "Reject music-heavy, multi-speaker, clipped or overlapping material; process to 24 kHz mono PCM without aggressive denoising or speed/pitch changes."
+  ],
+  "synthetic_evaluation_texts": {
+    "count": 20,
+    "audio_available": false,
+    "held_out_reference_groups": 0,
+    "note": "EVALUATION.jsonl contains public synthetic text only; it is not independent audio evidence and was not used for training."
+  },
+  "validator": {
+    "path": "scripts/cyrene-finetune/prepare_dataset.py",
+    "tests": "scripts/cyrene-finetune/test_prepare_dataset.py",
+    "test_result": "8/8 pass",
+    "properties": [
+      "required fields and nonempty transcript/speaker/permission",
+      "file existence and SHA-256 integrity",
+      "WAV duration consistency",
+      "duplicate audio and overlapping source intervals rejected",
+      "source-group 80/10/10 split with no group leakage",
+      "insufficient minutes/sources return a blocked gate and no manifest",
+      "upstream manifest converter writes path/duration/transcript only"
+    ]
+  },
+  "not_done": [
+    "No private sources.csv/clips.jsonl inventory was created because no additional authorized recordings or reviewed transcript were supplied.",
+    "No train/valid/test aligned manifest was written.",
+    "No training or pilot was started.",
+    "No checkpoint, candidate audio or voice state was produced."
+  ]
+}

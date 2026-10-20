@@ -59,6 +59,8 @@ jobs:
       - name: Python Pocket TTS service suites
         run: python -m unittest discover -s tests -p "test_*.py"
         working-directory: apps/services/pocket-tts
+      - name: Cyrene fine-tuning dataset suites
+        run: python -m unittest discover -s scripts/cyrene-finetune -p "test_*.py"
       - name: Publish verification evidence
         if: always()
         uses: actions/upload-artifact@v4
