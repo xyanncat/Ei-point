@@ -59,6 +59,9 @@ jobs:
       - name: Python qwen TTS service suites
         run: python -m unittest discover -s tests -p "test_*.py"
         working-directory: apps/services/qwen-tts
+      - name: Python Pocket TTS service suites
+        run: python -m unittest discover -s tests -p "test_*.py"
+        working-directory: apps/services/pocket-tts
       - name: Publish verification evidence
         if: always()
         uses: actions/upload-artifact@v4
