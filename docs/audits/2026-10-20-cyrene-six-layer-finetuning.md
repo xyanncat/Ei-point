@@ -38,7 +38,9 @@ exists. Production remains on the existing six-layer Pocket model.
 - One owner-supplied reference MP3 is known: 249,171 bytes, **15.569 s**,
   44.1 kHz mono, SHA-256
   `73A3B7AEDBC95BCDD0ADF4A6304DD3C47EC7A69D06BA6182F77945B32C031561`.
-  It is already tracked from earlier provisioning; no copy was added.
+  It is already tracked from earlier provisioning; no copy was added. A
+  recursive scan of the authorized `E:\github\Ei Point` project assets found
+  only this same MP3 (plus its `.models` copy), with no additional recordings.
 - **Usable training clips: 0.** The reference transcript was not independently
   reviewed in this task; permission basis is not recorded; one recording
   cannot provide independent train/validation/test groups.
