@@ -27,6 +27,7 @@ from typing import Any
 
 MODEL_ID = "kyutai/pocket-tts"
 POCKET_TTS_VERSION = "3.3.0"
+DSP_VERSION = "rubberband-v1"
 MAX_TEXT_CHARS = 500
 MAX_BODY_BYTES = 16 * 1024
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
@@ -82,11 +83,11 @@ def validate_request(value: Any) -> tuple[str, str, str]:
     return text, voice, output_format
 
 
-def cache_key(model_revision: str, voice_sha256: str, voice: str, text: str, output_format: str = "wav", sample_rate: int = 24000, tempo: float = 1.0) -> str:
+def cache_key(model_revision: str, voice_sha256: str, voice: str, text: str, output_format: str = "wav", sample_rate: int = 24000, tempo: float = 1.0, dsp: str = DSP_VERSION) -> str:
     # The source text never appears in cache identifiers or metrics. The model
-    # revision, voice-state hash, sample rate and tempo are part of the identity
-    # so a stale engine/voice/pacing artifact can never be served.
-    material = f"pocket-v1\0{model_revision}\0{voice_sha256}\0{sample_rate}\0{tempo:.3f}\0{voice}\0{output_format}\0{text}".encode("utf-8")
+    # revision, voice-state hash, sample rate, tempo and DSP filter are part of
+    # the identity so a stale engine/voice/pacing artifact can never be served.
+    material = f"pocket-v1\0{dsp}\0{model_revision}\0{voice_sha256}\0{sample_rate}\0{tempo:.3f}\0{voice}\0{output_format}\0{text}".encode("utf-8")
     return hashlib.sha256(material).hexdigest()
 
 
@@ -566,28 +567,36 @@ class TtsService:
 def _apply_tempo(wav_audio: bytes, tempo: float) -> bytes:
     """Slow/speed the generated speech without changing pitch.
 
-    Pocket has no speed control. `atempo` preserves pitch and is applied at the
-    bounded service boundary so /speak and /tts share the same delivery.
+    Rubberband gives cleaner time-stretching than the basic atempo filter; the
+    fallback keeps the service available if a future pinned FFmpeg lacks it.
     """
     if not 0.5 <= tempo <= 1.5:
         raise RuntimeError("tempo-out-of-range")
-    result = subprocess.run(
-        [
-            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
-            "-threads", "1", "-f", "wav", "-i", "pipe:0", "-vn",
-            "-filter:a", f"atempo={tempo:.3f}",
-            "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", "-f", "wav", "pipe:1",
-        ],
-        input=wav_audio,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        timeout=30,
-        check=True,
-    )
-    audio = result.stdout
-    if not audio or len(audio) > MAX_AUDIO_BYTES:
-        raise RuntimeError("tempo-audio-size-out-of-range")
-    return audio
+    base = [
+        "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+        "-threads", "1", "-f", "wav", "-i", "pipe:0", "-vn",
+        "-filter:a", "",
+        "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", "-f", "wav", "pipe:1",
+    ]
+    for filter_value in (f"rubberband=tempo={tempo:.3f}:pitch=1.0", f"atempo={tempo:.3f}"):
+        args = list(base)
+        args[args.index("-filter:a") + 1] = filter_value
+        try:
+            result = subprocess.run(
+                args,
+                input=wav_audio,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            continue
+        audio = result.stdout
+        if not audio or len(audio) > MAX_AUDIO_BYTES:
+            raise RuntimeError("tempo-audio-size-out-of-range")
+        return audio
+    raise RuntimeError("tempo-filter-failed")
 
 
 def _resident_memory_bytes() -> int:
