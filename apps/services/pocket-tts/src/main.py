@@ -82,11 +82,11 @@ def validate_request(value: Any) -> tuple[str, str, str]:
     return text, voice, output_format
 
 
-def cache_key(model_revision: str, voice_sha256: str, voice: str, text: str, output_format: str = "wav", sample_rate: int = 24000) -> str:
+def cache_key(model_revision: str, voice_sha256: str, voice: str, text: str, output_format: str = "wav", sample_rate: int = 24000, tempo: float = 1.0) -> str:
     # The source text never appears in cache identifiers or metrics. The model
-    # revision, voice-state hash and sample rate are part of the identity so a
-    # stale engine/voice artifact can never be served as a Pocket result.
-    material = f"pocket-v1\0{model_revision}\0{voice_sha256}\0{sample_rate}\0{voice}\0{output_format}\0{text}".encode("utf-8")
+    # revision, voice-state hash, sample rate and tempo are part of the identity
+    # so a stale engine/voice/pacing artifact can never be served.
+    material = f"pocket-v1\0{model_revision}\0{voice_sha256}\0{sample_rate}\0{tempo:.3f}\0{voice}\0{output_format}\0{text}".encode("utf-8")
     return hashlib.sha256(material).hexdigest()
 
 
@@ -208,6 +208,7 @@ class RuntimeState:
     ready: bool = False
     load_seconds: float = 0.0
     load_error: str = ""
+    tempo: float = 1.0
 
 
 class PocketRuntime:
@@ -219,14 +220,18 @@ class PocketRuntime:
         expected_voice_sha256: str,
         torch_threads: int,
         quantize: bool = False,
+        tempo: float = 1.0,
     ):
+        if not 0.5 <= tempo <= 1.5:
+            raise RuntimeError("Pocket tempo must be between 0.5 and 1.5")
         self.model_config = model_config
         self.expected_revision = revision
         self.voice_state_path = voice_state_path
         self.expected_voice_sha256 = expected_voice_sha256
         self.torch_threads = torch_threads
         self.quantize = quantize
-        self.state = RuntimeState(revision=revision if REVISION_PATTERN.fullmatch(revision) else "")
+        self.tempo = tempo
+        self.state = RuntimeState(revision=revision if REVISION_PATTERN.fullmatch(revision) else "", tempo=tempo)
         self._lock = threading.Lock()
 
     def load(self) -> None:
@@ -305,6 +310,8 @@ class PocketRuntime:
         audio_bytes = output.getvalue()
         if not audio_bytes or len(audio_bytes) > MAX_AUDIO_BYTES:
             raise RuntimeError("audio-size-out-of-range")
+        if abs(self.tempo - 1.0) > 0.001:
+            audio_bytes = _apply_tempo(audio_bytes, self.tempo)
         return audio_bytes
 
 
@@ -385,7 +392,7 @@ class TtsService:
             if self._worker_stuck:
                 self._requests["degraded"] = self._requests.get("degraded", 0) + 1
                 raise ServiceDegraded()
-        key = cache_key(state.revision, state.voice_sha256, voice, text, output_format)
+        key = cache_key(state.revision, state.voice_sha256, voice, text, output_format, tempo=state.tempo)
         cached = self.cache.get(key)
         if cached is not None:
             self._count("success")
@@ -504,6 +511,9 @@ class TtsService:
             "# HELP ei_tts_voice_state_info Pinned voice-state identity.",
             "# TYPE ei_tts_voice_state_info gauge",
             f'ei_tts_voice_state_info{{sha256="{state.voice_sha256}"}} 1' if state.voice_sha256 else "ei_tts_voice_state_info 0",
+            "# HELP ei_tts_tempo Playback tempo applied to generated speech.",
+            "# TYPE ei_tts_tempo gauge",
+            f"ei_tts_tempo {state.tempo:.3f}",
             "# HELP ei_tts_inference_seconds Time spent generating audio.",
             "# TYPE ei_tts_inference_seconds summary",
             f"ei_tts_inference_seconds_sum {inference_sum:.6f}",
@@ -551,6 +561,33 @@ class TtsService:
             ]
         )
         return "\n".join(lines) + "\n"
+
+
+def _apply_tempo(wav_audio: bytes, tempo: float) -> bytes:
+    """Slow/speed the generated speech without changing pitch.
+
+    Pocket has no speed control. `atempo` preserves pitch and is applied at the
+    bounded service boundary so /speak and /tts share the same delivery.
+    """
+    if not 0.5 <= tempo <= 1.5:
+        raise RuntimeError("tempo-out-of-range")
+    result = subprocess.run(
+        [
+            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-threads", "1", "-f", "wav", "-i", "pipe:0", "-vn",
+            "-filter:a", f"atempo={tempo:.3f}",
+            "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", "-f", "wav", "pipe:1",
+        ],
+        input=wav_audio,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        timeout=30,
+        check=True,
+    )
+    audio = result.stdout
+    if not audio or len(audio) > MAX_AUDIO_BYTES:
+        raise RuntimeError("tempo-audio-size-out-of-range")
+    return audio
 
 
 def _resident_memory_bytes() -> int:
@@ -708,6 +745,7 @@ def main() -> None:
     voice_state = Path(os.environ.get("POCKET_TTS_VOICE_STATE", "/voice/cyrene-voice.safetensors"))
     voice_sha256 = os.environ.get("POCKET_TTS_VOICE_SHA256", "")
     quantize = os.environ.get("POCKET_TTS_QUANTIZE", "0").strip().lower() in {"1", "on", "true", "yes"}
+    tempo = _bounded_float("POCKET_TTS_TEMPO", 0.90, 0.5, 1.5)
     threads = _positive_int("POCKET_TTS_TORCH_THREADS", 1, 1, 8)
     queue_max = _positive_int("POCKET_TTS_QUEUE_MAX", 2, 1, 32)
     request_timeout = _positive_int("POCKET_TTS_REQUEST_TIMEOUT_SECONDS", 75, 5, 300)
@@ -715,7 +753,7 @@ def main() -> None:
     if hard_timeout < request_timeout:
         hard_timeout = request_timeout + 30
     port = _positive_int("POCKET_TTS_PORT", 3120, 1024, 65535)
-    runtime = PocketRuntime(model_config, model_revision, voice_state, voice_sha256, threads, quantize=quantize)
+    runtime = PocketRuntime(model_config, model_revision, voice_state, voice_sha256, threads, quantize=quantize, tempo=tempo)
     stuck_exit = _positive_int("POCKET_TTS_STUCK_EXIT_SECONDS", 60, 0, 3600)
     service = TtsService(
         runtime,
@@ -747,6 +785,17 @@ def _positive_int(name: str, default: int, minimum: int, maximum: int) -> int:
         value = int(raw)
     except ValueError as exc:
         raise RuntimeError(f"{name} must be an integer") from exc
+    if not minimum <= value <= maximum:
+        raise RuntimeError(f"{name} is outside the supported range")
+    return value
+
+
+def _bounded_float(name: str, default: float, minimum: float, maximum: float) -> float:
+    raw = os.environ.get(name, str(default))
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be a number") from exc
     if not minimum <= value <= maximum:
         raise RuntimeError(f"{name} is outside the supported range")
     return value

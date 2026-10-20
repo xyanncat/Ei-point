@@ -20,6 +20,7 @@ from src.main import (
     RequestTimedOut,
     RuntimeState,
     TtsService,
+    _apply_tempo,
     cache_key,
     make_handler,
     mkldnn_enabled,
@@ -82,6 +83,7 @@ class CacheTests(unittest.TestCase):
         self.assertNotIn("private", key)
         self.assertNotEqual(key, cache_key("a" * 40, "c" * 64, "default", "private user text"))
         self.assertNotEqual(key, cache_key("d" * 40, "b" * 64, "default", "private user text"))
+        self.assertNotEqual(key, cache_key("a" * 40, "b" * 64, "default", "private user text", tempo=0.9))
 
     def test_cache_is_size_and_entry_bounded(self):
         cache = BoundedAudioCache(max_bytes=5, ttl_seconds=10, max_entries=1)
@@ -215,6 +217,17 @@ class PolicyTests(unittest.TestCase):
         self.assertTrue(mkldnn_enabled("auto", "AVX2"))
         self.assertTrue(mkldnn_enabled("on", "DEFAULT"))
         self.assertFalse(mkldnn_enabled("off", "AVX2"))
+
+    def test_tempo_filter_is_bounded_and_pitch_preserving(self):
+        with patch("src.main.subprocess.run") as run:
+            run.return_value.stdout = make_wav()
+            output = _apply_tempo(make_wav(), 0.9)
+            args = run.call_args.args[0]
+            self.assertIn("atempo=0.900", args)
+            self.assertIn("pcm_s16le", args)
+            self.assertEqual(output, make_wav())
+        with self.assertRaises(RuntimeError):
+            _apply_tempo(make_wav(), 0.4)
 
 
 if __name__ == "__main__":
