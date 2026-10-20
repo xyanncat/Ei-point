@@ -27,7 +27,7 @@ from typing import Any
 
 MODEL_ID = "kyutai/pocket-tts"
 POCKET_TTS_VERSION = "3.3.0"
-DSP_VERSION = "rubberband-v1"
+DSP_VERSION = "atempo-v1"
 MAX_TEXT_CHARS = 500
 MAX_BODY_BYTES = 16 * 1024
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
@@ -567,36 +567,28 @@ class TtsService:
 def _apply_tempo(wav_audio: bytes, tempo: float) -> bytes:
     """Slow/speed the generated speech without changing pitch.
 
-    Rubberband gives cleaner time-stretching than the basic atempo filter; the
-    fallback keeps the service available if a future pinned FFmpeg lacks it.
+    atempo is the pacing filter accepted in the owner's listening test. It is
+    applied at the bounded service boundary so /speak and /tts share delivery.
     """
     if not 0.5 <= tempo <= 1.5:
         raise RuntimeError("tempo-out-of-range")
-    base = [
-        "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
-        "-threads", "1", "-f", "wav", "-i", "pipe:0", "-vn",
-        "-filter:a", "",
-        "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", "-f", "wav", "pipe:1",
-    ]
-    for filter_value in (f"rubberband=tempo={tempo:.3f}:pitch=1.0", f"atempo={tempo:.3f}"):
-        args = list(base)
-        args[args.index("-filter:a") + 1] = filter_value
-        try:
-            result = subprocess.run(
-                args,
-                input=wav_audio,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                timeout=30,
-                check=True,
-            )
-        except subprocess.CalledProcessError:
-            continue
-        audio = result.stdout
-        if not audio or len(audio) > MAX_AUDIO_BYTES:
-            raise RuntimeError("tempo-audio-size-out-of-range")
-        return audio
-    raise RuntimeError("tempo-filter-failed")
+    result = subprocess.run(
+        [
+            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-threads", "1", "-f", "wav", "-i", "pipe:0", "-vn",
+            "-filter:a", f"atempo={tempo:.3f}",
+            "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", "-f", "wav", "pipe:1",
+        ],
+        input=wav_audio,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        timeout=30,
+        check=True,
+    )
+    audio = result.stdout
+    if not audio or len(audio) > MAX_AUDIO_BYTES:
+        raise RuntimeError("tempo-audio-size-out-of-range")
+    return audio
 
 
 def _resident_memory_bytes() -> int:

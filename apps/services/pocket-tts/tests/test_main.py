@@ -223,7 +223,7 @@ class PolicyTests(unittest.TestCase):
             run.return_value.stdout = make_wav()
             output = _apply_tempo(make_wav(), 0.9)
             args = run.call_args.args[0]
-            self.assertIn("rubberband=tempo=0.900:pitch=1.0", args)
+            self.assertIn("atempo=0.900", args)
             self.assertIn("pcm_s16le", args)
             self.assertEqual(output, make_wav())
         with self.assertRaises(RuntimeError):
