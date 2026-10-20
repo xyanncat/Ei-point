@@ -1,0 +1,23 @@
+# Private experiment material stays outside Git; local copies are ignored too.
+private/
+data/
+audio/
+runs/
+outputs/
+checkpoints/
+latents/
+.venv/
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.mp4
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.log
+sources.csv
+clips.jsonl
+*_aligned.jsonl

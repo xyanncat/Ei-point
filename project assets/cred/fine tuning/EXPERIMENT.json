@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "kind": "project-experiment-contract-not-upstream-trainer-config",
+  "candidate_name": "Cyrene",
+  "architecture_layers": 6,
+  "route": "experimental-direct-adaptation-of-existing-six-layer-weights",
+  "allow_teacher_download": false,
+  "allow_paid_compute": false,
+  "allow_production_weight_overwrite": false,
+  "private_workdir_example": "/opt/ei-point/.models/cyrene-finetuning",
+  "baseline": {
+    "package_version_from_repository": "3.3.0",
+    "model_revision_from_repository": "983151f13aaeab1b13c1e5e3c2c383d49a9edf3f",
+    "must_verify_live": true,
+    "preserve_original_artifacts": true
+  },
+  "training_policy": {
+    "freeze_codec_initially": true,
+    "preserve_tokenizer": true,
+    "precision_initial": "float32",
+    "initial_micro_batch": 1,
+    "initial_torch_threads": 1,
+    "maximum_torch_threads": 2,
+    "distributed": false,
+    "compile": false,
+    "hyperparameters_must_be_resolved_from_pinned_trainer_schema": true,
+    "require_finite_loss_gradients_and_changed_trainable_tensors": true,
+    "require_export_reload_and_resume_checks": true
+  },
+  "hard_limits": {
+    "max_cpu_equivalent_cores": 2,
+    "max_memory_gib": 6,
+    "swap_allowed": false,
+    "max_tasks": 64,
+    "max_private_run_disk_gib": 8,
+    "minimum_filesystem_free_gib": 10,
+    "max_pilot_wall_seconds": 600,
+    "max_pilot_optimizer_steps": 10,
+    "max_first_stage_wall_seconds": 1800,
+    "max_total_experiment_wall_seconds": 7200,
+    "max_total_optimizer_steps": 1000,
+    "max_retained_candidate_checkpoints": 3,
+    "termination_grace_seconds": 20
+  },
+  "monitoring": {
+    "interval_seconds": 5,
+    "stop_if_production_unhealthy": true,
+    "stop_if_production_queue_sustained_nonempty_seconds": 10,
+    "stop_if_production_p95_exceeds_baseline_factor": 1.25,
+    "p95_comparison_requires_sufficient_passive_samples": true,
+    "stop_if_host_available_memory_below_gib": 8,
+    "stop_if_training_loss_or_gradient_nonfinite": true,
+    "stop_if_production_restart_count_increases": true,
+    "stop_if_disk_budget_or_free_space_limit_breached": true
+  },
+  "promotion": {
+    "require_owner_blind_listening_acceptance": true,
+    "require_no_unexplained_intelligibility_or_audio_quality_regression": true,
+    "require_candidate_p95_at_most_baseline_factor": 1.2,
+    "require_sustained_rtf_below": 1.0,
+    "production_memory_limit_gib": 4,
+    "benchmark_min_warm_samples_per_candidate": 30,
+    "keep_same_tempo_for_like_for_like_comparison": true,
+    "require_no_active_voice_session_during_cutover": true,
+    "single_voice_aliases": ["cyrene", "default"]
+  }
+}
