@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "seed": 20261020,
+  "isolation": {
+    "required": true,
+    "notes": "Run only on a separate VM/host with its own Docker daemon, storage, network and no production Discord tokens, database, volumes, routes or jobs. A second Compose project on the live VPS is NOT full isolation.",
+    "production_denylist": [
+      "100.77.131.20",
+      "ei-point-tts-1",
+      "ei-point-bot-ai-1",
+      "ei-point-hy-mt2-1",
+      "ei-point-postgres-1",
+      "tts",
+      "tts-24l",
+      "hy-mt2",
+      "bot-ai",
+      "postgres",
+      "localhost",
+      "127.0.0.1"
+    ]
+  },
+  "target": {
+    "tts_base": "http://staging-tts.internal:3120",
+    "mt_base": "http://staging-mt.internal:3121"
+  },
+  "limits": {
+    "max_in_flight": 4,
+    "client_timeout_s": 120,
+    "max_total_requests": 3000
+  },
+  "slo": {
+    "p95_ms": 5000,
+    "max_error_rate": 0.01,
+    "max_queue_depth": 2
+  },
+  "texts": {
+    "tts_short": "Hello there.",
+    "tts_medium": "The lantern by the window is still warm, and the morning train leaves at seven forty-five.",
+    "tts_long": "Ah, there you are. I was wondering how your day was going. The lantern by the window is still warm, and the morning train leaves at seven forty-five. Even an ordinary afternoon can hide a little treasure, so let us take the long road home tonight and remember it.",
+    "mt_short": "The lantern is still warm.",
+    "mt_medium": "The morning train leaves at seven forty-five from the quiet harbor."
+  },
+  "workload_assumptions": {
+    "label": "ASSUMPTION, not measured user behavior",
+    "normal_mix": "25% short TTS, 20% medium TTS, 10% long TTS, 25% short MT, 20% medium MT",
+    "request_frequency_per_active_user_per_minute": 1.0,
+    "listeners_per_tts_utterance": "not modeled; Discord listeners do not add model requests"
+  },
+  "stages": {
+    "smoke": {
+      "rate_rps": 0.2,
+      "duration_s": 30,
+      "max_requests": 8,
+      "mix": {"tts_short": 0.5, "mt_short": 0.5}
+    },
+    "warm": {
+      "rate_rps": 0.2,
+      "duration_s": 120,
+      "max_requests": 30,
+      "mix": {"tts_short": 0.5, "tts_medium": 0.2, "mt_short": 0.3}
+    },
+    "normal": {
+      "rate_rps": 0.3,
+      "duration_s": 600,
+      "max_requests": 250,
+      "mix": {"tts_short": 0.25, "tts_medium": 0.20, "tts_long": 0.10, "mt_short": 0.25, "mt_medium": 0.20}
+    },
+    "ramp_1": {
+      "rate_rps": 0.25,
+      "duration_s": 120,
+      "max_requests": 60,
+      "mix": {"tts_short": 0.25, "tts_medium": 0.20, "tts_long": 0.10, "mt_short": 0.25, "mt_medium": 0.20}
+    },
+    "ramp_2": {
+      "rate_rps": 0.3125,
+      "duration_s": 120,
+      "max_requests": 70,
+      "mix": {"tts_short": 0.25, "tts_medium": 0.20, "tts_long": 0.10, "mt_short": 0.25, "mt_medium": 0.20}
+    },
+    "ramp_3": {
+      "rate_rps": 0.390625,
+      "duration_s": 120,
+      "max_requests": 80,
+      "mix": {"tts_short": 0.25, "tts_medium": 0.20, "tts_long": 0.10, "mt_short": 0.25, "mt_medium": 0.20}
+    },
+    "saturation": {
+      "rate_rps": 0.8,
+      "duration_s": 60,
+      "max_requests": 60,
+      "mix": {"tts_short": 0.25, "tts_medium": 0.20, "tts_long": 0.10, "mt_short": 0.25, "mt_medium": 0.20}
+    },
+    "spike": {
+      "rate_rps": 1.6,
+      "duration_s": 15,
+      "max_requests": 30,
+      "mix": {"tts_short": 0.5, "mt_short": 0.5}
+    },
+    "soak": {
+      "rate_rps": 0.25,
+      "duration_s": 1800,
+      "max_requests": 600,
+      "mix": {"tts_short": 0.25, "tts_medium": 0.20, "tts_long": 0.10, "mt_short": 0.25, "mt_medium": 0.20}
+    }
+  }
+}

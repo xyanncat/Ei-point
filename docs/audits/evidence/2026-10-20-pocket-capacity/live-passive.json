@@ -1,0 +1,174 @@
+{
+  "benchmark": "pocket-tts-capacity-2026-10-20",
+  "mode": "LIVE-PASSIVE",
+  "window_utc_approx": "2026-10-20T01:58Z-02:04Z",
+  "timestamp_note": "Exact date -u line was lost when the provider serial console stopped returning output; provider xterm token iat values were 2026-10-20T01:58:50Z and 02:03:59Z. No inference request was sent.",
+  "source_revision": "995fc1f",
+  "source_tree": "/opt/ei-point; no dirty work at sync",
+  "services": {
+    "running": 13,
+    "healthy": 13,
+    "images": {
+      "tts": "sha256:ca7197c801c9a3413bbc16cfa30b9020358e99a914477edfb171944c218864d8",
+      "bot_ai": "sha256:f9169b661009fff0f2bb1ebbf447d6dd6b3b4c34fb775ae9d1e76964569db124",
+      "hy_mt2": "sha256:73e36d019cd86b8d4363e380b135becfb16124c2b56ebdd6d7a403bbe5246b80",
+      "postgres": "sha256:f33b1c4b8eb7435a2c8448303896e4cac1dae57a82002c737ca36855bad3c81a"
+    },
+    "restarts": 0,
+    "oom_killed": false
+  },
+  "cpu": {
+    "configured_vcpus": 10,
+    "model_note": "Common KVM processor previously verified on this deployment; fresh lscpu model line was not retained in the bounded terminal buffer",
+    "features_verified_prior": "no SSE4.1/SSE4.2/AVX/AVX2/FMA exposed; PyTorch capability DEFAULT; Pocket oneDNN disabled at startup",
+    "slice": {
+      "cpu_max": "900000 100000",
+      "weight": 100,
+      "cpuset_effective": "0-9",
+      "ancestor_cpu_max": "max 100000",
+      "ancestor_cpuset": "0-9",
+      "cpu_10s_usec": 300005,
+      "lifetime_nr_throttled": 2,
+      "lifetime_throttled_usec": 5214
+    },
+    "tts": {
+      "nano_cpus": 0,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "shares": 4096,
+      "cpuset": "",
+      "cgroup_parent": "ei-point.slice",
+      "memory_bytes": 4294967296,
+      "affinity": "0-9",
+      "threads": 20
+    },
+    "hy_mt2": {
+      "nano_cpus": 0,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "shares": 2048,
+      "cpuset": "",
+      "cgroup_parent": "ei-point.slice",
+      "memory_bytes": 4294967296,
+      "affinity": "0-9",
+      "threads": 19
+    },
+    "versions": {
+      "pocket_tts": "3.3.0",
+      "torch": "2.9.1+cpu",
+      "numpy": "2.2.6",
+      "ffmpeg": "5.1.9-0+deb12u1",
+      "node": "v24.8.0",
+      "postgres": "17.5 (Debian 17.5-1.pgdg130+1)",
+      "hy_mt2_threads": 6,
+      "hy_mt2_threads_batch": 6,
+      "hy_mt2_parallel": 1,
+      "hy_mt2_ctx": 2048
+    }
+  },
+  "observations": {
+    "vmstat_idle_samples": [98, 99, 100, 99],
+    "loadavg": "0.02 0.04 0.05 1/640",
+    "host_processes": 243,
+    "host_threads": 641,
+    "mem_total_bytes": 67433967616,
+    "mem_used_bytes": 4106805248,
+    "mem_free_bytes": 23201427456,
+    "mem_available_bytes": 63327162368,
+    "swap_total_bytes": 17179865088,
+    "swap_used_bytes": 0,
+    "psi_cpu_some_avg10": 0.0,
+    "psi_cpu_full_avg10": 0.0,
+    "psi_memory_avg10": 0.0,
+    "psi_io_avg10": 0.0,
+    "slice_memory_current": 1576812544,
+    "slice_memory_peak": 9025839104,
+    "slice_memory_events": {"low": 0, "high": 0, "max": 0, "oom": 0, "oom_kill": 0},
+    "tts_memory_current": 711942144,
+    "tts_memory_peak": 977018880,
+    "tts_memory_events": {"low": 0, "high": 0, "max": 0, "oom": 0, "oom_kill": 0},
+    "docker_stats": {
+      "tts": "cpu=0.02% mem=679MiB/4GiB",
+      "bot_ai": "cpu=0.00% mem=54.93MiB/2GiB",
+      "hy_mt2": "cpu=0.00% mem=198.7MiB/4GiB",
+      "postgres": "cpu=2.91% mem=97.33MiB/6GiB",
+      "web": "cpu=6.82% mem=74.19MiB/1GiB",
+      "api": "cpu=4.88% mem=37.11MiB/1GiB"
+    }
+  },
+  "queues": {
+    "tts_ready": 1,
+    "tts_success": 0,
+    "tts_queue_depth": 0,
+    "tts_inference_active": 0,
+    "tts_cache_hits": 0,
+    "tts_cache_misses": 0,
+    "mt_processing": 0,
+    "mt_deferred": 0,
+    "voice_leases": 0,
+    "db_active": 0
+  },
+  "storage": {
+    "filesystem": "ext4 rw,relatime,discard,errors=remount-ro",
+    "size": "492G",
+    "used": "84G",
+    "available": "389G",
+    "used_percent": 18,
+    "inodes_used_percent": 6,
+    "docker_images": "16 total, 6.536GB, 203.1MB reclaimable",
+    "docker_volumes": "4 total, 157.8MB",
+    "docker_build_cache": "261 entries, 60.01GB, 53.72GB reclaimable",
+    "models_bytes": "2.9G",
+    "log_bytes": {"tts": 3248, "bot_ai": 119, "hy_mt2": 3600},
+    "deploy_lock": false,
+    "backup_process": false
+  },
+  "network_health_ms": {
+    "tts_ready_5_get": {"min": 1.3, "median": 1.4, "max": 26.9},
+    "hy_mt2_health_5_get": {"min": 0.6, "median": 1.1, "max": 1.7}
+  },
+  "live_probes": {
+    "status": "BLOCKED_PROVIDER_CONSOLE",
+    "requests_sent": 0,
+    "reason": "After passive inspection, the provider serial console stopped returning a shell (xterm: 'starting serial terminal on interface serial0' followed by no output; noVNC produced no canvas). No SSH route from the local workstation and no provider API. No synthetic inference was sent; TTS success/cache counters remained at 0.",
+    "max_tested_sustainable_goodput": null,
+    "saturation_throughput": null,
+    "first_audio_ms": null,
+    "generation_ms": null,
+    "mp4_overhead_ms": null,
+    "translation_timings": null
+  },
+  "stress": {
+    "status": "BLOCKED_ISOLATION",
+    "executed": false,
+    "reason": "Only the live VPS is available. A second Compose project on the same host is not full CPU/memory-bandwidth/storage/network isolation. No separate VM/host exists; no production 100% test was run.",
+    "harness": "bench/pocket_capacity/runner.py",
+    "scenario": "bench/pocket_capacity/scenario.example.json",
+    "self_test": {
+      "passed": true,
+      "successful": 4,
+      "scheduled": 4,
+      "errors": 0,
+      "success_rps": 4.0,
+      "latency_ms_p50": 34.46,
+      "note": "local mock server; no live/staging inference"
+    },
+    "planned_100_percent_test": "Not run. Harness requires EI_BENCH_ISOLATED=1 and refuses production denylist targets."
+  },
+  "functional_context": {
+    "engine": "Pocket 6-layer, original Cyrene reference, voice-state sha256 c053f46f..., tempo 0.90 atempo",
+    "qwen_removed": true,
+    "owner_acceptance": "Pace accepted; clone similarity/clarity remains open. /speak and /tts were functionally exercised before this benchmark."
+  },
+  "health_comparison": {
+    "baseline": "13/13 healthy; queues/leases 0; no deploy lock",
+    "after_benchmark": "No production action or inference occurred after baseline. Final Docker health could not be re-read because the provider console became unavailable; re-check is pending console recovery.",
+    "absolute_zero_impact_claimed": false
+  },
+  "git": {
+    "benchmark_source_revision": "995fc1f",
+    "vps_checkout": "995fc1f at sync; new harness/report pull pending because console is unavailable",
+    "production_redeployed": false,
+    "tuned": false
+  }
+}
