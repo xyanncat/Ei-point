@@ -1,7 +1,7 @@
 "use client";
 // Shared staff components: page header, panels, attention list, tables, drawer,
 // empty/error states. One consistent set per the redesign brief.
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 export function PageHeader({
   eyebrow,
@@ -127,5 +127,110 @@ export function stateText(state: string | undefined, stale?: boolean) {
     ({ ok: "Healthy", degraded: "Degraded", down: "Offline", unknown: "Unknown" } as Record<string, string>)[
       state ?? "unknown"
     ] ?? "Unknown"
+  );
+}
+
+/** A server switcher that looks like the site, not the operating system.
+ *  A button opens a small animated menu; Escape closes it, focus returns to
+ *  the button, and the closed menu is inert. Replaces the native select. */
+export function ServerSwitcher({
+  label,
+  options,
+  value,
+  onChange,
+  suffix,
+}: {
+  label: string;
+  options: { id: string; name: string }[];
+  value: string;
+  onChange: (id: string) => void;
+  suffix?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const listId = useId();
+  const current = options.find((option) => option.id === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open ]);
+
+  return (
+    <div ref={rootRef} className="sf-switcher">
+      <span className="sf-switcher__label" id={`${listId}-label`}>
+        {label}
+      </span>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="sf-switcher__button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-labelledby={`${listId}-label ${listId}-button`}
+        id={`${listId}-button`}
+        onClick={() => setOpen((was) => !was)}
+      >
+        <span className="sf-switcher__value">
+          {current ? current.name : "Choose a server"}
+          {suffix ? <span className="sf-switcher__suffix">{suffix}</span> : null}
+        </span>
+        <span className="sf-switcher__chevron" aria-hidden="true" data-open={open ? "true" : "false"}>
+          ▾
+        </span>
+      </button>
+      <div className="sf-switcher__menu-wrap" data-open={open ? "true" : "false"}>
+        <ul
+          role="listbox"
+          aria-labelledby={`${listId}-label`}
+          id={listId}
+          className="sf-switcher__menu"
+          inert={!open}
+        >
+          {options.map((option) => {
+            const selected = option.id === value;
+            return (
+              <li key={option.id} role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className="sf-switcher__option"
+                  data-selected={selected ? "true" : "false"}
+                  tabIndex={open ? 0 : -1}
+                  onClick={() => {
+                    onChange(option.id);
+                    setOpen(false);
+                    buttonRef.current?.focus();
+                  }}
+                >
+                  <span>{option.name}</span>
+                  {selected ? (
+                    <span className="sf-switcher__check" aria-hidden="true">
+                      ✓
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
   );
 }

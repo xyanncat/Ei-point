@@ -4,7 +4,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "../../../lib/api";
-import { Empty, PageHeader, Panel } from "../../../components/staff/ui";
+import { Empty, HealthBadge, PageHeader, Panel } from "../../../components/staff/ui";
+import { Stagger, StaggerItem } from "../../../components/motion";
 
 type PurchaseLog = {
   orderId: string;
@@ -26,6 +27,14 @@ const STATUS_LABEL: Record<string, string> = {
   settled: "Settled",
   rejected: "Rejected",
   expired: "Expired",
+};
+
+const STATUS_HEALTH: Record<string, string> = {
+  pending: "degraded",
+  claimed: "degraded",
+  settled: "ok",
+  rejected: "down",
+  expired: "down",
 };
 
 function stamp(value: string) {
@@ -95,42 +104,47 @@ export default function AccountOrdersPage() {
         detail="Status, amount and the server the work runs in."
       >
         {orders.length ? (
-          <table className="sf-table">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Service</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Placed</th>
-                {scope === "all" ? <th>Buyer</th> : null}
-                <th>Server</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr key={order.orderId}>
-                  <td>
-                    <Link href={`/account/orders/${encodeURIComponent(order.orderId)}`}>
-                      {order.orderId}
-                    </Link>
-                  </td>
-                  <td>{order.serviceName}</td>
-                  <td className="sf-num">
-                    {(order.amountMinor / 100).toLocaleString("en-IN", {
-                      style: "currency",
-                      currency: "INR",
-                      maximumFractionDigits: 0,
-                    })}
-                  </td>
-                  <td>{STATUS_LABEL[order.status] ?? order.status}</td>
-                  <td className="sf-num">{stamp(order.createdAt)}</td>
-                  {scope === "all" ? <td className="sf-num">{order.buyerId}</td> : null}
-                  <td>{order.guildName ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Stagger className="sf-cards" amount={0.08}>
+            {orders.map((order) => (
+              <StaggerItem key={order.orderId}>
+                <article className="sf-card">
+                  <div className="sf-card__top">
+                    <span className="sf-card__mark" aria-hidden="true">
+                      {(order.serviceName || order.orderId).charAt(0)}
+                    </span>
+                    <div>
+                      <h3 className="sf-card__title">
+                        <Link href={`/account/orders/${encodeURIComponent(order.orderId)}`}>
+                          {order.orderId}
+                        </Link>
+                      </h3>
+                      <p className="sf-card__sub">{order.serviceName}</p>
+                    </div>
+                  </div>
+                  <div className="sf-card__meta">
+                    <span className="sf-num">
+                      {(order.amountMinor / 100).toLocaleString("en-IN", {
+                        style: "currency",
+                        currency: "INR",
+                        maximumFractionDigits: 0,
+                      })}
+                    </span>
+                    <HealthBadge
+                      health={STATUS_HEALTH[order.status] ?? "unknown"}
+                      text={STATUS_LABEL[order.status] ?? order.status}
+                    />
+                  </div>
+                  <div className="sf-card__meta">
+                    <span className="sf-num">{stamp(order.createdAt)}</span>
+                    {scope === "all" ? (
+                      <span className="sf-num">{order.buyerId}</span>
+                    ) : null}
+                    <span className="sf-card__sub">{order.guildName ?? "No server"}</span>
+                  </div>
+                </article>
+              </StaggerItem>
+            ))}
+          </Stagger>
         ) : (
           <Empty
             title={busy ? "Loading orders…" : "No orders yet"}

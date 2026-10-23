@@ -5,7 +5,8 @@
 // for keep their history.
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../../lib/api";
-import { PageHeader, Panel, Empty } from "../staff/ui";
+import { PageHeader, Panel, Empty, HealthBadge } from "../staff/ui";
+import { Stagger, StaggerItem } from "../motion";
 
 type CatalogueItem = {
   sku: string;
@@ -329,26 +330,34 @@ export function CatalogueManager() {
         detail="Edit a price or a description, or take a service off the site."
       >
         {items.length ? (
-          <table className="sf-table">
-            <thead>
-              <tr>
-                <th>Service</th>
-                <th>Price</th>
-                <th>State</th>
-                <th>
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.sku}>
-                  <td>
-                    <strong>{item.name}</strong>
-                    <br />
-                    <span className="sf-dim">{item.sku}</span>
+          <Stagger className="sf-cards" amount={0.08}>
+            {items.map((item) => (
+              <StaggerItem key={item.sku}>
+                <article className="sf-card">
+                  <div className="sf-card__top">
+                    <span className="sf-card__mark" aria-hidden="true">
+                      {item.name.charAt(0)}
+                    </span>
+                    <div>
+                      <h3 className="sf-card__title">{item.name}</h3>
+                      <p className="sf-card__sub">{item.sku}</p>
+                    </div>
+                  </div>
+                  <div className="sf-card__meta">
+                    <span className="sf-num">
+                      {(item.priceMinor / 100).toLocaleString("en-IN", {
+                        style: "currency",
+                        currency: item.currency,
+                        maximumFractionDigits: 0,
+                      })}
+                    </span>
+                    <HealthBadge
+                      health={item.active ? "ok" : "unknown"}
+                      text={item.active ? "Offered" : "Withdrawn"}
+                    />
+                  </div>
                     {draft?.sku === item.sku ? (
-                      <div style={{ marginTop: "0.8rem" }}>
+                      <div className="sf-card__editor">
                         {editor(
                           draft,
                           (next) => setDraft(next),
@@ -357,42 +366,31 @@ export function CatalogueManager() {
                         )}
                       </div>
                     ) : null}
-                  </td>
-                  <td className="sf-num">
-                    {(item.priceMinor / 100).toLocaleString("en-IN", {
-                      style: "currency",
-                      currency: item.currency,
-                      maximumFractionDigits: 0,
-                    })}
-                  </td>
-                  <td>{item.active ? "Offered" : "Withdrawn"}</td>
-                  <td>
-                    <div className="world-row">
+                  <div className="sf-card__foot">
+                    <button
+                      className="sf-ghost"
+                      type="button"
+                      onClick={() =>
+                        setDraft(draft?.sku === item.sku ? null : toDraft(item))
+                      }
+                    >
+                      {draft?.sku === item.sku ? "Close" : "Edit"}
+                    </button>
+                    {item.active ? (
                       <button
                         className="sf-ghost"
                         type="button"
-                        onClick={() =>
-                          setDraft(draft?.sku === item.sku ? null : toDraft(item))
-                        }
+                        disabled={busy}
+                        onClick={() => void remove(item)}
                       >
-                        {draft?.sku === item.sku ? "Close" : "Edit"}
+                        Remove
                       </button>
-                      {item.active ? (
-                        <button
-                          className="sf-ghost"
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void remove(item)}
-                        >
-                          Remove
-                        </button>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    ) : null}
+                  </div>
+                </article>
+              </StaggerItem>
+            ))}
+          </Stagger>
         ) : (
           <Empty
             title="No services yet"

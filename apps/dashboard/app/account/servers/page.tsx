@@ -12,7 +12,8 @@ import {
   ServerSettingsPanel,
 } from "../../../components/staff/panels";
 import { StaffAccessPanel } from "../../../components/staff/staff-access";
-import { HealthBadge, PageHeader, Panel, Empty, stateText, stamp } from "../../../components/staff/ui";
+import { HealthBadge, PageHeader, Panel, Empty, ServerSwitcher, stateText, stamp } from "../../../components/staff/ui";
+import { Stagger, StaggerItem } from "../../../components/motion";
 import { botsMeta } from "../../../components/staff/bots-meta";
 import { MasterServerControls } from "../../../components/account/master-controls";
 
@@ -54,23 +55,16 @@ export default function ServersPage() {
       ) : null}
 
       {guilds.length > 1 ? (
-        <div className="sf-field" style={{ maxWidth: "24rem", marginBottom: "1rem" }}>
-          <span>Server</span>
-          <select
-            value={guild}
-            onChange={(event) => {
-              setOpenBot("");
-              setGuild(event.target.value);
-            }}
-          >
-            {guilds.map((entry) => (
-              <option key={entry.guildId} value={entry.guildId}>
-                {entry.name}
-                {isMaster ? " (master)" : ""}
-              </option>
-            ))}
-          </select>
-        </div>
+        <ServerSwitcher
+          label="Server"
+          options={guilds.map((entry) => ({ id: entry.guildId, name: entry.name }))}
+          value={guild}
+          suffix={isMaster ? "master" : undefined}
+          onChange={(id) => {
+            setOpenBot("");
+            setGuild(id);
+          }}
+        />
       ) : null}
 
       {!guild ? (
@@ -89,38 +83,35 @@ export default function ServersPage() {
             detail="Open a bot to configure it. Everything here applies to this server only."
           >
             {cards.length ? (
-              <table className="sf-table">
-                <thead>
-                  <tr>
-                    <th>Bot</th>
-                    <th>Status</th>
-                    <th>Modules</th>
-                    <th>Seen</th>
-                    <th>
-                      <span className="sr-only">Setup</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cards.map((card) => {
-                    const meta = botsMeta(card.botKey);
-                    const isOpen = openBot === card.botKey;
-                    return (
-                      <tr key={card.botKey}>
-                        <td>
-                          <strong>{meta.name}</strong>
-                          <br />
-                          <span className="sf-dim">{meta.summary}</span>
-                        </td>
-                        <td>
+              <Stagger className="sf-cards" amount={0.1}>
+                {cards.map((card) => {
+                  const meta = botsMeta(card.botKey);
+                  const isOpen = openBot === card.botKey;
+                  return (
+                    <StaggerItem key={card.botKey}>
+                      <article className="sf-card">
+                        <div className="sf-card__top">
+                          <span className="sf-card__mark" aria-hidden="true">
+                            {meta.name.charAt(0)}
+                          </span>
+                          <div>
+                            <h3 className="sf-card__title">{meta.name}</h3>
+                            <p className="sf-card__sub">{meta.summary}</p>
+                          </div>
+                        </div>
+                        <div className="sf-card__meta">
                           <HealthBadge
                             health={card.stale ? "stale" : card.state}
                             text={card.stale ? "Stale" : stateText(card.state)}
                           />
-                        </td>
-                        <td>{(card.modules ?? []).join(", ") || "None assigned"}</td>
-                        <td className="sf-num">{stamp(card.updatedAt)}</td>
-                        <td>
+                          <span className="sf-card__sub">
+                            {(card.modules ?? []).join(" · ") || "No modules"}
+                          </span>
+                        </div>
+                        <div className="sf-card__meta">
+                          <span className="sf-num">Seen {stamp(card.updatedAt)}</span>
+                        </div>
+                        <div className="sf-card__foot">
                           <button
                             className="sf-ghost"
                             type="button"
@@ -129,12 +120,12 @@ export default function ServersPage() {
                           >
                             {isOpen ? "Close" : "Set up"}
                           </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </div>
+                      </article>
+                    </StaggerItem>
+                  );
+                })}
+              </Stagger>
             ) : (
               <Empty
                 title={busy ? "Loading bots…" : "No bots in this server"}
