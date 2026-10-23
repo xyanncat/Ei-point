@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { PublicNav } from "./public-nav";
-import { ScrollProgress } from "./motion";
+import { PageTransition, ScrollProgress } from "./motion";
 import { WorldProvider } from "./world";
 
 const FOOTER_COLUMNS: { title: string; links: [string, string][] }[] = [
@@ -81,11 +81,15 @@ export function SiteFrame({ children }: { children: ReactNode }) {
     <WorldProvider tone={appSurface ? "calm" : "cinema"}>
       <ScrollProgress />
       {appSurface ? (
-        <div className="ei-dashboard-frame">{children}</div>
+        <div className="ei-dashboard-frame">
+          <PageTransition routeKey={path}>{children}</PageTransition>
+        </div>
       ) : (
         <div className="ei-public">
           <PublicNav />
-          <main id="main">{children}</main>
+          <PageTransition routeKey={path}>
+            <main id="main">{children}</main>
+          </PageTransition>
           <Footer />
         </div>
       )}

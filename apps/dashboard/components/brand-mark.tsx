@@ -1,8 +1,8 @@
 export function BrandMark() {
-  // Drawn in CSS (see .ei-brand-mark) — the site ships no raster brand asset.
+  // The real brand file — no more CSS-drawn placeholder.
   return (
     <span className="ei-brand-mark" aria-hidden="true">
-      <span className="ei-brand-mark__core" />
+      <img src="/media/logo.svg" alt="" width="38" height="38" />
     </span>
   );
 }

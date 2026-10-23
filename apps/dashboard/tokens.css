@@ -31,9 +31,9 @@
   --k-warn: #e4b45c;
   --k-bad: #ff8f8f;
 
-  /* typography */
-  --k-font-ui: "Outfit Variable", "Outfit", "Nunito Sans Variable", "Nunito Sans", "Segoe UI", system-ui, sans-serif;
-  --k-font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  /* typography — Cinzel carries the cinematic display voice, Manrope the UI */
+  --k-font-ui: "Manrope Variable", "Manrope", "Segoe UI", system-ui, sans-serif;
+  --k-font-display: "Cinzel Variable", "Cinzel", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --k-text-s: 0.82rem;
   --k-text-m: 0.92rem;
   --k-text-body: 0.9375rem;

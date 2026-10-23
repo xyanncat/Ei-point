@@ -169,6 +169,33 @@ export function KineticTitle({
   );
 }
 
+/** Page transition: the whole route enters with the site grammar — rise +
+    de-blur, expo-out — every time the pathname changes. Keyed by route so a
+    fresh mount replays the entrance; reduced motion renders plain content. */
+export function PageTransition({
+  routeKey,
+  children,
+  className,
+}: {
+  routeKey: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  const reduce = useReducedMotion();
+  if (reduce) return <div className={className}>{children}</div>;
+  return (
+    <motion.div
+      key={routeKey}
+      className={className}
+      initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
+      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+      transition={{ duration: 0.55, ease: EASE }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 /** Hairline progress rail pinned to the top of the viewport. */
 export function ScrollProgress() {
   const reduce = useReducedMotion();

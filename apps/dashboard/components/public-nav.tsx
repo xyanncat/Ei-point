@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { BrandMark } from "./brand-mark";
 
 const PRIMARY: [string, string][] = [
@@ -25,6 +26,7 @@ const SECONDARY: [string, string][] = [
 
 export function PublicNav() {
   const path = usePathname();
+  const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -43,15 +45,27 @@ export function PublicNav() {
         </Link>
 
         <div className="site-nav__links">
-          {PRIMARY.map(([href, label]) => (
-            <Link key={href} href={href} aria-current={active(href) ? "page" : undefined}>
-              {label}
-            </Link>
-          ))}
+          {PRIMARY.map(([href, label]) => {
+            const isActive = active(href);
+            return (
+              <Link key={href} href={href} aria-current={isActive ? "page" : undefined}>
+                {label}
+                {isActive && !reduce ? (
+                  <motion.span
+                    layoutId="site-nav-active"
+                    className="site-nav__pill"
+                    aria-hidden="true"
+                    transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                  />
+                ) : null}
+              </Link>
+            );
+          })}
         </div>
 
         <div className="site-nav__tools">
           <Link href="/account" className="icon-button" aria-label="My account">
+            <img src="/media/account.svg" alt="" width="18" height="18" />
             Account
           </Link>
           <button
@@ -59,6 +73,7 @@ export function PublicNav() {
             className="icon-button site-nav__burger"
             aria-expanded={open}
             aria-controls="site-nav-drawer"
+            aria-label={open ? "Close menu" : "Open menu"}
             onClick={() => setOpen((value) => !value)}
           >
             <span aria-hidden="true">{open ? "Close" : "Menu"}</span>
@@ -70,7 +85,7 @@ export function PublicNav() {
         id="site-nav-drawer"
         className="site-nav__drawer"
         data-open={open ? "true" : "false"}
-        hidden={!open}
+        inert={!open}
       >
         <div className="site-nav__drawer-inner">
           {PRIMARY.map(([href, label]) => (

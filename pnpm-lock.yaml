@@ -333,11 +333,11 @@ importers:
       '@ei-point/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@fontsource-variable/nunito-sans':
-        specifier: 5.3.0
+      '@fontsource-variable/cinzel':
+        specifier: ^5.3.0
         version: 5.3.0
-      '@fontsource-variable/outfit':
-        specifier: 5.3.0
+      '@fontsource-variable/manrope':
+        specifier: ^5.3.0
         version: 5.3.0
       motion:
         specifier: ^14.6.0
@@ -760,11 +760,11 @@ packages:
   '@fastify/proxy-addr@5.1.2':
     resolution: {integrity: sha512-uqB4QsgVoro0XDC+DIftIMGXHdBPn+lK6Ek3xXAIxPMCJfqxnbtyEoMCm2KPUVOuIosd7Cyw9HawEqMFM/UA+g==}
 
-  '@fontsource-variable/nunito-sans@5.3.0':
-    resolution: {integrity: sha512-Vk1PSfckNDwgw2yGcsvJP3o/0zEW8Rp6KzbD8Ql/6iRHQshnhhAjt+cSIfAUyp5vQuSlleGHFW2LfYaaex0diw==}
+  '@fontsource-variable/cinzel@5.3.0':
+    resolution: {integrity: sha512-eFcU0TwaAP5QESF2pV8VoOPJJXJ6sSGm/6mXMwqTdMBPAJMaLhfa6oISHuOtFeddsoHP9RYm4Io0j1j3mNEz2Q==}
 
-  '@fontsource-variable/outfit@5.3.0':
-    resolution: {integrity: sha512-fPb5XnYK0k7SbR++HEmm4+ZqDszmLKQ+sPRUr8oQ/KNC0vy6r6hazJFe8iYozv4cqlHbvJ/JECkJWrfDodUMVQ==}
+  '@fontsource-variable/manrope@5.3.0':
+    resolution: {integrity: sha512-6D5dgokHsWDDMtmXHznKa0hK229NN+1a4BLPmUCLqcO1Pw5EEhWY5RFt0AcXnVRAljFFPfRtLkJePQj6LSsV6g==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -1981,9 +1981,9 @@ snapshots:
       '@fastify/forwarded': 3.1.1
       ipaddr.js: 2.5.0
 
-  '@fontsource-variable/nunito-sans@5.3.0': {}
+  '@fontsource-variable/cinzel@5.3.0': {}
 
-  '@fontsource-variable/outfit@5.3.0': {}
+  '@fontsource-variable/manrope@5.3.0': {}
 
   '@img/colour@1.1.0':
     optional: true
