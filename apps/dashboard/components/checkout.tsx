@@ -1,7 +1,16 @@
 "use client";
 import { useRef, useState, useEffect, type FormEvent } from "react";
-import QRCode from "qrcode";
 import { api, ApiError, type AccountResponse } from "../lib/api";
+// Loaded on demand: the QR encoder (~80 KB) only ships to visitors who reach
+// a payment step, never to first-load bundles.
+async function qrDataURL(text: string): Promise<string> {
+  const { default: QRCode } = await import("qrcode");
+  return QRCode.toDataURL(text, {
+    width: 256,
+    margin: 2,
+    color: { dark: "#251322", light: "#ffffff" },
+  });
+}
 type Method = "upi" | "usdt" | "razorpay";
 type Options = {enabled:boolean;methods:{upi:boolean;usdt:boolean;razorpay:boolean}};
 type Order = {orderId:string;token:string;amountMinor:number;currency:string;paymentMethod:Method;paymentUri?:string;destination?:string;network?:string;expiresAt:string;referralApplied:boolean;creditAppliedMinor?:number;status?:string};
@@ -27,13 +36,13 @@ export function CheckoutButton({serviceId,name}:{serviceId:string;name:string}){
   // outcome is never the default.
   const previous=await api<ResumedOrder|{resumed:false}>(`/api/payments/resume?serviceId=${encodeURIComponent(serviceId)}`).catch(error=>{if(alive.current)setError(error instanceof Error?error.message:"Could not check for an existing checkout. Retry in a moment.");return null;});
   if(previous===null)return;
-  if("resumed" in previous&&previous.resumed){setOrder(previous);setStatus(previous.status==="confirmed"?"confirmed":previous.status??"pending");if(previous.paymentUri)setQr(await QRCode.toDataURL(previous.paymentUri,{width:256,margin:2,color:{dark:"#251322",light:"#ffffff"}}));return;}
+  if("resumed" in previous&&previous.resumed){setOrder(previous);setStatus(previous.status==="confirmed"?"confirmed":previous.status??"pending");if(previous.paymentUri)setQr(await qrDataURL(previous.paymentUri));return;}
   const o=await api<Options>("/api/payments/options");if(alive.current){setOptions(o);setMethod(o.methods.upi?"upi":"usdt");}}catch(e){if(alive.current)setError(e instanceof Error?e.message:"Payment options are unavailable.");}finally{if(alive.current)setBusy(false);}}
  async function checkout(e:FormEvent){e.preventDefault();setError("");setBusy(true);attempt.current ||= crypto.randomUUID();secret.current ||= btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");try {
   const o=await api<Order>("/api/payments/upi-qr",{method:"POST",headers:{"content-type":"application/json","x-csrf-token":await csrfToken()},body:JSON.stringify({serviceId,paymentMethod:method,idempotencyKey:attempt.current,recoveryToken:secret.current,...(ref?{referralCode:ref.trim().toUpperCase()}:{})})});
   if(!/^RP-[A-Z0-9]{6}$/.test(o.orderId)||!o.token)throw Error("The payment service returned an incomplete order.");
   if(!o.paymentUri)throw Error("The payment service returned an incomplete order.");
-  setOrder(o);setStatus("pending");setQr(await QRCode.toDataURL(o.paymentUri,{width:256,margin:2,color:{dark:"#251322",light:"#ffffff"}}));
+  setOrder(o);setStatus("pending");setQr(await qrDataURL(o.paymentUri));
   if(o.referralApplied){try{localStorage.removeItem(REFERRAL_KEY);}catch{}}
  }catch(e){setError(e instanceof Error?e.message:"Could not create checkout.");}finally{setBusy(false);}}
  async function claim(e:FormEvent){e.preventDefault();if(!order)return;setBusy(true);setError("");try{const r=await api<{notificationStatus?:string}>("/api/payments/claim",{method:"POST",headers:{"content-type":"application/json","x-csrf-token":await csrfToken()},body:JSON.stringify({orderId:order.orderId,token:order.token,idempotencyKey:`claim-${order.orderId}`,...(order.paymentMethod==="upi"?{utr:proof}:order.paymentMethod==="razorpay"?{reference:proof}:{txid:proof})})});setNotified(r?.notificationStatus??"");setClaimed(true);setStatus("claimed");}catch(e){setError(e instanceof Error?e.message:"Could not submit payment proof.");}finally{setBusy(false);}}

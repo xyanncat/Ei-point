@@ -4,6 +4,13 @@ import "@fontsource-variable/cinzel";
 import "@fontsource-variable/manrope";
 import { SiteFrame } from "../components/site-frame";
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0e0a0f",
+};
+
 export const metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "http://localhost:3000",

@@ -109,7 +109,25 @@ export function WorldProvider({
   children: ReactNode;
   tone?: "cinema" | "calm";
 }) {
-  const reduce = useReducedMotion();
+  const prefersReduced = useReducedMotion();
+  // Data-saver / 2G visitors get the still frame, never the 90 MB film or
+  // the soundtrack: same art direction, zero heavy bytes. Quality is
+  // untouched for everyone else — this only reroutes the constrained.
+  const [liteMotion, setLiteMotion] = useState(false);
+  useEffect(() => {
+    const connection = (
+      navigator as Navigator & {
+        connection?: { saveData?: boolean; effectiveType?: string };
+      }
+    ).connection;
+    if (
+      connection &&
+      (connection.saveData || /^(slow-2g|2g)$/.test(connection.effectiveType ?? ""))
+    ) {
+      setLiteMotion(true);
+    }
+  }, []);
+  const reduce = prefersReduced || liteMotion;
   const pathname = usePathname();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);

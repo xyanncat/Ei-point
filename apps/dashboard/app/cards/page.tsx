@@ -41,6 +41,8 @@ export default function CardsPage() {
                   src={card.artwork_ref}
                   alt={card.name}
                   loading="lazy"
+                  decoding="async"
+                  draggable={false}
                   style={{
                     width: "100%",
                     height: 260,
