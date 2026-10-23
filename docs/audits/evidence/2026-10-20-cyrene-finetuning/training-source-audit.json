@@ -1,0 +1,74 @@
+{
+  "audit": "cyrene-six-layer-finetune",
+  "date": "2026-10-20",
+  "status": "prepared_but_not_trainable",
+  "training_source": {
+    "repository": "https://github.com/kyutai-labs/pocket-tts",
+    "tag": "v3.3.0",
+    "commit": "3dbee45d343d7dddd0d105468d17f8dcba14db3e",
+    "commit_date": "2026-09-24T17:20:54+02:00",
+    "package_version": "3.3.0",
+    "clone_command": "git clone --depth 1 --branch v3.3.0 https://github.com/kyutai-labs/pocket-tts.git",
+    "not_vendored_in_repo": true
+  },
+  "official_recipes": {
+    "finetune.yaml": "24-layer English teacher (english_2026-04_24l.yaml); not a six-layer recipe",
+    "depth_distill.yaml": "six-layer student distilled from a 24-layer teacher; requires teacher weights and 200000 steps; teacher route forbidden",
+    "direct_six_layer": "experimental project route; no official validated config in v3.3.0"
+  },
+  "cpu_route": {
+    "gpu_required_by_upstream_readme": true,
+    "readme_note": "Training requires one NVIDIA GPU; CPU execution is described in distributed.py as accidental, not a use case.",
+    "cpu_escape_hatch": "POCKET_TTS_ALLOW_CPU=1",
+    "cpu_escape_hatch_meaning": "Bypasses the CUDA check; it is not a CPU performance or quality guarantee.",
+    "vps_gpu_visible": false,
+    "experiment_limits": {
+      "max_cpu_equivalent_cores": 2,
+      "max_memory_gib": 6,
+      "swap_allowed": false,
+      "max_tasks": 64,
+      "max_pilot_wall_seconds": 600,
+      "max_pilot_optimizer_steps": 10,
+      "max_first_stage_wall_seconds": 1800,
+      "max_total_experiment_wall_seconds": 7200,
+      "max_total_optimizer_steps": 1000
+    },
+    "isolated_training_environment": false,
+    "cpu_pilot_run": false,
+    "measured_seconds_per_step": null,
+    "reason": "Dataset gate failed first; no GPU is visible, upstream CPU training is explicitly unsupported, the VPS uses the production slice/console is unavailable, and no isolated training host exists. A CPU step-time number would not make a valid fine-tune and was not fabricated."
+  },
+  "data_contract": {
+    "manifest_schema": "each train/valid JSONL row: path, duration, transcript; optional word alignments",
+    "loader": "training/dataloader/loader.py",
+    "required_split": "source-group isolated train/validation/test; no overlap or duplicate audio",
+    "precompute_default_sec": true,
+    "pilot_precompute_recommendation": false
+  },
+  "direct_six_layer_notes": {
+    "possible_from_released_weights": "Configuration can name pocket_tts/config/english.yaml with start_from_pretrained: true; safetensors loading is supported by _load_flow_lm_state.",
+    "unresolved": [
+      "No official six-layer fine-tune recipe or baseline metrics.",
+      "The six-layer model is a distilled student; its guidance/conditioning behavior differs from the 24-layer teacher recipe.",
+      "The three public eval texts and owner-held-out audio are required before any claim.",
+      "The experiment requires a valid source-group dataset and a passing pilot before any training run."
+    ]
+  },
+  "skills_resolved": {
+    "fine-tuning": "C:/Users/DELL/.config/opencode/skills/fine-tuning",
+    "local-llms": "C:/Users/DELL/.config/opencode/skills/local-llms",
+    "python-performance": "C:/Users/DELL/.config/opencode/skills/python-performance",
+    "performance-profiling": "C:/Users/DELL/.config/opencode/skills/performance-profiling",
+    "load-testing": "C:/Users/DELL/.config/opencode/skills/load-testing",
+    "docker-best-practices": "C:/Users/DELL/.config/opencode/skills/docker-best-practices",
+    "writing-plans": "C:/Users/DELL/.config/opencode/skills/writing-plans",
+    "executing-plans": "C:/Users/DELL/.config/opencode/skills/executing-plans",
+    "data-validation": "C:/Users/DELL/.config/opencode/skills/data-validation",
+    "verification-before-completion": "C:/Users/DELL/.config/opencode/skills/verification-before-completion",
+    "systematic-debugging": "C:/Users/DELL/.config/opencode/skills/systematic-debugging",
+    "deep-research": "C:/Users/DELL/.config/opencode/skills/deep-research",
+    "ponytail": "C:/Users/DELL/.config/opencode/skills/ponytail",
+    "discord-bots": "C:/Users/DELL/.config/opencode/skills/discord-bots",
+    "missing_essential": []
+  }
+}
