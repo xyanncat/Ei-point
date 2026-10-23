@@ -23,6 +23,9 @@
                   "type": "object",
                   "required": [
                     "user",
+                    "role",
+                    "isAdmin",
+                    "isMaster",
                     "expiresAt"
                   ],
                   "properties": {
@@ -44,6 +47,15 @@
                     "expiresAt": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "role": {
+                      "$ref": "#/components/schemas/Role"
+                    },
+                    "isAdmin": {
+                      "type": "boolean"
+                    },
+                    "isMaster": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -334,6 +346,424 @@
           }
         }
       }
+    },
+    "/api/catalog": {
+      "get": {
+        "operationId": "publicCatalog",
+        "tags": [
+          "catalogue"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CatalogItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Denied"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/admin/catalog": {
+      "get": {
+        "operationId": "adminCatalog",
+        "tags": [
+          "catalogue"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CatalogAdminItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Denied"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createCatalogItem",
+        "tags": [
+          "catalogue"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogSaveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "item"
+                  ],
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/CatalogAdminItem"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Denied"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/admin/catalog/{sku}": {
+      "put": {
+        "operationId": "updateCatalogItem",
+        "tags": [
+          "catalogue"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sku",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogSaveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "item"
+                  ],
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/CatalogAdminItem"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Denied"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeCatalogItem",
+        "tags": [
+          "catalogue"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sku",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "item"
+                  ],
+                  "properties": {
+                    "item": {
+                      "$ref": "#/components/schemas/CatalogAdminItem"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Denied"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/master/guilds": {
+      "get": {
+        "operationId": "masterGuilds",
+        "tags": [
+          "master"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "guilds"
+                  ],
+                  "properties": {
+                    "guilds": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MasterGuild"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Denied"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/master/guilds/{guildId}/bots/{botKey}": {
+      "delete": {
+        "operationId": "removeBotFromGuild",
+        "tags": [
+          "master"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "guildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "botKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "botKey",
+                    "guildId"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "botKey": {
+                      "type": "string"
+                    },
+                    "guildId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Denied"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/api/account/orders": {
+      "get": {
+        "operationId": "purchaseLogs",
+        "tags": [
+          "account"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "orders",
+                    "scope"
+                  ],
+                  "properties": {
+                    "orders": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PurchaseLogEntry"
+                      }
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "own",
+                        "all"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Denied"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -563,6 +993,218 @@
                 }
               }
             }
+          }
+        }
+      },
+      "Role": {
+        "type": "string",
+        "enum": [
+          "user",
+          "admin",
+          "master"
+        ],
+        "description": "user = a customer. admin = the operator: owns the service catalogue. master = outranks a server: sees every server and may remove a bot."
+      },
+      "CatalogItem": {
+        "type": "object",
+        "required": [
+          "sku",
+          "name",
+          "priceMinor",
+          "currency"
+        ],
+        "properties": {
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "priceMinor": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "game": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "membershipDays": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      },
+      "CatalogAdminItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CatalogItem"
+          },
+          {
+            "type": "object",
+            "required": [
+              "active"
+            ],
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        ]
+      },
+      "MasterGuild": {
+        "type": "object",
+        "required": [
+          "guildId",
+          "name",
+          "ownerId",
+          "approved",
+          "bots"
+        ],
+        "properties": {
+          "guildId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "bots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CatalogSaveRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "priceMinor"
+        ],
+        "properties": {
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "priceMinor": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "currency": {
+            "type": "string"
+          },
+          "game": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PurchaseLogEntry": {
+        "type": "object",
+        "required": [
+          "orderId",
+          "buyerId",
+          "sku",
+          "serviceName",
+          "amountMinor",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string"
+          },
+          "buyerId": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "amountMinor": {
+            "type": "integer"
+          },
+          "method": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "guildId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guildName": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       }

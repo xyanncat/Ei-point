@@ -132,6 +132,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["publicCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["adminCatalog"];
+        put?: never;
+        post: operations["createCatalogItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/catalog/{sku}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateCatalogItem"];
+        post?: never;
+        delete: operations["removeCatalogItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/master/guilds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["masterGuilds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/master/guilds/{guildId}/bots/{botKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removeBotFromGuild"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/account/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["purchaseLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -183,6 +279,60 @@ export interface components {
                 /** Format: date-time */
                 changedAt: string;
             }[];
+        };
+        /**
+         * @description user = a customer. admin = the operator: owns the service catalogue. master = outranks a server: sees every server and may remove a bot.
+         * @enum {string}
+         */
+        Role: "user" | "admin" | "master";
+        CatalogItem: {
+            sku: string;
+            name: string;
+            priceMinor: number;
+            currency: string;
+            game?: string | null;
+            category?: string | null;
+            duration?: string | null;
+            description?: string | null;
+            membershipDays?: number | null;
+        };
+        CatalogAdminItem: components["schemas"]["CatalogItem"] & {
+            active: boolean;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        MasterGuild: {
+            guildId: string;
+            name: string;
+            ownerId: string;
+            approved: boolean;
+            bots: string[];
+        };
+        CatalogSaveRequest: {
+            sku?: string;
+            name: string;
+            priceMinor: number;
+            currency?: string;
+            game?: string;
+            category?: string;
+            duration?: string;
+            description?: string;
+            active?: boolean;
+        };
+        PurchaseLogEntry: {
+            orderId: string;
+            buyerId: string;
+            sku: string;
+            serviceName: string;
+            amountMinor: number;
+            method?: string | null;
+            status: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt?: string | null;
+            guildId?: string | null;
+            guildName?: string | null;
         };
     };
     responses: {
@@ -243,6 +393,9 @@ export interface operations {
                         };
                         /** Format: date-time */
                         expiresAt: string;
+                        role: components["schemas"]["Role"];
+                        isAdmin: boolean;
+                        isMaster: boolean;
                     };
                 };
             };
@@ -419,6 +572,225 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["AuthRequired"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    publicCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["CatalogItem"][];
+                    };
+                };
+            };
+            401: components["responses"]["AuthRequired"];
+            403: components["responses"]["Denied"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    adminCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["CatalogAdminItem"][];
+                    };
+                };
+            };
+            401: components["responses"]["AuthRequired"];
+            403: components["responses"]["Denied"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createCatalogItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogSaveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        item: components["schemas"]["CatalogAdminItem"];
+                    };
+                };
+            };
+            401: components["responses"]["AuthRequired"];
+            403: components["responses"]["Denied"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    updateCatalogItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sku: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogSaveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        item: components["schemas"]["CatalogAdminItem"];
+                    };
+                };
+            };
+            401: components["responses"]["AuthRequired"];
+            403: components["responses"]["Denied"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    removeCatalogItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sku: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        item: components["schemas"]["CatalogAdminItem"];
+                    };
+                };
+            };
+            401: components["responses"]["AuthRequired"];
+            403: components["responses"]["Denied"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    masterGuilds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        guilds: components["schemas"]["MasterGuild"][];
+                    };
+                };
+            };
+            401: components["responses"]["AuthRequired"];
+            403: components["responses"]["Denied"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    removeBotFromGuild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                guildId: string;
+                botKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: boolean;
+                        botKey: string;
+                        guildId: string;
+                    };
+                };
+            };
+            401: components["responses"]["AuthRequired"];
+            403: components["responses"]["Denied"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    purchaseLogs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        orders: components["schemas"]["PurchaseLogEntry"][];
+                        /** @enum {string} */
+                        scope: "own" | "all";
+                    };
+                };
+            };
+            401: components["responses"]["AuthRequired"];
+            403: components["responses"]["Denied"];
             503: components["responses"]["Unavailable"];
         };
     };

@@ -1,13 +1,17 @@
 import { expect, test } from "@playwright/test";
-import { fitsViewport, imageLoaded, trackPageErrors } from "./helpers";
+import { fitsViewport, trackPageErrors } from "./helpers";
 
 const publicRoutes = [
   "/",
   "/services",
   "/membership",
   "/referrals",
+  "/cards",
   "/verify",
-  "/help",
+  "/about",
+  "/docs",
+  "/terms",
+  "/policy",
   "/missing-kafka-page",
 ];
 
@@ -22,80 +26,82 @@ for (const route of publicRoutes) {
       await expect(page).toHaveTitle(/Ei point/);
       await expect(page.locator("h1").first()).toBeVisible();
       expect(await fitsViewport(page)).toBe(true);
-      expect(
-        await imageLoaded(page.locator(".ei-brand-mark img").first()),
-      ).toBe(true);
-      expect(
-        await imageLoaded(page.locator(".ei-page-art>img").first()),
-      ).toBe(true);
+      // The brand mark is drawn in CSS, never loaded from a file.
+      await expect(page.locator(".ei-brand-mark").first()).toBeVisible();
     }
     expect(errors).toEqual([]);
   });
 }
 
-test("ambient and artwork motion pause and respect reduced motion", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Pause ambient motion" }).click();
-  expect(
-    await page
-      .locator(".ei-atmosphere svg")
-      .first()
-      .evaluate((element) => getComputedStyle(element).animationPlayState),
-  ).toBe("paused");
-  await page.getByRole("button", { name: "Resume ambient motion" }).click();
-  await page.getByRole("button", { name: "Pause artwork motion" }).first().click();
-  expect(
-    await page
-      .locator(".ei-page-art>img")
-      .first()
-      .evaluate((element) => getComputedStyle(element).animationPlayState),
-  ).toBe("paused");
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  expect(
-    await page
-      .locator(".ei-page-art>img")
-      .first()
-      .evaluate((element) => getComputedStyle(element).animationName),
-  ).toBe("none");
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-});
-
-test("homepage and dashboard heroes load, pause and respect reduced motion", async ({
+test("the film is the page: full bleed, looping, and nobody has to press play", async ({
   page,
 }) => {
   const errors = trackPageErrors(page);
-  for (const route of ["/", "/dashboard"]) {
-    await page.goto(route);
-    await expect(page.locator(".kafka-character")).toBeVisible();
-    expect(await imageLoaded(page.locator(".kafka-character"))).toBe(true);
-    await page.getByRole("button", { name: "Pause character animation" }).click();
-    expect(
-      await page
-        .locator(".kafka-character")
-        .evaluate((element) => getComputedStyle(element).animationPlayState),
-    ).toBe("paused");
-    await page
-      .getByRole("button", { name: "Resume character animation" })
-      .click();
-    expect(
-      await page
-        .locator(".kafka-character")
-        .evaluate((element) => getComputedStyle(element).animationPlayState),
-    ).toBe("running");
-    for (const width of [1440, 768, 390]) {
-      await page.setViewportSize({ width, height: 1000 });
-      expect(await fitsViewport(page)).toBe(true);
-    }
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    expect(
-      await page
-        .locator(".kafka-character")
-        .evaluate((element) => getComputedStyle(element).animationName),
-    ).toBe("none");
-    await page.emulateMedia({ reducedMotion: "no-preference" });
-  }
+  await page.goto("/");
+  const film = page.locator(".world__video");
+  await expect(film).toHaveAttribute("loop", "");
+  await expect(film).toHaveAttribute("autoplay", "");
+
+  // The whole 2:30 film, at its native resolution, in a format browsers take.
+  const sources = await film.locator("source").evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute("src")),
+  );
+  expect(sources.some((src) => src?.includes("film-1080"))).toBe(true);
+  expect(sources.some((src) => src?.includes("film-540"))).toBe(true);
+  await expect
+    .poll(
+      async () =>
+        film.evaluate((element) => (element as HTMLVideoElement).duration),
+      { timeout: 30_000 },
+    )
+    .toBeGreaterThan(140);
+
+  // It covers the viewport and plays without a control anywhere.
+  const box = await film.boundingBox();
+  expect(box?.width).toBeGreaterThanOrEqual(1400);
+  expect(await film.evaluate((element) => (element as HTMLVideoElement).paused)).toBe(
+    false,
+  );
+  expect(
+    await page.getByRole("button", { name: /pause|play the film|mut/i }).count(),
+  ).toBe(0);
+
+  // The soundtrack is part of the film, not a control.
+  await expect(page.locator("audio")).toHaveCount(1);
+
+  // Reduced motion means the still frame, not the film.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(film).toBeHidden();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  expect(errors).toEqual([]);
+});
+
+test("scrolling walks the film's scenes and reframes the picture", async ({
+  page,
+}) => {
+  const errors = trackPageErrors(page);
+  await page.goto("/");
+  const scenes = page.locator(".scene");
+  expect(await scenes.count()).toBeGreaterThanOrEqual(6);
+
+  // The first scene's headline is on screen before any scrolling.
+  const first = await page.locator(".scene .world-title").first().textContent();
+  expect(first?.trim().length).toBeGreaterThan(0);
+
+  // Scrolling moves the crop of the film, so the picture reframes with the copy.
+  const cropAt = async () =>
+    page.locator(".world__video").evaluate(
+      (element) => getComputedStyle(element).objectPosition,
+    );
+  const before = await cropAt();
+  await page.evaluate(() => window.scrollTo({ top: 2600, behavior: "instant" }));
+  await page.waitForTimeout(900);
+  const after = await cropAt();
+  expect(after).not.toBe(before);
+
+  // Every scene is reachable and the copy is still there.
+  const last = await page.locator(".scene .world-title").last().textContent();
+  expect(last?.trim().length).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
 
@@ -124,13 +130,19 @@ test("service filters narrow the catalog and the empty state explains the search
     page.getByRole("heading", { name: "The collection is waiting" }),
   ).toBeVisible();
   await page.goto("/about");
-  expect(await page.getByRole("link", { name: /Discord profile/ }).count()).toBeGreaterThan(0);
-  await page.goto("/help");
-  await page.getByText("How do payments work?").click();
   await expect(
-    page.getByText("Choose a service, sign in with Discord"),
+    page.getByRole("heading", { name: /A small operation/ }),
+  ).toBeVisible();
+  await page.goto("/docs");
+  await expect(
+    page.getByRole("heading", { name: "Getting started" }),
   ).toBeVisible();
   expect(await fitsViewport(page)).toBe(true);
+});
+
+test("the old help address lands on the docs", async ({ page }) => {
+  await page.goto("/help");
+  await expect(page).toHaveURL(/\/docs$/);
 });
 
 test("verification page covers empty, short, unknown and matching states", async ({
@@ -168,7 +180,8 @@ test("verification page covers empty, short, unknown and matching states", async
 test("services page navigates to verification", async ({ page }) => {
   const errors = trackPageErrors(page);
   await page.goto("/services");
-  await page.getByRole("link", { name: "Verify order", exact: true }).click();
+  await page.getByRole("link", { name: "Verify an order", exact: true }).click();
+  await page.waitForURL("**/verify");
   expect(new URL(page.url()).pathname).toBe("/verify");
   expect(errors).toEqual([]);
 });
@@ -185,7 +198,8 @@ test("service details render archive facts with an honest purchase entry; unknow
   expect(await page.getByRole("button", { name: /Checkout/i }).count()).toBeGreaterThan(0);
   expect(await page.getByRole("link", { name: "← All services" }).count()).toBe(1);
   await page.goto("/services/not-a-real-service");
-  await expect(page.getByRole("heading", { name: "A loose thread." })).toBeVisible();
-  expect(await page.getByRole("link", { name: "Return to Ei point" }).count()).toBe(1);
+  await expect(
+    page.getByRole("heading", { name: /Nothing/ }),
+  ).toBeVisible();
   expect(errors).toEqual([]);
 });

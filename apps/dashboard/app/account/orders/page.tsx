@@ -1,72 +1,153 @@
 "use client";
-// My account · My orders. Account-scoped history is not connected yet; the
-// working path is the same order-status lookup the receipt links use.
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+// Purchase logs. A customer sees their own orders; the operator and the
+// master see every order on the platform.
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { api, ApiError } from "../../../lib/api";
 import { Empty, PageHeader, Panel } from "../../../components/staff/ui";
 
+type PurchaseLog = {
+  orderId: string;
+  buyerId: string;
+  sku: string;
+  serviceName: string;
+  amountMinor: number;
+  method: string | null;
+  status: string;
+  createdAt: string;
+  expiresAt: string | null;
+  guildId: string | null;
+  guildName: string | null;
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: "Awaiting proof",
+  claimed: "Under review",
+  settled: "Settled",
+  rejected: "Rejected",
+  expired: "Expired",
+};
+
+function stamp(value: string) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? date.toISOString().slice(0, 16).replace("T", " ")
+    : "—";
+}
+
 export default function AccountOrdersPage() {
-  const router = useRouter();
-  const [id, setId] = useState("");
-  const [formError, setFormError] = useState("");
+  const [orders, setOrders] = useState<PurchaseLog[]>([]);
+  const [scope, setScope] = useState<"own" | "all">("own");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(true);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ orders: PurchaseLog[]; scope: "own" | "all" }>(
+        "/api/account/orders",
+      );
+      setOrders(result.orders);
+      setScope(result.scope);
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : cause instanceof Error
+            ? cause.message
+            : "The purchase log could not be loaded.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   return (
     <>
       <PageHeader
-        eyebrow="My account"
-        title="My orders"
-        explain="Open an order to see its full state, timing and next step."
+        eyebrow={scope === "all" ? "Every order" : "Your orders"}
+        title="Purchase logs"
+        explain={
+          scope === "all"
+            ? "Every order placed on the platform, newest first."
+            : "Every order you have placed, newest first. Each one carries its own verification link."
+        }
+        actions={
+          <button className="sf-ghost" onClick={() => void load()} disabled={busy}>
+            {busy ? "Refreshing…" : "Refresh"}
+          </button>
+        }
       />
-      <Panel
-        title="Open an order"
-        detail="Paste the order ID (RP-…) from your checkout or receipt. Status needs only the ID; the verification token in your receipt remains receipt-grade proof."
-      >
-        {formError ? (
-          <p className="sf-note sf-error" role="alert">
-            {formError}
-          </p>
-        ) : null}
-        <form
-          className="sf-actions"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const clean = id.trim().toUpperCase();
-            if (!/^RP-[A-Z0-9]{6}$/.test(clean)) {
-              setFormError("Order IDs look like RP-ABC123 — copy it exactly from your checkout or receipt.");
-              return;
-            }
-            setFormError("");
-            router.push(`/account/orders/${encodeURIComponent(clean)}`);
-          }}
-        >
-          <label className="sf-field">
-            <span>Order ID</span>
-            <input
-              required
-              value={id}
-              maxLength={12}
-              onChange={(event) => {
-                setId(event.target.value);
-                setFormError("");
-              }}
-              placeholder="RP-DEMO01"
-            />
-          </label>
-          <button className="sf-ghost">Open order</button>
-        </form>
-      </Panel>
-      <Panel title="Order history" detail="Every order placed with your Discord sign-in, with status and next steps.">
-        <Empty
-          title="Not connected yet"
-          detail="Account-linked order history ships with the customer dashboard. Until then, order status is available from your order ID above or the verification link that came with the order."
-        />
-        <p className="sf-actions">
-          <Link className="sf-ghost" href="/verify">
-            Open the verification page
-          </Link>
+
+      {error ? (
+        <p className="world-note world-note--error" role="alert">
+          {error}
         </p>
+      ) : null}
+
+      <Panel
+        title="Orders"
+        detail="Status, amount and the server the work runs in."
+      >
+        {orders.length ? (
+          <table className="sf-table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Service</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Placed</th>
+                {scope === "all" ? <th>Buyer</th> : null}
+                <th>Server</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((order) => (
+                <tr key={order.orderId}>
+                  <td>
+                    <Link href={`/account/orders/${encodeURIComponent(order.orderId)}`}>
+                      {order.orderId}
+                    </Link>
+                  </td>
+                  <td>{order.serviceName}</td>
+                  <td className="sf-num">
+                    {(order.amountMinor / 100).toLocaleString("en-IN", {
+                      style: "currency",
+                      currency: "INR",
+                      maximumFractionDigits: 0,
+                    })}
+                  </td>
+                  <td>{STATUS_LABEL[order.status] ?? order.status}</td>
+                  <td className="sf-num">{stamp(order.createdAt)}</td>
+                  {scope === "all" ? <td className="sf-num">{order.buyerId}</td> : null}
+                  <td>{order.guildName ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <Empty
+            title={busy ? "Loading orders…" : "No orders yet"}
+            detail={
+              busy
+                ? undefined
+                : "Once you buy a service it appears here with its verification link."
+            }
+          />
+        )}
       </Panel>
+
+      <p className="sf-actions">
+        <Link className="sf-ghost" href="/verify">
+          Open the verification page
+        </Link>
+      </p>
     </>
   );
 }

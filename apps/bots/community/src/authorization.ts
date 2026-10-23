@@ -10,7 +10,10 @@ export function communityCommandPermissionDenial(
   commandName: string,
   canManageServer: boolean,
   isGuildOwner: boolean,
+  /** The master identity is never refused, whatever the server's roles say. */
+  isMaster = false,
 ): string | null {
+  if (isMaster) return null;
   if (manageServerCommands.has(commandName) && !canManageServer) {
     return "Manage Server permission is required.";
   }

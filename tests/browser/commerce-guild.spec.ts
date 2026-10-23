@@ -4,21 +4,17 @@ import { fitsViewport, trackPageErrors } from "./helpers";
 const first = "111111111111111111";
 const second = "222222222222222222";
 
-test("late first-guild payment response cannot overwrite the current guild's orders", async ({
+const guild = (id: string) => ({
+  guildId: id,
+  name: id === first ? "First guild" : "Second guild",
+  approved: true,
+  scopes: ["*"],
+});
+
+test("the purchase log follows the signed-in customer, not a guild switch", async ({
   page,
 }) => {
   const errors = trackPageErrors(page);
-  let release: () => void = () => {};
-  let requestedResolve: () => void = () => {};
-  const requested = new Promise<void>((resolve) => {
-    requestedResolve = resolve;
-  });
-  const guild = (id: string) => ({
-    guildId: id,
-    name: id === first ? "First guild" : "Second guild",
-    approved: true,
-    scopes: ["*"],
-  });
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
@@ -26,63 +22,29 @@ test("late first-guild payment response cannot overwrite the current guild's ord
     if (path === "/api/auth/me") {
       result = {
         user: { id: "qa", name: "QA" },
-        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        role: "master",
         isAdmin: true,
+        isMaster: true,
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
       };
     } else if (path === "/api/guilds") {
       result = { guilds: [guild(first), guild(second)] };
-    } else if (path === "/api/overview") {
+    } else if (path === "/api/account/orders") {
       result = {
-        guild: guild(url.searchParams.get("guildId") ?? first),
-        cards: [
-          {
-            botKey: "cipher",
-            modules: ["commerce"],
-            state: "ok",
-            gateway: "ok",
-            dbReady: true,
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-        stale: false,
-        fetchedAt: new Date().toISOString(),
-        incidents: [],
-        actions: [],
-      };
-    } else if (path === "/api/catalog") {
-      result = { items: [] };
-    } else if (path.endsWith("/settings")) {
-      result = {
-        settings: {
-          notifications_enabled: true,
-          server_paused: false,
-          notification_preferences: {},
-        },
-      };
-    } else if (path.endsWith("/bot-state")) {
-      result = { bots: [] };
-    } else if (path.endsWith("/command-permissions")) {
-      result = { permissions: [] };
-    } else if (path.endsWith("/embeds")) {
-      result = { jobs: [] };
-    } else if (path.endsWith("/commerce/orders")) {
-      if (path.includes(first)) {
-        requestedResolve();
-        await new Promise<void>((resolve) => {
-          release = resolve;
-        });
-      }
-      result = {
+        scope: "all",
         orders: [
           {
-            orderId: path.includes(first) ? "RP-OLD111" : "RP-NEW222",
+            orderId: "RP-NEW222",
             buyerId: first,
+            sku: "membership",
             serviceName: "Guild scoped service",
             amountMinor: 70000,
             method: "upi",
             status: "claimed",
             createdAt: new Date().toISOString(),
-            proofRef: "upi:123456789012",
+            expiresAt: null,
+            guildId: second,
+            guildName: "Second guild",
           },
         ],
       };
@@ -95,22 +57,9 @@ test("late first-guild payment response cannot overwrite the current guild's ord
       body: JSON.stringify(result),
     });
   });
-  await page.goto("/dashboard/commerce");
-  await Promise.race([
-    requested,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Commerce request not issued")), 5000),
-    ),
-  ]);
-  await page
-    .getByRole("combobox", { name: "Choose server" })
-    .selectOption(second);
-  await page.getByRole("link", { name: "Commerce", exact: true }).click();
+  await page.goto("/account/orders");
   await expect(page.getByText("RP-NEW222")).toBeVisible();
-  release();
-  await page.waitForTimeout(250);
-  expect(await page.getByText("RP-OLD111").count()).toBe(0);
-  expect(await page.getByText("RP-NEW222").count()).toBeGreaterThan(0);
+  await expect(page.getByText("Second guild")).toBeVisible();
   expect(errors).toEqual([]);
 });
 

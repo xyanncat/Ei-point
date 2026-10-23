@@ -12,7 +12,7 @@ export interface ControlDependencies {
   authorize: (
     request: FastifyRequest,
     guildId: string | undefined,
-    scope: "read" | "operate" | "admin",
+    scope: "read" | "operate" | "admin" | "master",
     moduleId?: string,
   ) => Promise<{ userId: string }>;
   env: Record<string, string | undefined>;
@@ -110,7 +110,9 @@ class ControlError extends Error {
     super(code);
   }
 }
-const fail = (status: number, code: string): never => {
+// The explicit annotation on the const is what lets TypeScript narrow after a
+// call: `if (!row) fail(404, "x")` means `row` is defined on the next line.
+const fail: (status: number, code: string) => never = (status, code) => {
   throw new ControlError(status, code);
 };
 const object = (value: any): Record<string, any> =>
@@ -269,7 +271,7 @@ export function registerControlRoutes(
   const route = (
     method: any,
     path: string,
-    scope: "read" | "operate" | "admin",
+    scope: "read" | "operate" | "admin" | "master",
     handler: (r: any, user: string, guild: string | undefined) => Promise<any>,
   ) =>
     app.route({
@@ -605,6 +607,170 @@ export function registerControlRoutes(
       "SELECT * FROM access.staff_roles ORDER BY guild_id,role_id,scope",
     ),
   }));
+
+  // ---------------------------------------------------------------------
+  // Catalogue management (administrator).
+  //
+  // The operator owns the public catalogue: the price a customer pays, the
+  // wording they read, and whether a service is offered at all. Removing a
+  // service deactivates it — history stays intact, because settled orders
+  // still reference the row.
+  // ---------------------------------------------------------------------
+  const catalogueColumns =
+    "sku,name,price_minor,currency,game,category,duration,description,active,updated_at";
+  const catalogueFields = (b: Record<string, any>) => {
+    const name = text(b.name, 200, true);
+    const priceMinor = Number(b.price_minor);
+    if (!Number.isSafeInteger(priceMinor) || priceMinor <= 0)
+      fail(400, "invalid-price");
+    const currency = (text(b.currency, 8) || "INR").toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) fail(400, "invalid-currency");
+    const game = text(b.game, 120);
+    const category = text(b.category, 120);
+    const duration = text(b.duration, 120);
+    const description = text(b.description, 600);
+    const active = b.active === undefined ? true : b.active;
+    if (typeof active !== "boolean") fail(400, "invalid-active");
+    return { name, priceMinor, currency, game, category, duration, description, active };
+  };
+
+  route("GET", "/api/admin/catalog", "admin", async () => ({
+    items: await q(
+      `SELECT ${catalogueColumns} FROM commerce.catalog ORDER BY active DESC, price_minor, name`,
+    ),
+  }));
+
+  route("POST", "/api/admin/catalog", "admin", async (r, u) => {
+    const b = object(r.body);
+    const sku = text(b.sku, 120, true);
+    if (!/^[a-z0-9][a-z0-9-]{1,100}$/.test(sku)) fail(400, "invalid-sku");
+    const f = catalogueFields(b);
+    return tx(async (q) => {
+      const rows = await q(
+        `INSERT INTO commerce.catalog(sku,name,price_minor,currency,game,category,duration,description,active,updated_at)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,now())
+         ON CONFLICT(sku) DO UPDATE SET name=$2,price_minor=$3,currency=$4,game=$5,category=$6,duration=$7,description=$8,active=$9,updated_at=now()
+         RETURNING ${catalogueColumns}`,
+        [
+          sku,
+          f.name,
+          f.priceMinor,
+          f.currency,
+          f.game || null,
+          f.category || null,
+          f.duration || null,
+          f.description || null,
+          f.active,
+        ],
+      );
+      await audit(q, u, "catalog.save", undefined, sku);
+      return { item: rows[0] };
+    });
+  });
+
+  route("PUT", "/api/admin/catalog/:sku", "admin", async (r, u) => {
+    const b = object(r.body);
+    const sku = text((r.params as any).sku, 120, true);
+    if (!/^[a-z0-9][a-z0-9-]{1,100}$/.test(sku)) fail(400, "invalid-sku");
+    const f = catalogueFields(b);
+    return tx(async (q) => {
+      const rows = await q(
+        `UPDATE commerce.catalog SET name=$2,price_minor=$3,currency=$4,game=$5,category=$6,duration=$7,description=$8,active=$9,updated_at=now()
+         WHERE sku=$1 RETURNING ${catalogueColumns}`,
+        [
+          sku,
+          f.name,
+          f.priceMinor,
+          f.currency,
+          f.game || null,
+          f.category || null,
+          f.duration || null,
+          f.description || null,
+          f.active,
+        ],
+      );
+      if (!rows[0]) fail(404, "catalog-unknown");
+      await audit(q, u, "catalog.save", undefined, sku);
+      return { item: rows[0] };
+    });
+  });
+
+  route("DELETE", "/api/admin/catalog/:sku", "admin", async (r, u) => {
+    const sku = text((r.params as any).sku, 120, true);
+    if (!/^[a-z0-9][a-z0-9-]{1,100}$/.test(sku)) fail(400, "invalid-sku");
+    return tx(async (q) => {
+      // Deactivate rather than delete: settled orders still reference the row.
+      const rows = await q(
+        `UPDATE commerce.catalog SET active=false,updated_at=now() WHERE sku=$1 RETURNING ${catalogueColumns}`,
+        [sku],
+      );
+      if (!rows[0]) fail(404, "catalog-unknown");
+      await audit(q, u, "catalog.remove", undefined, sku);
+      return { item: rows[0] };
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // Master control.
+  //
+  // The master identity is the one account that outranks a server. It sees
+  // every server, edits any of them, and can pull a bot out of a server that
+  // has gone wrong. A bot removed this way is unregistered from the guild
+  // and its per-guild control rows are dropped with it.
+  // ---------------------------------------------------------------------
+  route("GET", "/api/master/guilds", "master", async () => {
+    const guilds = await q(
+      "SELECT guild_id,name,owner_id,approved,updated_at FROM access.guilds ORDER BY name",
+    );
+    const bots = await q("SELECT bot_key,guild_ids FROM config.bots ORDER BY bot_key");
+    return {
+      guilds: guilds.map((g: any) => ({
+        guildId: g.guild_id,
+        name: g.name,
+        ownerId: g.owner_id,
+        approved: g.approved === true,
+        bots: bots
+          .filter((b: any) => Array.isArray(b.guild_ids) && b.guild_ids.includes(g.guild_id))
+          .map((b: any) => b.bot_key),
+      })),
+    };
+  });
+
+  route("DELETE", "/api/master/guilds/:guildId/bots/:botKey", "master", async (r, u, g) => {
+    const botKey = text((r.params as any).botKey, 40, true);
+    if (!/^[a-z][a-z0-9_-]{1,39}$/.test(botKey)) fail(400, "invalid-bot-key");
+    return tx(async (q) => {
+      const rows = await q(
+        "SELECT guild_ids FROM config.bots WHERE bot_key=$1 FOR UPDATE",
+        [botKey],
+      );
+      const bot = rows[0];
+      if (!bot) fail(404, "unknown-bot");
+      const current: string[] = Array.isArray(bot.guild_ids) ? bot.guild_ids : [];
+      if (!current.includes(g!)) fail(404, "bot-not-in-guild");
+      const next = current.filter((id) => id !== g!);
+      await q(
+        "UPDATE config.bots SET guild_ids=$2,updated_at=now() WHERE bot_key=$1",
+        [botKey, next],
+      );
+      // Drop the guild's control state for that bot; the bot is no longer here.
+      await q(
+        "DELETE FROM config.guild_controls WHERE guild_id=$1 AND bot_key=$2",
+        [g!, botKey],
+      );
+      await q(
+        "DELETE FROM config.bot_states WHERE guild_id=$1 AND bot_key=$2",
+        [g!, botKey],
+      );
+      await q(
+        "DELETE FROM config.command_permissions WHERE guild_id=$1 AND bot_key=$2",
+        [g!, botKey],
+      );
+      await audit(q, u, "bot.remove", g, botKey);
+      await event(q, g!, "bot.removed", { bot_key: botKey, removed_by: u });
+      return { ok: true, botKey, guildId: g! };
+    });
+  });
   const accountBody = (value: any) => {
     const b = object(value);
     if (!["postgres", "redis", "mongodb"].includes(b.provider))

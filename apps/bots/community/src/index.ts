@@ -11,6 +11,7 @@ import { CommunityService } from "@ei-point/module-community";
 import { EconomyService } from "@ei-point/module-games";
 import { commandDefinitions, respondToCommand } from "./commands.js";
 import { communityCommandPermissionDenial } from "./authorization.js";
+import { isMasterId } from "@ei-point/contracts";
 import { commonCommandDefinitions, respondToCommonCommand, withEiEmbedReplies } from "@ei-point/module-bot-ui";
 import {
   createInteractionClaims,
@@ -101,13 +102,14 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         authorize: async () => {
           if (!interaction.inCachedGuild()) return { content: "This server is not approved." };
           if (!(await isControlEnabled(controlQuery, interaction.guildId, botKey,
-            interaction.commandName, [...interaction.member.roles.cache.keys()]))) {
+            interaction.commandName, [...interaction.member.roles.cache.keys()], interaction.user.id))) {
             return { content: "This bot, server, or command is disabled for your roles." };
           }
           const commandDenial = communityCommandPermissionDenial(
             interaction.commandName,
             interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild),
             interaction.guild.ownerId === interaction.user.id,
+            isMasterId(interaction.user.id, process.env.DASHBOARD_MASTER_IDS),
           );
           if (commandDenial) return { content: commandDenial };
           return undefined;

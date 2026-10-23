@@ -1,27 +1,28 @@
-import { PageArt } from "../components/page-art";
+import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <section className="ei-page-layout" aria-label="Page not found">
-      <div className="ei-page-body">
-        <p>Page not found</p>
-        <h1>
-          A loose
+    <section className="world-section world-shell" aria-label="Page not found">
+      <div className="world-page">
+        <p className="world-eyebrow">404</p>
+        <h1 className="world-title">
+          Nothing
           <br />
-          thread.
+          here yet.
         </h1>
-        <p className="lede">
-          This page does not exist, or its link has changed. Head back to Ei
-          point to find your next step.
+        <p className="world-lede">
+          This page does not exist, or it moved somewhere else. The services,
+          the docs and your account are all still where you left them.
         </p>
-        <p>
-          <a className="ei-action" href="/">
-            Return to Ei point
-          </a>{" "}
-          <a href="/help">Help &amp; FAQ ↗</a>
-        </p>
+        <div className="world-row" style={{ marginTop: "1.6rem" }}>
+          <Link className="ei-action" href="/">
+            Back to the start
+          </Link>
+          <Link className="world-button world-button--ghost" href="/services">
+            Browse services
+          </Link>
+        </div>
       </div>
-      <PageArt src="/art/kafka-floral.png" caption="Find your way back." />
     </section>
   );
 }

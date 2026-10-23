@@ -13,6 +13,7 @@ import pg from "pg";
 import { catalogChoices, commerceCommandDefinitions, respondToCommerceCommand } from "./commands.js";
 import { canSettleCommerce } from "./authorization.js";
 import { commonCommandDefinitions, respondToCommonCommand, toEiComponentPayload, withEiEmbedReplies } from "@ei-point/module-bot-ui";
+import { isMasterId } from "@ei-point/contracts";
 
 const botKey = process.env.BOT_KEY ?? "cipher";
 const url = process.env.DATABASE_URL;
@@ -107,13 +108,13 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
           if (!interaction.inCachedGuild()) return { content: "Commerce commands are only available in an approved server." };
           const memberRoleIds = [...interaction.member.roles.cache.keys()];
           if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows,
-            interaction.guildId, botKey, interaction.commandName, memberRoleIds))) {
+            interaction.guildId, botKey, interaction.commandName, memberRoleIds, interaction.user.id))) {
             return { content: "This bot, server, or command is disabled for your roles." };
           }
           const identity = (await pool.query("SELECT application_id FROM config.bots WHERE bot_key=$1", [botKey])).rows[0];
           if (identity?.application_id !== client.user!.id) return { content: "Registered bot identity is unavailable." };
           userScopes = await loadStaffScopes(interaction.guildId, memberRoleIds);
-          if (interaction.commandName === "orders" && ["settle", "review", "reject"].includes(interaction.options.getSubcommand(false) ?? "") && !canSettleCommerce({ isOwner, canManage, userScopes })) {
+          if (interaction.commandName === "orders" && ["settle", "review", "reject"].includes(interaction.options.getSubcommand(false) ?? "") && !canSettleCommerce({ isOwner, canManage, userScopes, isMaster: isMasterId(interaction.user.id, process.env.DASHBOARD_MASTER_IDS) })) {
             return { content: "❌ Permission denied: `commerce-settle` role or Manage Server required." };
           }
           return undefined;
@@ -139,6 +140,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
             isOwner,
             canManage,
             userScopes,
+            isMaster: isMasterId(interaction.user.id, process.env.DASHBOARD_MASTER_IDS),
             paymentOrigin: process.env.PAYMENT_ORIGIN ?? "",
             payeeVpa: process.env.UPI_PAYEE_VPA ?? "",
             payeeName: process.env.UPI_PAYEE_NAME ?? "",

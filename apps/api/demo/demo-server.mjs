@@ -3,9 +3,22 @@
 // API shapes; mutations answer 409 read-only so the UI stays honest.
 // Run: node apps/api/demo/demo-server.mjs  (PORT env, default 3001)
 import http from "node:http";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const ago = (minutes) => new Date(Date.now() - minutes * 60000).toISOString();
+
+// The catalogue mirrors the real archive so the preview looks like production:
+// same services, same prices, same games.
+const archive = JSON.parse(
+  readFileSync(
+    fileURLToPath(
+      new URL("../../dashboard/lib/project-assets.json", import.meta.url),
+    ),
+    "utf8",
+  ),
+);
 
 const BOT_CARDS = [
   { botKey: "kafka", modules: ["security", "moderation", "logging"], state: "ok", gateway: "ok", dbReady: true },
@@ -98,6 +111,39 @@ const ORDERS = [
   },
 ];
 const ADMIN_GUILDS = GUILDS.map((guild) => ({ guild_id: guild.guildId, name: guild.name, approved: true }));
+const MASTER_GUILDS = GUILDS.map((guild) => ({
+  guildId: guild.guildId,
+  name: guild.name,
+  ownerId: guild.guildId === GUILDS[0].guildId ? "111111111111111111" : "222222222222222222",
+  approved: true,
+  bots: BOT_CARDS.filter((card) => card.botKey === "kafka" || card.botKey === "cipher").map((card) => card.botKey),
+}));
+const CATALOG = archive.services.map((service) => ({
+  sku: service.sku,
+  name: service.name,
+  priceMinor: service.price_minor,
+  currency: service.currency,
+  game: service.game ?? null,
+  category: service.category ?? null,
+  duration: service.duration ?? null,
+  description: service.description ?? null,
+  membershipDays: null,
+  active: true,
+  updatedAt: ago(600),
+}));
+const PURCHASE_LOGS = ORDERS.map((order) => ({
+  orderId: order.orderId,
+  buyerId: order.buyerId,
+  sku: order.orderId === "RP-DEMO01" ? "membership" : "tournament",
+  serviceName: order.serviceName,
+  amountMinor: order.amountMinor,
+  method: order.method,
+  status: order.status,
+  createdAt: order.createdAt,
+  expiresAt: null,
+  guildId: GUILDS[0].guildId,
+  guildName: GUILDS[0].name,
+}));
 const STAFF_SCOPES = [
   { guild_id: "111111111111111111", role_id: "145000000000000003", scope: "moderation" },
   { guild_id: "111111111111111111", role_id: "145000000000000004", scope: "commerce-settle" },
@@ -130,8 +176,12 @@ const server = http.createServer((req, res) => {
   const method = req.method ?? "GET";
   const guild = path.match(/^\/api\/guilds\/([^/]+)(\/.*)?$/);
 
-  // Mutations in the selected-server or admin namespaces are read-only here.
-  if (method !== "GET" && (guild || path.startsWith("/api/admin/"))) {
+  // Mutations in the selected-server, admin or master namespaces are
+  // read-only here.
+  if (
+    method !== "GET" &&
+    (guild || path.startsWith("/api/admin/") || path.startsWith("/api/master/"))
+  ) {
     return json(res, 409, {
       error: "Changes are disabled in the demo preview.",
       code: "demo-readonly",
@@ -141,13 +191,18 @@ const server = http.createServer((req, res) => {
 
   if (path === "/healthz") return json(res, 200, { ok: true, service: "api-demo" });
   if (path === "/readyz") return json(res, 200, { dbReady: true, status: "ok", demo: true });
-  if (path === "/api/auth/me")
+  if (path === "/api/auth/me") {
+    // The demo identity can wear any hat: DEMO_ROLE or ?role=user|admin|master.
+    const role = url.searchParams.get("role") ?? process.env.DEMO_ROLE ?? "master";
     return json(res, 200, {
       demo: true,
-      isAdmin: true,
+      role,
+      isAdmin: role === "admin" || role === "master",
+      isMaster: role === "master",
       user: { id: "111111111111111111", name: "Demo staff" },
       expiresAt: new Date(Date.now() + 3600000).toISOString(),
     });
+  }
   if (path === "/api/auth/csrf") return json(res, 200, { csrfToken: "demo" });
   if (path === "/api/auth/logout") return json(res, 200, { ok: true });
   if (path === "/api/auth/login") {
@@ -190,12 +245,11 @@ const server = http.createServer((req, res) => {
     });
   if (path === "/api/catalog")
     return json(res, 200, {
-      items: [
-        { sku: "membership", name: "Royality Membership", priceMinor: 49900, currency: "INR" },
-        { sku: "tournament", name: "Tournament Entry", priceMinor: 9900, currency: "INR" },
-        { sku: "card-pack", name: "Mythic Card Pack", priceMinor: 19900, currency: "INR" },
-      ],
+      items: CATALOG.map(({ active, updatedAt, ...item }) => item),
     });
+  if (path === "/api/account/orders")
+    return json(res, 200, { orders: PURCHASE_LOGS, scope: "all" });
+  if (path === "/api/master/guilds") return json(res, 200, { guilds: MASTER_GUILDS });
   if (path === "/api/orders/verify") {
     if (["demo", "demo-verification-token"].includes(url.searchParams.get("token") ?? "")) {
       return json(res, 200, { skuName: "Demo Membership", amountMinor: 49900, status: "settled" });
@@ -219,6 +273,7 @@ const server = http.createServer((req, res) => {
   }
   if (path.startsWith("/api/admin/")) {
     if (path === "/api/admin/guilds") return json(res, 200, { guilds: ADMIN_GUILDS });
+    if (path === "/api/admin/catalog") return json(res, 200, { items: CATALOG });
     if (path === "/api/admin/staff-scopes") return json(res, 200, { scopes: STAFF_SCOPES });
     if (path === "/api/admin/secrets") return json(res, 200, { secrets: SECRETS });
     if (path === "/api/admin/accounts") return json(res, 200, { accounts: ACCOUNTS });

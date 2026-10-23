@@ -4,7 +4,9 @@ import {
   communityConfigurationPatch,
   applyCommunityConfiguration,
   consumeEmbedJob,
+  isControlEnabled,
 } from "./controls.js";
+import { DEFAULT_MASTER_IDS } from "@ei-point/contracts";
 import type { SqlPool } from "./database.js";
 test("community configuration maps every supported field and preserves unsupported settings as pending", () => {
   assert.deepEqual(
@@ -127,8 +129,48 @@ test("failed runtime installation rolls back and never acknowledges configuratio
   assert.equal(sqls.at(-1), "ROLLBACK");
   assert.ok(!sqls.some((s) => s.startsWith("UPDATE config.settings")));
 });
-test("paused embed job is deferred with no send and never completes", async () => {
-  const writes: string[] = [];
+test("the master identity is not bound by a server's role list", async () => {
+  const row = {
+    approved: true,
+    bot_key: "kafka",
+    server_paused: false,
+    enabled: true,
+    paused: false,
+    command_enabled: true,
+    role_ids: ["145000000000000001"],
+  };
+  const query = async () => [row];
+  // A member without the required role is refused…
+  assert.equal(
+    await isControlEnabled(query, "guild", "kafka", "ban", ["999999999999999999"]),
+    false,
+  );
+  // …the master is not, whatever roles the server handed out.
+  assert.equal(
+    await isControlEnabled(query, "guild", "kafka", "ban", [], DEFAULT_MASTER_IDS[0]),
+    true,
+  );
+});
+
+test("a paused bot stays paused even for the master", async () => {
+  const query = async () => [
+    {
+      approved: true,
+      bot_key: "kafka",
+      server_paused: false,
+      enabled: true,
+      paused: true,
+      command_enabled: true,
+      role_ids: [],
+    },
+  ];
+  assert.equal(
+    await isControlEnabled(query, "guild", "kafka", "ban", [], DEFAULT_MASTER_IDS[0]),
+    false,
+  );
+});
+
+test("paused embed job is deferred with no send and never completes", async () => {  const writes: string[] = [];
   let sent = false;
   const query = async (sql: string) => {
     writes.push(sql);

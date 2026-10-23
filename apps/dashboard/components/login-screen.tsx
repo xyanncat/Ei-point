@@ -6,9 +6,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { KafkaScene } from "./kafka-scene";
 import { BrandMark } from "./brand-mark";
-import "../app/kafka.css";
 import "./staff/staff.css";
 
 const MESSAGES: Record<string, string> = {
@@ -77,9 +75,6 @@ export function LoginScreen() {
             <Link href="/" style={{ color: "var(--sf-dim)" }}>
               Back to the community website
             </Link>
-          </div>
-          <div className="sf-hero-art">
-            <KafkaScene />
           </div>
         </section>
       </main>

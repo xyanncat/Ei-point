@@ -1,5 +1,16 @@
 # Kafka redesign â€” navigation, design system and page patterns
 
+> **Superseded (2026-10-23).** The information architecture in this document
+> describes the previous workspace. The site is now built on the trailer and
+> the account area is a three-role model. See
+> [design/cinematic-world.md](design/cinematic-world.md) for the current
+> structure, the film, and the role ladder.
+>
+> | Area | Routes now |
+> |---|---|
+> | Public website | `/`, `/services`, `/services/[sku]`, `/about`, `/docs`, `/terms`, `/policy`, `/membership`, `/referrals`, `/cards`, `/verify`, `/login` |
+> | My account | `/account/servers`, `/account/services` (admin and master only), `/account/orders` |
+
 Owner brief (2026-10-18). Three areas share one Kafka design system:
 
 | Area | Audience | Routes |
@@ -90,9 +101,9 @@ Unconnected features are marked unavailable/planned; the demo never shows contra
 
 | Area | Navigation | Routes |
 |---|---|---|
-| Public website | Home · Services · Cards · Membership · Help (utility: Verify order, My account; staff via account menu + footer) | `/`, `/services`, `/services/[sku]`, `/cards`, `/membership`, `/help`, `/referrals`, `/about`, `/verify`, `/login` |
-| My account | Overview · My orders · Membership · Referrals · Account settings | `/account`, `/account/orders`, `/account/membership`, `/account/referrals`, `/account/settings` — customer data backend does not exist yet; pages document the gap honestly |
-| Staff workspace | Grouped sidebar: Workspace / Server management / Records / Preferences / Owner·admin | `/dashboard/*` with section tabs (see above), bot tabs (Overview/Configuration/Command permissions/Diagnostics) |
-| System (global) | Guilds · Integrations · Secret vault · Backups | `/dashboard/system/*`; `/system/*` redirects here deliberately |
+| Public website | Home ï¿½ Services ï¿½ Cards ï¿½ Membership ï¿½ Help (utility: Verify order, My account; staff via account menu + footer) | `/`, `/services`, `/services/[sku]`, `/cards`, `/membership`, `/help`, `/referrals`, `/about`, `/verify`, `/login` |
+| My account | Overview ï¿½ My orders ï¿½ Membership ï¿½ Referrals ï¿½ Account settings | `/account`, `/account/orders`, `/account/membership`, `/account/referrals`, `/account/settings` ï¿½ customer data backend does not exist yet; pages document the gap honestly |
+| Staff workspace | Grouped sidebar: Workspace / Server management / Records / Preferences / Ownerï¿½admin | `/dashboard/*` with section tabs (see above), bot tabs (Overview/Configuration/Command permissions/Diagnostics) |
+| System (global) | Guilds ï¿½ Integrations ï¿½ Secret vault ï¿½ Backups | `/dashboard/system/*`; `/system/*` redirects here deliberately |
 
 Preserved public URLs: `/referrals` and `/about` (no redirects). The ordering FAQ moved from `/about` to `/help`; `/about` keeps the studio team.

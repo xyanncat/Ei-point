@@ -94,4 +94,40 @@ export interface CatalogItem {
   name: string;
   priceMinor: number;
   currency: string;
+  game?: string | null;
+  category?: string | null;
+  duration?: string | null;
+  description?: string | null;
+  membershipDays?: number | null;
+}
+
+// The role ladder. Master outranks admin; admin outranks user.
+export type Role = "user" | "admin" | "master";
+
+// The founding identities. DASHBOARD_ADMIN_IDS / DASHBOARD_MASTER_IDS override
+// them at runtime; the defaults keep a fresh install working.
+export const DEFAULT_ADMIN_IDS = ["733513636269785120"] as const;
+export const DEFAULT_MASTER_IDS = ["1479589523426902208"] as const;
+
+const snowflake = (value: string) => /^\d{17,20}$/.test(value);
+
+/** Parse a comma-separated ID list, falling back when it holds nothing valid. */
+export function roleIdsFromEnv(
+  raw: string | undefined,
+  fallback: readonly string[],
+): string[] {
+  const parsed = (raw ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(snowflake);
+  return parsed.length ? parsed : fallback.filter(snowflake);
+}
+
+/** True when the identity is the master. A master is never bound by roles. */
+export function isMasterId(
+  discordUserId: string | undefined | null,
+  raw?: string,
+): boolean {
+  if (!discordUserId) return false;
+  return roleIdsFromEnv(raw, DEFAULT_MASTER_IDS).includes(discordUserId);
 }

@@ -62,7 +62,8 @@ test('restic fails on repository errors without auto-init and discovers actual n
   // §9B/A19: the unique/private host assets must ride the encrypted off-host set.
   await writeFile(join(f.directory,'cyrene-reference.mp3'),'reference-bytes');
   await writeFile(join(f.directory,'persona.md'),'persona-bytes');
-  await appendFile(f.envFile,`CYRENE_REFERENCE_AUDIO_PATH=${unix(join(f.directory,'cyrene-reference.mp3'))}\nCYRENE_PERSONA_MEMORY_FILE=${unix(join(f.directory,'persona.md'))}\n`);
+  await writeFile(join(f.directory,'pocket-voice-state.bin'),'voice-state-bytes');
+  await appendFile(f.envFile,`CYRENE_REFERENCE_AUDIO_PATH=${unix(join(f.directory,'cyrene-reference.mp3'))}\nCYRENE_PERSONA_MEMORY_FILE=${unix(join(f.directory,'persona.md'))}\nPOCKET_TTS_VOICE_STATE_PATH=${unix(join(f.directory,'pocket-voice-state.bin'))}\n`);
   await f.mock('docker',`printf '%s\n' "$*" >> "$MOCK_LOG"
 if [[ "$*" == *'volume ls'* ]]; then [[ "$*" == *'=artwork'* ]] && echo artwork-id || echo pgbackrest-id
 elif [[ "$*" == *artwork-id* ]]; then echo '${unix(artwork)}'
@@ -81,8 +82,9 @@ test('a healthy restic run backs up exactly the inventory set: private paths, en
     const artwork=join(f.directory,'artwork'),physical=join(f.directory,'physical');await mkdir(artwork);await mkdir(physical);
     await mkdir(join(physical,'backup','ei-point','20261014-120000F'),{recursive:true});await writeFile(join(physical,'backup','ei-point','backup.info'),'fixture');await writeFile(join(physical,'backup','ei-point','20261014-120000F','backup.manifest'),'fixture');
     const reference=join(f.directory,'cyrene-reference.mp3'),persona=join(f.directory,'persona.md');
-    await writeFile(reference,'reference-bytes');await writeFile(persona,'persona-bytes');
-    await appendFile(f.envFile,`CYRENE_REFERENCE_AUDIO_PATH=${unix(reference)}\nCYRENE_PERSONA_MEMORY_FILE=${unix(persona)}\n`);
+    const voiceState=join(f.directory,'pocket-voice-state.bin');
+    await writeFile(reference,'reference-bytes');await writeFile(persona,'persona-bytes');await writeFile(voiceState,'voice-state-bytes');
+    await appendFile(f.envFile,`CYRENE_REFERENCE_AUDIO_PATH=${unix(reference)}\nCYRENE_PERSONA_MEMORY_FILE=${unix(persona)}\nPOCKET_TTS_VOICE_STATE_PATH=${unix(voiceState)}\n`);
     await f.mock('docker',`printf '%s\n' "$*" >> "$MOCK_LOG"
 if [[ "$*" == *'volume ls'* ]]; then [[ "$*" == *'=artwork'* ]] && echo artwork-id || echo pgbackrest-id
 elif [[ "$*" == *artwork-id* ]]; then echo '${unix(artwork)}'
@@ -98,7 +100,7 @@ else echo '${unix(physical)}'; fi`);
     const normalize=(p)=>String(p).replace(/\\/g,'/').replace(/([A-Za-z]):(?=\/)/gu,(s,c)=>'/'+c.toLowerCase()).toLowerCase();
     const backupLine=log.split('\n').find(l=>l.includes('restic backup'));
     assert.ok(backupLine,'restic backup must run after a healthy snapshots check');
-    for(const path of [f.envFile,reference,persona,artwork,physical])
+    for(const path of [f.envFile,reference,persona,voiceState,artwork,physical])
       assert.ok(normalize(backupLine).includes(normalize(path)),`backup must include ${path}: ${backupLine}`);
     assert.match(backupLine,/--tag ei-point/);
     assert.match(backupLine,/--tag physical-and-private/);

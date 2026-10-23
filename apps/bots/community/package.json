@@ -13,6 +13,7 @@
   "dependencies": {
     "discord.js": "14.27.0",
     "pg": "8.13.1",
+    "@ei-point/contracts": "workspace:*",
     "@ei-point/flow": "workspace:*",
     "@ei-point/module-community": "workspace:*",
     "@ei-point/module-games": "workspace:*",

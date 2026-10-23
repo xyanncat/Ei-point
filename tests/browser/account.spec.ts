@@ -80,45 +80,43 @@ test("account pages: signed-out states keep sign-in one click away with safe ret
     }),
   );
   await page.goto("/account");
-  await expect(page.getByRole("heading", { name: "Sign in to see your account" })).toBeVisible();
-  await expect(page.getByRole("link", { name: CTA })).toHaveAttribute(
-    "href",
-    "/login?returnTo=%2Faccount",
-  );
-  await page.goto("/account/settings");
-  await expect(page.getByText("You are signed out.")).toBeVisible();
-  await expect(page.getByRole("link", { name: CTA })).toHaveAttribute(
-    "href",
-    "/login?returnTo=%2Faccount%2Fsettings",
-  );
+  await expect(page.getByRole("heading", { name: "Sign in to continue" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Sign in with Discord" }),
+  ).toHaveAttribute("href", "/login");
   // direct URLs render their own honest states while signed out
-  await page.goto("/account/membership");
-  await expect(page.getByRole("heading", { name: "Membership", exact: true })).toBeVisible();
-  await page.goto("/account/referrals");
-  await expect(page.getByRole("heading", { name: "Referrals", exact: true })).toBeVisible();
-  await page.goto("/account/orders");
-  await expect(page.getByRole("heading", { name: "My orders", exact: true })).toBeVisible();
+  for (const route of ["/account/servers", "/account/services", "/account/orders"]) {
+    await page.goto(route);
+    await expect(
+      page.getByRole("heading", { name: "Sign in to continue" }),
+    ).toBeVisible();
+  }
   expect(errors).toEqual([]);
 });
 
-test("orders: lookup validation and order detail states against the demo status service", async ({
+test("the account area offers the services tab only to the operator and the master", async ({
   page,
 }) => {
   const errors = trackPageErrors(page);
-  await page.goto("/account/orders");
-  await page.getByLabel("Order ID").fill("abc");
-  await page.getByRole("button", { name: "Open order" }).click();
+  const member = {
+    user: { id: "qa-member", name: "QA member" },
+    role: "user",
+    isAdmin: false,
+    isMaster: false,
+    expiresAt: new Date(Date.now() + 3600000).toISOString(),
+  };
+  await page.route("**/api/auth/me", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(member) }),
+  );
+  await page.goto("/account/servers");
+  await expect(page.getByRole("link", { name: "Servers", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Purchase logs", exact: true })).toBeVisible();
+  // The catalogue tab is not offered to a plain customer…
+  expect(await page.getByRole("link", { name: "Services", exact: true }).count()).toBe(0);
+  // …and the page itself refuses them.
+  await page.goto("/account/services");
   await expect(
-    page.getByRole("alert").filter({ hasText: "Order IDs look like RP-ABC123" }),
+    page.getByRole("heading", { name: "Not available for your role" }),
   ).toBeVisible();
-  await page.getByLabel("Order ID").fill("rp-demo01");
-  await page.getByRole("button", { name: "Open order" }).click();
-  await page.waitForURL("**/account/orders/RP-DEMO01");
-  await expect(page.getByRole("heading", { name: "Order RP-DEMO01" })).toBeVisible();
-  await expect(page.getByText("Demo Membership")).toBeVisible();
-  await expect(page.getByText("Payment received and verified.")).toBeVisible();
-  await expect(page.getByText("Status view — no buyer details are shown here.")).toBeVisible();
-  await page.goto("/account/orders/NOPE-1");
-  await expect(page.getByText("No order matches this ID")).toBeVisible();
   expect(errors).toEqual([]);
 });

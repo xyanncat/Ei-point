@@ -16,6 +16,7 @@ import { registerCommerceRoutes, maintainCommerce } from "./commerce-routes.js";
 import { registerControlRoutes } from "./control-routes.js";
 import { channelPermissions, canSendEmbed } from "./channel-permissions.js";
 import { registeredBotToken } from "@ei-point/flow";
+import { Roles } from "./roles.js";
 
 type Query = (
   sql: string,
@@ -118,6 +119,7 @@ export function createApp(options: AppOptions = {}) {
       return (await pool!.query(sql, params)).rows;
     });
   const configured = () => secret.length >= 32 && csrfSecret.length >= 32;
+  const roles = new Roles(env);
   const transaction = options.transaction ?? (async <T>(work: (query: Query) => Promise<T>): Promise<T> => {
     if (!pool) return work(query); // Injected query is used only by isolated tests.
     const client = await pool.connect();
@@ -243,6 +245,16 @@ export function createApp(options: AppOptions = {}) {
       "SELECT guild_id,name,owner_id,approved FROM access.guilds WHERE approved=true ORDER BY name",
     );
     if (guildRows.length === 0) return [];
+    // The master identity is not filtered by Discord membership. It exists to
+    // fix a misbehaving bot in any server, so it sees every approved server
+    // with full scope.
+    if (roles.isMaster(String(s.discord_user_id)))
+      return guildRows.map((g) => ({
+        guildId: g.guild_id,
+        name: g.name,
+        approved: true,
+        scopes: ["*"],
+      }));
     const memberships: Record<string, any>[] = [];
     for (let page = 0; page < 5; page++) {
       const after = memberships.at(-1)?.id;
@@ -261,7 +273,7 @@ export function createApp(options: AppOptions = {}) {
           "The server list could not be fully checked. Retry shortly.",
         );
     }
-    const roles = await query(
+    const staffRoles = await query(
       "SELECT guild_id,role_id,scope FROM access.staff_roles",
     );
     const result: GuildInfo[] = [];
@@ -279,7 +291,7 @@ export function createApp(options: AppOptions = {}) {
       )
         scopes = ["*"];
       else {
-        const grants = roles.filter((r) => r.guild_id === g.guild_id);
+        const grants = staffRoles.filter((r) => r.guild_id === g.guild_id);
         if (grants.length) {
           const member = await discord(
             `/users/@me/guilds/${g.guild_id}/member`,
@@ -467,9 +479,12 @@ export function createApp(options: AppOptions = {}) {
   );
   app.get("/api/auth/me", async (req) => {
     const s = await session(req.headers.cookie);
+    const id = String(s.discord_user_id);
     return {
-      user: { id: s.discord_user_id, name: s.display_name },
-      isAdmin: (env.DASHBOARD_ADMIN_IDS ?? "").split(",").map(id=>id.trim()).includes(s.discord_user_id),
+      user: { id, name: s.display_name },
+      role: roles.role(id),
+      isAdmin: roles.isAdmin(id),
+      isMaster: roles.isMaster(id),
       expiresAt: new Date(s.expires_at).toISOString(),
     };
   });
@@ -542,15 +557,53 @@ export function createApp(options: AppOptions = {}) {
   app.get("/api/catalog", async () => ({
     items: (
       await query(
-        "SELECT sku,name,price_minor,currency FROM commerce.catalog WHERE active=true ORDER BY price_minor",
+        "SELECT sku,name,price_minor,currency,game,category,duration,description,membership_days FROM commerce.catalog WHERE active=true ORDER BY price_minor",
       )
     ).map((r) => ({
       sku: r.sku,
       name: r.name,
       priceMinor: Number(r.price_minor),
       currency: r.currency,
+      game: r.game ?? null,
+      category: r.category ?? null,
+      duration: r.duration ?? null,
+      description: r.description ?? null,
+      membershipDays: r.membership_days === null || r.membership_days === undefined ? null : Number(r.membership_days),
     })),
   }));
+  // Purchase logs. A customer sees their own orders; the operator and the
+  // master see every order on the platform.
+  app.get("/api/account/orders", async (req) => {
+    const s = await session(req.headers.cookie);
+    const id = String(s.discord_user_id);
+    const elevated = roles.isAdmin(id);
+    const rows = await query(
+      `SELECT o.public_id AS "orderId", o.buyer_id AS "buyerId", o.sku,
+              o.service_name AS "serviceName", o.amount_minor AS "amountMinor",
+              o.method, o.status, o.created_at AS "createdAt", o.expires_at AS "expiresAt",
+              g.name AS "guildName", g.guild_id AS "guildId"
+       FROM commerce.orders o LEFT JOIN access.guilds g ON g.guild_id=o.guild_id
+       WHERE ($2::boolean OR o.buyer_id=$1)
+       ORDER BY o.created_at DESC LIMIT 200`,
+      [id, elevated],
+    );
+    return {
+      orders: rows.map((r) => ({
+        orderId: String(r.orderId),
+        buyerId: String(r.buyerId),
+        sku: r.sku,
+        serviceName: r.serviceName ?? r.sku,
+        amountMinor: Number(r.amountMinor),
+        method: r.method ?? null,
+        status: r.status,
+        createdAt: new Date(r.createdAt).toISOString(),
+        expiresAt: r.expiresAt ? new Date(r.expiresAt).toISOString() : null,
+        guildId: r.guildId ?? null,
+        guildName: r.guildName ?? null,
+      })),
+      scope: elevated ? "all" : "own",
+    };
+  });
   app.get<{ Querystring: { token?: string } }>(
     "/api/orders/verify",
     async (req, reply) => {
@@ -581,8 +634,14 @@ export function createApp(options: AppOptions = {}) {
   }
   const administrator = async (req: {headers:{cookie?:string|undefined}}) => {
     const s = await session(req.headers.cookie);
-    if (!(env.DASHBOARD_ADMIN_IDS ?? "").split(",").map(id=>id.trim()).filter(snowflake).includes(s.discord_user_id))
+    if (!roles.isAdmin(String(s.discord_user_id)))
       throw new HttpError(403,"admin-required","This action requires a configured Ei point administrator.");
+    return {userId:String(s.discord_user_id)};
+  };
+  const master = async (req: {headers:{cookie?:string|undefined}}) => {
+    const s = await session(req.headers.cookie);
+    if (!roles.isMaster(String(s.discord_user_id)))
+      throw new HttpError(403,"master-required","This action requires the Ei point master account.");
     return {userId:String(s.discord_user_id)};
   };
   registerCommerceRoutes(app,{env,query,transaction,session:async(req) => {
@@ -606,6 +665,7 @@ export function createApp(options: AppOptions = {}) {
     const bot=await get(`/guilds/${guildId}/members/${identity.id}`);
     for(const [member,id] of [[actor,s.discord_user_id],[bot,identity.id]] as const){if(!canSendEmbed(channelPermissions(guildId,member,roles,channel.permission_overwrites??[],id,guild.owner_id)))throw new HttpError(403,"channel-denied","Both you and the bot need permission to send embeds in this channel.");}
   },authorize:async(req,guildId,scope,module) => {
+    if(scope==="master") return master(req);
     if(scope==="admin") return administrator(req);
     const s=await session(req.headers.cookie),g=await scoped(req.headers.cookie,guildId);
     if((scope==="operate" || module) && !g.scopes?.some(value=>value==="*"||(module && value===module))) throw new HttpError(403,"scope-denied","Your role cannot access these server controls.");

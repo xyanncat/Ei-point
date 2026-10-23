@@ -1,7 +1,8 @@
 export function BrandMark() {
+  // Drawn in CSS (see .ei-brand-mark) — the site ships no raster brand asset.
   return (
     <span className="ei-brand-mark" aria-hidden="true">
-      <img src="/art/kafka-tea.png" alt="" width="40" height="40" />
+      <span className="ei-brand-mark__core" />
     </span>
   );
 }

@@ -1,5 +1,7 @@
 @import "../tokens.css";
 @import "../theme.css";
+@import "./public-kafka.css";
+@import "./world.css";
 
 * {
   box-sizing: border-box;
@@ -7,22 +9,32 @@
 
 html {
   color-scheme: dark;
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-  /* Locally hosted fonts replace this stack in Phase 4 polish (see theme.css). */
+  background: var(--k-bg-deep);
+  color: var(--k-text);
+  font-family: var(--k-font-ui);
+  font-size: var(--k-text-body);
+  line-height: var(--k-leading);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 a {
-  color: var(--accent);
+  color: var(--k-orchid);
 }
 
 :focus-visible {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--k-gold);
   outline-offset: 2px;
 }
 
@@ -35,15 +47,19 @@ a {
   left: 1rem;
   top: 1rem;
   z-index: 100;
-  background: var(--surface);
+  background: var(--k-surface);
   padding: 0.5rem 1rem;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
+::selection {
+  background: rgba(207, 138, 175, 0.35);
+  color: var(--k-text);
+}
+
+/* The sign-in and account surfaces keep their own frame but still sit on the
+   film, so they need the same box model as the public pages. */
+.ei-dashboard-frame {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
 }

@@ -38,6 +38,17 @@ function run(command, args, { shell = false } = {}) {
 const sha256 = (text) => createHash("sha256").update(String(text), "utf8").digest("hex");
 const normalize = (text) => text.replace(/\r\n/gu, "\n");
 
+// Git quotes a path in porcelain output when it contains spaces or other
+// special characters. The recorded path must be the real path, not the quoted
+// form, or every consumer sees a path that does not exist.
+const unquotePath = (value) => {
+  if (value.length < 2 || !value.startsWith('"') || !value.endsWith('"')) return value;
+  const escapes = { n: "\n", t: "\t", r: "\r", b: "\b", f: "\f", '"': '"', "\\": "\\" };
+  return value
+    .slice(1, -1)
+    .replace(/\\(.)/gu, (_match, character) => escapes[character] ?? character);
+};
+
 async function main() {
   const args = process.argv.slice(2);
   const out = resolve(root, valueFor(args, "--out") ?? "docs/audits/releases");
@@ -53,12 +64,18 @@ async function main() {
   // Classify each dirty entry from observed state — never hardcode a narrative.
   // Untracked files are labelled as such; a modified path whose only difference
   // is line endings (git diff --ignore-cr-at-eol is empty) is derived, not assumed.
+  // A deleted path is labelled as deleted: it no longer exists on disk, so it
+  // must not be counted as modified or read as a surviving file.
   const dirty = [];
   for (const line of porcelain.split("\n").filter((entry) => entry.trim() !== "")) {
     const status = line.slice(0, 2).trim();
-    const path = line.slice(3).trim();
+    const path = unquotePath(line.slice(3).trim());
     if (status === "??") {
       dirty.push({ status, path, kind: "untracked" });
+      continue;
+    }
+    if (status.includes("D")) {
+      dirty.push({ status, path, kind: "deleted" });
       continue;
     }
     const diff = await run("git", ["diff", "--ignore-cr-at-eol", "--quiet", "--", path], { shell: false });
@@ -83,7 +100,7 @@ async function main() {
   ]);
   const kinds = Object.groupBy(dirty, (entry) => entry.kind);
   const dirtyStateNote = dirty.length
-    ? `Derived from observed state: ${kinds["line-ending-only"]?.length ?? 0} line-ending-only, ${kinds["content-modified"]?.length ?? 0} content-modified, ${kinds["untracked"]?.length ?? 0} untracked. No claims are made about content beyond this classification.`
+    ? `Derived from observed state: ${kinds["line-ending-only"]?.length ?? 0} line-ending-only, ${kinds["content-modified"]?.length ?? 0} content-modified, ${kinds["deleted"]?.length ?? 0} deleted, ${kinds["untracked"]?.length ?? 0} untracked. No claims are made about content beyond this classification.`
     : "clean";
   const releaseId = `${startedAt.toISOString().replace(/[-:]/gu, "").replace(/\.\d+Z$/u, "Z")}-${revision.slice(0, 8)}-${dirty.length ? "dirty" : "clean"}`;
   const directory = resolve(out, releaseId);

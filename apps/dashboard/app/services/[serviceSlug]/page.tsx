@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import assets from "../../../lib/project-assets.json";
 import { CheckoutButton } from "../../../components/checkout";
+import { Reveal } from "../../../components/motion";
 
 type ArchiveService = {
   sku: string;
@@ -43,56 +44,82 @@ export default async function ServiceDetailPage({ params }: { params: Promise<{ 
   }).format(service.price_minor / 100);
 
   return (
-    <section aria-label={service.name} className="ei-home-section">
+    <section className="world-section world-shell" aria-label={service.name}>
       <p>
         <Link href="/services">← All services</Link>
       </p>
-      <p>
-        {service.game} · {service.category}
-      </p>
-      <h1>{service.name}</h1>
-      <p className="lede">{service.description}</p>
-      <div className="service-grid">
-        <div className="clip-panel">
-          <h2>What&rsquo;s included</h2>
-          {service.inclusions?.length ? (
-            <ul>
-              {service.inclusions.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          ) : (
-            <p>The archive lists no itemised inclusions for this service; the description above is the full scope.</p>
-          )}
-          {service.facts?.length ? (
-            <dl>
-              {service.facts.map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : null}
-        </div>
-        <div className="clip-panel">
-          <h2>Price &amp; timing</h2>
-          <p>
-            <strong>{price}</strong>
+      <div className="world-page">
+        <Reveal>
+          <p className="world-eyebrow">
+            {service.game} · {service.category}
           </p>
-          <p>Estimated duration: {service.duration}</p>
-          <p>Checkout always shows the authoritative amount for your order; staff confirm availability before starting.</p>
-        </div>
+          <h1 className="world-title">{service.name}</h1>
+          <p className="world-lede">{service.description}</p>
+        </Reveal>
+
+          <Reveal delay={0.08}>
+            <div className="glass world-card" style={{ marginTop: "1.4rem" }}>
+              <span className="world-card__tag">Price and timing</span>
+              <p className="world-card__price" style={{ fontSize: "1.8rem" }}>
+                {price}
+              </p>
+              <p className="world-note">
+                Estimated duration: {service.duration}. Checkout always shows
+                the authoritative amount for your order, and staff confirm
+                availability before any work starts.
+              </p>
+            </div>
+          </Reveal>
+
+          {service.inclusions?.length ? (
+            <Reveal delay={0.12}>
+              <div className="prose" style={{ marginTop: "1.8rem" }}>
+                <h2>What is included</h2>
+                <ul>
+                  {service.inclusions.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+          ) : (
+            <Reveal delay={0.12}>
+              <div className="prose" style={{ marginTop: "1.8rem" }}>
+                <h2>Scope</h2>
+                <p>
+                  The archive lists no itemised inclusions for this service.
+                  The description above is the full scope.
+                </p>
+              </div>
+            </Reveal>
+          )}
+
+          {service.facts?.length ? (
+            <Reveal delay={0.16}>
+              <div className="prose" style={{ marginTop: "1.4rem" }}>
+                <h2>Details</h2>
+                <dl>
+                  {service.facts.map(([label, value]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </Reveal>
+          ) : null}
+
+          <Reveal delay={0.2}>
+            <div style={{ marginTop: "1.8rem" }}>
+              <CheckoutButton serviceId={service.sku} name={service.name} />
+            </div>
+            <p className="world-note">
+              <Link href="/verify">Verify an order ↗</Link> ·{" "}
+              <Link href="/docs">Questions? Read the docs ↗</Link>
+            </p>
+          </Reveal>
       </div>
-      <div>
-        <CheckoutButton serviceId={service.sku} name={service.name} />
-      </div>
-      <p>
-        <a className="ei-action" href="/verify">
-          Verify an order ↗
-        </a>{" "}
-        <Link href="/help">Questions? Help centre ↗</Link>
-      </p>
     </section>
   );
 }

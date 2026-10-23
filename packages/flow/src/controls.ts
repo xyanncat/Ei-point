@@ -1,5 +1,6 @@
 import type { SqlPool } from "./database.js";
 import { transaction, lockApprovedGuild } from "./database.js";
+import { isMasterId } from "@ei-point/contracts";
 export type ControlQuery = (
   sql: string,
   params?: unknown[],
@@ -113,6 +114,7 @@ export async function isControlEnabled(
   botKey: string,
   command?: string,
   roleIds: string[] = [],
+  actorId?: string | null,
 ): Promise<boolean> {
   const rows = await query(
     `SELECT g.approved, b.bot_key, COALESCE(c.server_paused,false) server_paused,
@@ -135,6 +137,11 @@ export async function isControlEnabled(
     row.command_enabled === false
   )
     return false;
+  // The master identity outranks the server's role list: a bot never refuses
+  // the master, whatever roles the server has given them. A paused or
+  // disabled bot still stays paused — the master un-pauses it from the
+  // workspace, and the pause is what stops a bot from misbehaving.
+  if (isMasterId(actorId ?? null, process.env.DASHBOARD_MASTER_IDS)) return true;
   return (
     !row.role_ids?.length ||
     row.role_ids.some((role: string) => roleIds.includes(role))

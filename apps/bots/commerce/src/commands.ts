@@ -27,6 +27,8 @@ export interface CommerceCommandRequest {
   isOwner: boolean;
   canManage: boolean;
   userScopes: string[];
+  /** The master identity outranks the server's role and permission list. */
+  isMaster?: boolean | undefined;
   defer(): Promise<void>;
   reply(text: string): Promise<void>;
   paymentOrigin: string;
@@ -95,8 +97,8 @@ export async function respondToCommerceCommand(
   req: CommerceCommandRequest,
   pool: Pool,
 ): Promise<void> {
-  const { name, subcommand, options, guildId, userId, isOwner, canManage, userScopes } = req;
-  const isPrivileged = canSettleCommerce({ isOwner, canManage, userScopes });
+  const { name, subcommand, options, guildId, userId, isOwner, canManage, userScopes, isMaster } = req;
+  const isPrivileged = canSettleCommerce({ isOwner, canManage, userScopes, isMaster });
 
   if (name === "orders") {
     if (subcommand === "list") {

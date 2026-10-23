@@ -95,6 +95,11 @@ test("the evidence bundle classifies dirty state from observed paths that exist"
   // A porcelain parsing bug once ate the leading "." of the first entry's path;
   // every classified path must exist on disk exactly as recorded.
   for (const entry of evidence.dirtyState) {
+    if (entry.kind === "deleted") {
+      // A deleted path is recorded as deleted, and it must be gone from disk.
+      assert.ok(!existsSync(entry.path), `deleted path must not exist on disk: ${entry.path}`);
+      continue;
+    }
     assert.ok(existsSync(entry.path), `dirty path must exist on disk: ${entry.path}`);
     assert.ok(["untracked", "line-ending-only", "content-modified"].includes(entry.kind), `unexpected kind: ${entry.kind}`);
   }

@@ -1,50 +1,77 @@
-import { PageArt } from "../../components/page-art";
+import Link from "next/link";
 import { ServiceCatalog } from "../../components/service-catalog";
+import { Reveal, Stagger, StaggerItem } from "../../components/motion";
+
+const STEPS = [
+  {
+    title: "Choose a service",
+    body: "Open a service for its inclusions, timing and the exact price before committing to anything.",
+  },
+  {
+    title: "Pay your way",
+    body: "Sign in with Discord, then pay by UPI, Razorpay or USDT. Checkout shows the authoritative amount and a QR code.",
+  },
+  {
+    title: "Verified by a person",
+    body: "Submit your payment proof once. Staff check it, and the work starts when they confirm it.",
+  },
+];
+
 export default function ServicesPage() {
   return (
-    <section aria-label="Game services">
-      <div className="ei-page-layout">
-        <div className="ei-page-body">
-          <p>Game services</p>
-          <h1>
-            Make your
-            <br />
-            next move.
-          </h1>
-          <p className="lede">
-            Quest progression, exploration and character builds from the
-            original Ei Paradise catalog. Choose a game and find the support
-            your account needs.
-          </p>
-          <div className="clip-panel">
-            <h2>Original services, preserved</h2>
-            <p>
-              These service definitions and INR prices come from the supplied
-              archive. Staff confirm availability and the final order before
-              payment.
+    <>
+      <section className="world-section world-shell" aria-label="Game services">
+        <div className="world-page">
+          <Reveal>
+            <p className="world-eyebrow">The catalogue</p>
+            <h1 className="world-title">
+              Make your
+              <br />
+              next move.
+            </h1>
+            <p className="world-lede">
+              Quest progression, exploration and account management across
+              five games. Pick a game, find the support your account needs,
+              and see the exact price before you pay anything.
             </p>
-            <a className="ei-action" href="#catalog">
-              Browse all services
-            </a>
-          </div>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <p>
+              <Link className="ei-action" href="#catalog">
+                Browse all services
+              </Link>
+            </p>
+          </Reveal>
         </div>
-        <PageArt src="/art/kafka-tea.png" caption="The next move is yours." />
-      </div>
-      <div id="catalog">
+      </section>
+
+      <section className="world-section world-section--tight world-shell" id="catalog">
         <ServiceCatalog />
-      </div>
-      <div className="ei-home-section" aria-label="Service help">
-        <h2>Questions before ordering?</h2>
-        <p className="lede">
-          Payment steps, verification, timing and supported games are explained
-          in the help centre.
-        </p>
-        <p>
-          <a className="ei-action" href="/help">
-            Help &amp; FAQ ↗
-          </a>
-        </p>
-      </div>
-    </section>
+      </section>
+
+      <section className="world-section world-shell" aria-label="How ordering works">
+        <Reveal>
+          <p className="world-eyebrow">The order</p>
+          <h2 className="world-title world-title--sm">Three steps</h2>
+        </Reveal>
+        <Stagger className="world-grid">
+          {STEPS.map((step, index) => (
+            <StaggerItem key={step.title}>
+              <article className="glass world-card">
+                <span className="world-card__tag">Step {index + 1}</span>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </article>
+            </StaggerItem>
+          ))}
+        </Stagger>
+        <Reveal>
+          <p className="world-note" style={{ marginTop: "1.4rem" }}>
+            Payment steps, verification, timing and the supported games are
+            explained in the <Link href="/docs">docs</Link>.
+          </p>
+        </Reveal>
+      </section>
+    </>
   );
 }

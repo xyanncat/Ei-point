@@ -11,7 +11,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { GuildInfo } from "@ei-point/contracts";
+import type { GuildInfo, Role } from "@ei-point/contracts";
 import { api, ApiError, type AccountResponse } from "../../lib/api";
 
 type Boot = "loading" | "login" | "ready" | "failed";
@@ -25,6 +25,9 @@ interface StaffValue {
   guildName: string;
   demo: boolean;
   isAdmin: boolean;
+  /** user | admin | master. Master outranks admin. */
+  role: Role;
+  isMaster: boolean;
   error: string;
   reference: string;
   retry: () => void;
@@ -46,6 +49,8 @@ export function StaffProvider({ children }: { children: ReactNode }) {
   const [guild, setGuild] = useState("");
   const [demo, setDemo] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [role, setRole] = useState<Role>("user");
+  const [isMaster, setIsMaster] = useState(false);
   const [error, setError] = useState("");
   const [reference, setReference] = useState("");
 
@@ -54,10 +59,12 @@ export function StaffProvider({ children }: { children: ReactNode }) {
     setError("");
     setReference("");
     try {
-      const me = await api<AccountResponse & { demo?: boolean; isAdmin?: boolean }>("/api/auth/me");
+      const me = await api<AccountResponse & { demo?: boolean; isAdmin?: boolean; isMaster?: boolean; role?: Role }>("/api/auth/me");
       setUser(me.user);
       setDemo(me.demo === true);
       setIsAdmin(me.isAdmin === true);
+      setRole(me.role ?? (me.isAdmin === true ? "admin" : "user"));
+      setIsMaster(me.isMaster === true || me.role === "master");
       const list = await api<{ guilds: GuildInfo[] }>("/api/guilds");
       setGuilds(list.guilds);
       const requested =
@@ -122,12 +129,14 @@ export function StaffProvider({ children }: { children: ReactNode }) {
       guildName: guilds.find((g) => g.guildId === guild)?.name ?? "",
       demo,
       isAdmin,
+      role,
+      isMaster,
       error,
       reference,
       retry: () => void initialize(),
       logout,
     }),
-    [boot, user, guilds, guild, selectGuild, demo, isAdmin, error, reference, initialize, logout],
+    [boot, user, guilds, guild, selectGuild, demo, isAdmin, role, isMaster, error, reference, initialize, logout],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
