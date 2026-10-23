@@ -25,10 +25,13 @@
   --sf-display: var(--k-font-display);
   display: flex;
   min-height: 100vh;
+  /* Transparent: the world film and the logged-in character scene sit behind
+     this shell, so an opaque background here would bury them both. Panels,
+     tables and cards keep their own surfaces, so the data stays legible. */
   background:
     radial-gradient(1200px 600px at 85% -10%, rgba(125, 40, 86, 0.22), transparent 60%),
     radial-gradient(900px 500px at -10% 110%, rgba(207, 138, 175, 0.08), transparent 60%),
-    var(--sf-bg);
+    transparent;
   color: var(--sf-text);
   font-family: var(--k-font-ui);
   font-size: var(--k-text-body);

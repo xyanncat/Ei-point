@@ -13,7 +13,14 @@ the film itself.
   anywhere in the interface, because there is nothing to control.
 - **It loops.** The full 149.3 second trailer runs continuously on every route.
 - **The soundtrack is part of the film.** The audio is trimmed to exactly
-  149.3 seconds so the picture and the music stay in step on every loop.
+  149.3 seconds so the picture and the music stay in step on every loop. It
+  plays at 20% volume, locked to the film's clock (any drift over 0.3s is
+  corrected), and crossfades to silence across the last 2.5 seconds so the
+  loop restart never clicks.
+- **Logged-in pages open on their own character scene.** Same footage,
+  different moment: servers opens on the starfield solo, services on the
+  stage lineup, purchase logs on the group walking away, order detail on the
+  orb, sign-in on the street. The film keeps playing from there.
 - **The page is built on the film.** The home page is a sequence of scenes,
   one per beat of the trailer, and the copy in each scene is written from that
   beat. Scrolling the home page walks the same sequence the trailer plays.

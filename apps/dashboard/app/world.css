@@ -79,6 +79,28 @@
 }
 
 /* Calmer surfaces (account area) push the video further back. */
+/* The logged-in character scene. The account area dims the film for
+   legibility, so the scene still stands as a visible panel on the right,
+   fading into the page on the left. Same footage, its own moment. */
+.world__scene {
+  display: none;
+}
+.world--calm .world__scene {
+  display: block;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(64%, 780px);
+  background-size: cover;
+  background-position: center 28%;
+  background-repeat: no-repeat;
+  opacity: 0.75;
+  filter: saturate(1.12) contrast(1.03);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 38%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 38%);
+  pointer-events: none;
+}
 .world--calm .world__video {
   filter: saturate(0.92) contrast(1.02) brightness(0.6);
 }
