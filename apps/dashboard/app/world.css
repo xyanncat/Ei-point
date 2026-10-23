@@ -167,10 +167,11 @@
 
 .world-title {
   font-family: var(--k-font-display);
-  font-weight: 600;
-  font-size: clamp(2rem, 5.2vw, 3.6rem);
-  line-height: 1.12;
-  letter-spacing: 0.01em;
+  font-weight: 400;
+  font-size: clamp(2.6rem, 7vw, 4.6rem);
+  line-height: 0.98;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   margin: 0 0 1rem;
   text-wrap: balance;
 }
@@ -454,10 +455,11 @@
 
 .hero__title {
   font-family: var(--k-font-display);
-  font-weight: 600;
-  font-size: clamp(2.4rem, 7.6vw, 5.4rem);
-  line-height: 1.04;
-  letter-spacing: 0.01em;
+  font-weight: 400;
+  font-size: clamp(3.4rem, 11vw, 8rem);
+  line-height: 0.94;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   margin: 0 0 1.4rem;
   text-shadow: 0 6px 40px rgba(9, 7, 10, 0.55);
 }
