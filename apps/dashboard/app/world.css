@@ -151,10 +151,12 @@
   display: inline-flex;
   align-items: center;
   gap: 0.6em;
+  font-family: var(--k-font-small);
+  font-weight: 500;
   font-size: 0.72rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--k-orchid);
+  color: var(--k-text);
   margin: 0 0 1rem;
 }
 
@@ -167,13 +169,17 @@
 
 .world-title {
   font-family: var(--k-font-display);
-  font-weight: 400;
-  font-size: clamp(2.6rem, 7vw, 4.6rem);
-  line-height: 0.98;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font-weight: 600;
+  font-size: clamp(1.9rem, 4.6vw, 3.1rem);
+  line-height: 1.08;
+  letter-spacing: 0.01em;
   margin: 0 0 1rem;
   text-wrap: balance;
+  background: linear-gradient(100deg, var(--k-gold) 0%, var(--k-orchid) 55%, var(--k-gold) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
 .world-title--sm {
@@ -455,13 +461,17 @@
 
 .hero__title {
   font-family: var(--k-font-display);
-  font-weight: 400;
-  font-size: clamp(3.4rem, 11vw, 8rem);
-  line-height: 0.94;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font-weight: 700;
+  font-size: clamp(2.2rem, 7.5vw, 4.8rem);
+  line-height: 1.02;
+  letter-spacing: 0.01em;
   margin: 0 0 1.4rem;
   text-shadow: 0 6px 40px rgba(9, 7, 10, 0.55);
+  background: linear-gradient(100deg, var(--k-gold) 0%, var(--k-orchid) 55%, var(--k-gold) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
 .hero__lede {
@@ -649,6 +659,11 @@
 .kinetic__inner {
   display: inline-block;
   will-change: transform;
+  background: linear-gradient(100deg, var(--k-gold) 0%, var(--k-orchid) 55%, var(--k-gold) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
 .scroll-progress {
@@ -703,8 +718,9 @@
   gap: 1rem;
   padding-top: 0.9rem;
   border-top: 1px solid rgba(199, 171, 122, 0.16);
+  font-family: var(--k-font-small);
   font-size: 0.85rem;
-  color: var(--k-dim);
+  color: var(--k-text);
 }
 
 .world-card__price {
@@ -714,10 +730,12 @@
 }
 
 .world-card__tag {
+  font-family: var(--k-font-small);
+  font-weight: 500;
   font-size: 0.68rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--k-orchid);
+  color: var(--k-text);
 }
 
 /* ------------------------------------------------------------- footer -- */
@@ -743,10 +761,12 @@
 }
 
 .ei-site-footer h2 {
+  font-family: var(--k-font-small);
+  font-weight: 500;
   font-size: 0.78rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--k-dim);
+  color: var(--k-text);
   margin: 0 0 0.9rem;
 }
 
@@ -931,10 +951,12 @@
 }
 
 .world-field > span {
+  font-family: var(--k-font-small);
+  font-weight: 500;
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--k-dim);
+  color: var(--k-text);
 }
 
 .world-field input,
@@ -970,11 +992,12 @@
 }
 
 .world-table th {
+  font-family: var(--k-font-small);
   font-size: 0.72rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--k-dim);
-  font-weight: 600;
+  color: var(--k-text);
+  font-weight: 500;
 }
 
 .world-table tbody tr { transition: background var(--k-dur-fast) var(--k-ease); }

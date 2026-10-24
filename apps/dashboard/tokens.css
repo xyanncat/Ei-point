@@ -31,9 +31,11 @@
   --k-warn: #e4b45c;
   --k-bad: #ff8f8f;
 
-  /* typography — Bebas carries the trailer-poster display voice, Manrope the UI */
+  /* typography — Unbounded carries the stylish display voice in theme
+     colours, Space Grotesk the small labels in white, Manrope the body */
   --k-font-ui: "Manrope Variable", "Manrope", "Segoe UI", system-ui, sans-serif;
-  --k-font-display: "Bebas Neue", "Arial Narrow", "Impact", sans-serif;
+  --k-font-display: "Unbounded Variable", "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --k-font-small: "Space Grotesk Variable", "Space Grotesk", "Segoe UI", system-ui, sans-serif;
   --k-text-s: 0.82rem;
   --k-text-m: 0.92rem;
   --k-text-body: 0.9375rem;

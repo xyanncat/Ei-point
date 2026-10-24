@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import "./globals.css";
-import "@fontsource/bebas-neue";
+import "@fontsource-variable/unbounded";
+import "@fontsource-variable/space-grotesk";
 import "@fontsource-variable/manrope";
 import { SiteFrame } from "../components/site-frame";
 
