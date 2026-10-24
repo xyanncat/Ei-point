@@ -43,6 +43,18 @@ export const SECTION_GROUPS: { label: string; items: { id: string; label: string
     ],
   },
   {
+    label: "TTS setup",
+    items: [{ id: "tts", label: "Setup" }],
+  },
+  {
+    label: "Chatbot setup",
+    items: [{ id: "chatbot", label: "Setup" }],
+  },
+  {
+    label: "Music setup",
+    items: [{ id: "music", label: "Setup" }],
+  },
+  {
     label: "Ticket system",
     items: [
       { id: "ticket", label: "Ticket" },
@@ -508,6 +520,116 @@ function syncSectionParam(id: string) {
   window.history.replaceState(null, "", url.toString());
 }
 
+/** TTS setup: voice and model switches of every AI-capable bot in the server. */
+function TtsSetup({
+  guildId,
+  cards,
+  canOperate,
+}: {
+  guildId: string;
+  cards: BotCard[];
+  canOperate: boolean;
+}) {
+  const voice = cards.filter((card) => (card.modules ?? []).includes("ai"));
+  if (!voice.length) {
+    return (
+      <Panel title="TTS setup" detail="Voice and model switches.">
+        <Empty
+          title="No voice bot here"
+          detail="No bot in this server carries the AI voice module yet."
+        />
+      </Panel>
+    );
+  }
+  return (
+    <>
+      {voice.map((card) => (
+        <div key={card.botKey} style={{ marginBottom: "1.2rem" }}>
+          <BotStatePanel guildId={guildId} botKey={card.botKey} canOperate={canOperate} />
+          <div style={{ marginTop: "1.2rem" }}>
+            <ModuleConfig guildId={guildId} modules={["ai"]} canOperate={canOperate} />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** Chatbot setup: who may use the chatbots and what they may run. */
+function ChatbotSetup({
+  guildId,
+  cards,
+  canOperate,
+}: {
+  guildId: string;
+  cards: BotCard[];
+  canOperate: boolean;
+}) {
+  const brains = cards.filter((card) => (card.modules ?? []).includes("ai"));
+  if (!brains.length) {
+    return (
+      <Panel title="Chatbot setup" detail="Who may use the chatbots.">
+        <Empty
+          title="No chatbot here"
+          detail="No bot in this server carries the AI module yet."
+        />
+      </Panel>
+    );
+  }
+  return (
+    <>
+      {brains.map((card) => (
+        <div key={card.botKey} style={{ marginBottom: "1.2rem" }}>
+          <BotStatePanel guildId={guildId} botKey={card.botKey} canOperate={canOperate} />
+          <div style={{ marginTop: "1.2rem" }}>
+            <CommandPermissionsPanel guildId={guildId} botKey={card.botKey} canOperate={canOperate} />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** Music setup: state and permissions of every music bot in the server. */
+function MusicSetup({
+  guildId,
+  cards,
+  canOperate,
+}: {
+  guildId: string;
+  cards: BotCard[];
+  canOperate: boolean;
+}) {
+  const players = cards.filter((card) => (card.modules ?? []).includes("music"));
+  if (!players.length) {
+    return (
+      <Panel title="Music setup" detail="Music bots in this server.">
+        <Empty
+          title="No music bot here"
+          detail="No bot in this server carries the music module yet."
+        />
+      </Panel>
+    );
+  }
+  return (
+    <>
+      {players.map((card) => (
+        <div key={card.botKey} style={{ marginBottom: "1.2rem" }}>
+          <BotStatePanel guildId={guildId} botKey={card.botKey} canOperate={canOperate} />
+          <div style={{ marginTop: "1.2rem" }}>
+            <CommandPermissionsPanel guildId={guildId} botKey={card.botKey} canOperate={canOperate} />
+          </div>
+        </div>
+      ))}
+      <Panel title="Tuning" detail="Playback tuning.">
+        <p className="sf-dim">
+          Music bots expose no tunable settings — queue and session behaviour is fixed per bot.
+        </p>
+      </Panel>
+    </>
+  );
+}
+
 /** One server's full workspace: section tabs plus the active section. */
 export function ServerWorkspace({
   guildId,
@@ -593,6 +715,15 @@ export function ServerWorkspace({
             detail="Greetings, farewells and level-up notes for this server."
             canOperate={canOperate}
           />
+        ) : null}
+        {section === "tts" ? (
+          <TtsSetup guildId={guildId} cards={cards} canOperate={canOperate} />
+        ) : null}
+        {section === "chatbot" ? (
+          <ChatbotSetup guildId={guildId} cards={cards} canOperate={canOperate} />
+        ) : null}
+        {section === "music" ? (
+          <MusicSetup guildId={guildId} cards={cards} canOperate={canOperate} />
         ) : null}
         {section === "automod" ? (
           <ModuleGate
