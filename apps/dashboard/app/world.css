@@ -551,44 +551,35 @@
 /* --------------------------------------------------------------- page -- */
 
 /* A single column of content floating over the film.
-   The copy carries its own soft wash: a straight fade that can never draw a
-   visible edge or blob, no matter how bright the frame behind it gets. The
-   right side of the frame stays fully open. */
+   No boxes anywhere: readability comes from soft shadows under the type
+   itself, so there is never a rectangle edge on screen. The frame stays
+   fully open on every side. */
 .world-page {
   position: relative;
   max-width: 62rem;
   margin-inline: auto;
 }
 
-.world-page::before,
-.scene__inner::before,
-.hero__inner::before {
-  content: "";
-  position: absolute;
-  inset: -6vh 0 -6vh 0;
-  z-index: -1;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    rgba(10, 7, 12, 0.72) 0%,
-    rgba(10, 7, 12, 0.52) 36%,
-    rgba(10, 7, 12, 0.2) 60%,
-    transparent 84%
-  );
+.world-page .world-lede,
+.world-page .prose p,
+.world-page .prose li,
+.world-page .world-note,
+.scene__inner .world-lede,
+.hero__inner .hero__lede {
+  text-shadow:
+    0 1px 2px rgba(9, 7, 10, 0.9),
+    0 2px 18px rgba(9, 7, 10, 0.75);
 }
 
-@media (max-width: 820px) {
-  .world-page::before,
-  .scene__inner::before,
-  .hero__inner::before {
-    inset: -4vh 0 -4vh 0;
-    background: linear-gradient(
-      180deg,
-      rgba(10, 7, 12, 0.62) 0%,
-      rgba(10, 7, 12, 0.38) 55%,
-      transparent 92%
-    );
-  }
+.world-eyebrow,
+.scene__inner .world-eyebrow,
+.hero__inner .world-eyebrow {
+  text-shadow: 0 1px 10px rgba(9, 7, 10, 0.9);
+}
+
+.world-title,
+.hero__title {
+  filter: drop-shadow(0 3px 16px rgba(9, 7, 10, 0.65));
 }
 
 @media (max-width: 640px) {
