@@ -551,9 +551,9 @@
 /* --------------------------------------------------------------- page -- */
 
 /* A single column of content floating over the film.
-   The copy carries its own soft scrim: the frame stays clean and visible on
-   the right, and the type keeps its contrast on the left even when the film
-   goes bright. */
+   The copy carries its own soft wash: a straight fade that can never draw a
+   visible edge or blob, no matter how bright the frame behind it gets. The
+   right side of the frame stays fully open. */
 .world-page {
   position: relative;
   max-width: 62rem;
@@ -568,12 +568,12 @@
   inset: -6vh 0 -6vh 0;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(
-    68% 58% at 28% 50%,
-    rgba(10, 7, 12, 0.88) 0%,
-    rgba(10, 7, 12, 0.7) 40%,
-    rgba(10, 7, 12, 0.26) 66%,
-    transparent 88%
+  background: linear-gradient(
+    90deg,
+    rgba(10, 7, 12, 0.72) 0%,
+    rgba(10, 7, 12, 0.52) 36%,
+    rgba(10, 7, 12, 0.2) 60%,
+    transparent 84%
   );
 }
 
@@ -582,12 +582,11 @@
   .scene__inner::before,
   .hero__inner::before {
     inset: -4vh 0 -4vh 0;
-    background: radial-gradient(
-      92% 62% at 32% 50%,
-      rgba(10, 7, 12, 0.9) 0%,
-      rgba(10, 7, 12, 0.76) 44%,
-      rgba(10, 7, 12, 0.34) 72%,
-      transparent 94%
+    background: linear-gradient(
+      180deg,
+      rgba(10, 7, 12, 0.62) 0%,
+      rgba(10, 7, 12, 0.38) 55%,
+      transparent 92%
     );
   }
 }
