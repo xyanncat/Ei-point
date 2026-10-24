@@ -889,6 +889,40 @@
   box-shadow: 0 6px 20px rgba(125, 40, 86, 0.4);
 }
 
+/* Server tabs: buttons wearing the same pill, with a sliding active mark. */
+.world-tabs button.world-tab {
+  position: relative;
+  padding: 0.55rem 1.05rem;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--k-dim);
+  background: transparent;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--k-dur-fast) var(--k-ease);
+}
+
+.world-tabs button.world-tab:hover { color: var(--k-text); }
+.world-tabs button.world-tab[aria-selected="true"] { color: var(--k-text); }
+
+.world-tab__pill {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: linear-gradient(120deg, rgba(125, 40, 86, 0.85), rgba(93, 29, 64, 0.85));
+  box-shadow: 0 6px 20px rgba(125, 40, 86, 0.4);
+}
+
+.world-tab__label { position: relative; }
+
+@media (prefers-reduced-motion: reduce) {
+  .world-tabs button.world-tab[aria-selected="true"] {
+    background: linear-gradient(120deg, rgba(125, 40, 86, 0.85), rgba(93, 29, 64, 0.85));
+  }
+}
+
 /* --------------------------------------------------------------- forms -- */
 
 .world-field {
