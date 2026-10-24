@@ -12,7 +12,13 @@ import {
   type ReactNode,
 } from "react";
 import type { GuildInfo, Role } from "@ei-point/contracts";
-import { api, ApiError, type AccountResponse } from "../../lib/api";
+import {
+  api,
+  ApiError,
+  getRolePreview,
+  setRolePreview,
+  type AccountResponse,
+} from "../../lib/api";
 
 type Boot = "loading" | "login" | "ready" | "failed";
 
@@ -25,9 +31,14 @@ interface StaffValue {
   guildName: string;
   demo: boolean;
   isAdmin: boolean;
-  /** user | admin | master. Master outranks admin. */
+  /** Effective role: the segment under test. Master outranks admin. */
   role: Role;
   isMaster: boolean;
+  /** The real identity behind a preview. Only ever "master" when set. */
+  realRole: Role;
+  /** The segment under test, or null for the real view. Master only. */
+  preview: "user" | "admin" | null;
+  setPreview: (next: "user" | "admin" | null) => void;
   error: string;
   reference: string;
   retry: () => void;
@@ -51,6 +62,8 @@ export function StaffProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [role, setRole] = useState<Role>("user");
   const [isMaster, setIsMaster] = useState(false);
+  const [realRole, setRealRole] = useState<Role>("user");
+  const [preview, setPreviewState] = useState<"user" | "admin" | null>(null);
   const [error, setError] = useState("");
   const [reference, setReference] = useState("");
 
@@ -59,12 +72,23 @@ export function StaffProvider({ children }: { children: ReactNode }) {
     setError("");
     setReference("");
     try {
-      const me = await api<AccountResponse & { demo?: boolean; isAdmin?: boolean; isMaster?: boolean; role?: Role }>("/api/auth/me");
+      const me = await api<
+        AccountResponse & {
+          demo?: boolean;
+          isAdmin?: boolean;
+          isMaster?: boolean;
+          role?: Role;
+          realRole?: Role;
+          preview?: "user" | "admin" | null;
+        }
+      >("/api/auth/me");
       setUser(me.user);
       setDemo(me.demo === true);
       setIsAdmin(me.isAdmin === true);
       setRole(me.role ?? (me.isAdmin === true ? "admin" : "user"));
       setIsMaster(me.isMaster === true || me.role === "master");
+      setRealRole(me.realRole ?? me.role ?? "user");
+      setPreviewState(me.preview ?? getRolePreview());
       const list = await api<{ guilds: GuildInfo[] }>("/api/guilds");
       setGuilds(list.guilds);
       const requested =
@@ -107,8 +131,7 @@ export function StaffProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const logout = useCallback(async () => {
-    const token = await api<{ csrfToken: string }>("/api/auth/csrf");
+  const logout = useCallback(async () => {    const token = await api<{ csrfToken: string }>("/api/auth/csrf");
     await api("/api/auth/logout", {
       method: "POST",
       headers: { "x-csrf-token": token.csrfToken },
@@ -118,6 +141,15 @@ export function StaffProvider({ children }: { children: ReactNode }) {
     setGuilds([]);
     setGuild("");
   }, []);
+
+  const setPreview = useCallback(
+    (next: "user" | "admin" | null) => {
+      setRolePreview(next);
+      setPreviewState(next);
+      void initialize();
+    },
+    [initialize],
+  );
 
   const value = useMemo<StaffValue>(
     () => ({
@@ -131,12 +163,15 @@ export function StaffProvider({ children }: { children: ReactNode }) {
       isAdmin,
       role,
       isMaster,
+      realRole,
+      preview,
+      setPreview,
       error,
       reference,
       retry: () => void initialize(),
       logout,
     }),
-    [boot, user, guilds, guild, selectGuild, demo, isAdmin, role, isMaster, error, reference, initialize, logout],
+    [boot, user, guilds, guild, selectGuild, demo, isAdmin, role, isMaster, realRole, preview, setPreview, error, reference, initialize, logout],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -193,12 +193,23 @@ const server = http.createServer((req, res) => {
   if (path === "/readyz") return json(res, 200, { dbReady: true, status: "ok", demo: true });
   if (path === "/api/auth/me") {
     // The demo identity can wear any hat: DEMO_ROLE or ?role=user|admin|master.
-    const role = url.searchParams.get("role") ?? process.env.DEMO_ROLE ?? "master";
+    // It also honors the real preview header, so the master-only "View as"
+    // switcher can be walked locally: a master previewing as user|admin gets
+    // the effective role back, exactly like production.
+    const real = url.searchParams.get("role") ?? process.env.DEMO_ROLE ?? "master";
+    const asked = req.headers["x-ei-preview-role"];
+    const preview =
+      real === "master" && (asked === "user" || asked === "admin")
+        ? asked
+        : null;
+    const role = preview ?? real;
     return json(res, 200, {
       demo: true,
       role,
       isAdmin: role === "admin" || role === "master",
       isMaster: role === "master",
+      realRole: real,
+      preview,
       user: { id: "111111111111111111", name: "Demo staff" },
       expiresAt: new Date(Date.now() + 3600000).toISOString(),
     });
@@ -247,8 +258,14 @@ const server = http.createServer((req, res) => {
     return json(res, 200, {
       items: CATALOG.map(({ active, updatedAt, ...item }) => item),
     });
-  if (path === "/api/account/orders")
-    return json(res, 200, { orders: PURCHASE_LOGS, scope: "all" });
+  if (path === "/api/account/orders") {
+    const asked = req.headers["x-ei-preview-role"];
+    const scope = asked === "user" ? "own" : "all";
+    return json(res, 200, {
+      orders: scope === "own" ? PURCHASE_LOGS.slice(0, 1) : PURCHASE_LOGS,
+      scope,
+    });
+  }
   if (path === "/api/master/guilds") return json(res, 200, { guilds: MASTER_GUILDS });
   if (path === "/api/orders/verify") {
     if (["demo", "demo-verification-token"].includes(url.searchParams.get("token") ?? "")) {

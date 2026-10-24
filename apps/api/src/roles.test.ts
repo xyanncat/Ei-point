@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Roles } from "./roles.js";
+import { resolvePreview } from "./roles.js";
 import { DEFAULT_ADMIN_IDS, DEFAULT_MASTER_IDS } from "@ei-point/contracts";
 
 const ADMIN = DEFAULT_ADMIN_IDS[0];
@@ -49,4 +50,14 @@ test("a list of several identities is honoured", () => {
   assert.equal(roles.role(ADMIN), "admin");
   assert.equal(roles.role("123456789012345678"), "admin");
   assert.equal(roles.role(STRANGER), "user");
+});
+
+test("only the master can preview, and only downwards", () => {
+  assert.equal(resolvePreview("master", "admin"), "admin");
+  assert.equal(resolvePreview("master", "user"), "user");
+  assert.equal(resolvePreview("master", "master"), null);
+  assert.equal(resolvePreview("master", "owner"), null);
+  assert.equal(resolvePreview("master", undefined), null);
+  assert.equal(resolvePreview("admin", "user"), null);
+  assert.equal(resolvePreview("user", "admin"), null);
 });

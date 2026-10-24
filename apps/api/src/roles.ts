@@ -44,3 +44,15 @@ export class Roles {
     return "user";
   }
 }
+
+/**
+ * Role preview for testing. The master — and only the master — may ask the
+ * API to treat them as a lower role, so every segment can be walked with one
+ * login. Downgrade-only: a master may preview as admin or user; anyone else
+ * gets nothing back, so previewing can never escalate. Master-only guards
+ * always check the real identity, never the preview.
+ */
+export function resolvePreview(real: Role, raw: unknown): Role | null {
+  if (real !== "master") return null;
+  return raw === "user" || raw === "admin" ? raw : null;
+}

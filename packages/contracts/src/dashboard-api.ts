@@ -398,6 +398,9 @@ export interface operations {
                         role: components["schemas"]["Role"];
                         isAdmin: boolean;
                         isMaster: boolean;
+                        realRole?: components["schemas"]["Role"];
+                        /** @description Master-only role preview under test (user|admin), otherwise null. */
+                        preview?: string | null;
                     };
                 };
             };

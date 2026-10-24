@@ -16,7 +16,7 @@ import { registerCommerceRoutes, maintainCommerce } from "./commerce-routes.js";
 import { registerControlRoutes } from "./control-routes.js";
 import { channelPermissions, canSendEmbed } from "./channel-permissions.js";
 import { registeredBotToken } from "@ei-point/flow";
-import { Roles } from "./roles.js";
+import { Roles, resolvePreview, type Role } from "./roles.js";
 
 type Query = (
   sql: string,
@@ -120,6 +120,19 @@ export function createApp(options: AppOptions = {}) {
     });
   const configured = () => secret.length >= 32 && csrfSecret.length >= 32;
   const roles = new Roles(env);
+  // Effective role for this request. The dashboard sends x-ei-preview-role
+  // when the master walks a lower segment; resolvePreview admits it only for
+  // the master and only downwards, so every other identity is unaffected.
+  const previewFor = (
+    headers: Record<string, string | string[] | undefined>,
+    id: string,
+  ): Role | null =>
+    resolvePreview(
+      roles.role(id),
+      Array.isArray(headers["x-ei-preview-role"])
+        ? headers["x-ei-preview-role"][0]
+        : headers["x-ei-preview-role"],
+    );
   const transaction = options.transaction ?? (async <T>(work: (query: Query) => Promise<T>): Promise<T> => {
     if (!pool) return work(query); // Injected query is used only by isolated tests.
     const client = await pool.connect();
@@ -235,6 +248,7 @@ export function createApp(options: AppOptions = {}) {
   }
   async function authorizedGuilds(
     s: Record<string, any>,
+    preview: Role | null,
   ): Promise<GuildInfo[]> {
     const deadline = AbortSignal.timeout(12000);
     const token = (options.decryptToken ?? decryptToken)(
@@ -247,8 +261,8 @@ export function createApp(options: AppOptions = {}) {
     if (guildRows.length === 0) return [];
     // The master identity is not filtered by Discord membership. It exists to
     // fix a misbehaving bot in any server, so it sees every approved server
-    // with full scope.
-    if (roles.isMaster(String(s.discord_user_id)))
+    // with full scope — unless it is previewing a lower segment.
+    if (!preview && roles.isMaster(String(s.discord_user_id)))
       return guildRows.map((g) => ({
         guildId: g.guild_id,
         name: g.name,
@@ -322,15 +336,17 @@ export function createApp(options: AppOptions = {}) {
     }
     return result;
   }
-  async function scoped(header: string | undefined, id: unknown) {
-    const s = await session(header);
+  async function scoped(headers: Record<string, string | string[] | undefined>, id: unknown) {
+    const cookie = headers.cookie;
+    const s = await session(Array.isArray(cookie) ? cookie[0] : cookie);
     if (!snowflake(id))
       throw new HttpError(
         400,
         "guild-required",
         "Choose a server to continue.",
       );
-    const g = (await authorizedGuilds(s)).find((g) => g.guildId === id);
+    const preview = previewFor(headers, String(s.discord_user_id));
+    const g = (await authorizedGuilds(s, preview)).find((g) => g.guildId === id);
     if (!g)
       throw new HttpError(
         403,
@@ -482,11 +498,16 @@ export function createApp(options: AppOptions = {}) {
   app.get("/api/auth/me", async (req) => {
     const s = await session(req.headers.cookie);
     const id = String(s.discord_user_id);
+    const real = roles.role(id);
+    const preview = previewFor(req.headers, id);
+    const role = preview ?? real;
     return {
       user: { id, name: s.display_name },
-      role: roles.role(id),
-      isAdmin: roles.isAdmin(id),
-      isMaster: roles.isMaster(id),
+      role,
+      isAdmin: role === "admin" || role === "master",
+      isMaster: role === "master",
+      realRole: real,
+      preview,
       expiresAt: new Date(s.expires_at).toISOString(),
     };
   });
@@ -509,20 +530,26 @@ export function createApp(options: AppOptions = {}) {
       .header("Set-Cookie", `ei_session=; ${cookieAttrs} Max-Age=0`)
       .send({ ok: true });
   });
-  app.get("/api/guilds", async (req) => ({
-    guilds: await authorizedGuilds(await session(req.headers.cookie)),
-  }));
+  app.get("/api/guilds", async (req) => {
+    const s = await session(req.headers.cookie);
+    return {
+      guilds: await authorizedGuilds(
+        s,
+        previewFor(req.headers, String(s.discord_user_id)),
+      ),
+    };
+  });
   app.get<{ Querystring: { guildId?: string } }>(
     "/api/services",
     async (req) => {
-      const g = await scoped(req.headers.cookie, req.query.guildId);
+      const g = await scoped(req.headers, req.query.guildId);
       return services(g.guildId);
     },
   );
   app.get<{ Querystring: { guildId?: string } }>(
     "/api/overview",
     async (req) => {
-      const g = await scoped(req.headers.cookie, req.query.guildId),
+      const g = await scoped(req.headers, req.query.guildId),
         data = await services(g.guildId);
       const canSecurity =
         g.scopes?.includes("*") || g.scopes?.includes("security");
@@ -578,7 +605,8 @@ export function createApp(options: AppOptions = {}) {
   app.get("/api/account/orders", async (req) => {
     const s = await session(req.headers.cookie);
     const id = String(s.discord_user_id);
-    const elevated = roles.isAdmin(id);
+    const preview = previewFor(req.headers, id);
+    const elevated = preview ? preview === "admin" : roles.isAdmin(id);
     const rows = await query(
       `SELECT o.public_id AS "orderId", o.buyer_id AS "buyerId", o.sku,
               o.service_name AS "serviceName", o.amount_minor AS "amountMinor",
@@ -634,11 +662,16 @@ export function createApp(options: AppOptions = {}) {
     const timer=setInterval(()=>{if(maintaining)return;maintaining=true;void maintainCommerce(query).catch(()=>app.log.error("commerce maintenance failed")).finally(()=>{maintaining=false;});},60000);
     timer.unref();app.addHook("onClose",async()=>{clearInterval(timer);});
   }
-  const administrator = async (req: {headers:{cookie?:string|undefined}}) => {
+  const administrator = async (req: {headers:{cookie?:string|undefined} & Record<string, string | string[] | undefined>}) => {
     const s = await session(req.headers.cookie);
-    if (!roles.isAdmin(String(s.discord_user_id)))
+    const id = String(s.discord_user_id);
+    const preview = previewFor(req.headers, id);
+    // A master previewing as admin keeps admin access; previewing as a user
+    // drops it, exactly like the segment under test. Master-only guards use
+    // master() and never consult the preview.
+    if (preview ? preview !== "admin" : !roles.isAdmin(id))
       throw new HttpError(403,"admin-required","This action requires a configured Ei point administrator.");
-    return {userId:String(s.discord_user_id)};
+    return {userId:id};
   };
   const master = async (req: {headers:{cookie?:string|undefined}}) => {
     const s = await session(req.headers.cookie);
@@ -650,7 +683,7 @@ export function createApp(options: AppOptions = {}) {
     try{const s=await session(req.headers.cookie);return {discordUserId:String(s.discord_user_id)};}
     catch(e){if(e instanceof HttpError)return null;throw e;}
   },authorize:async(req,guildId) => {
-    const s=await session(req.headers.cookie),g=await scoped(req.headers.cookie,guildId);
+    const s=await session(req.headers.cookie),g=await scoped(req.headers,guildId);
     if(!g.scopes?.some(scope=>scope==="*"||scope==="commerce"||scope==="commerce-settle")) throw new HttpError(403,"scope-denied","Your role cannot manage orders for this server.");
     return {userId:String(s.discord_user_id),isAdmin:g.scopes.includes("*")||g.scopes.includes("commerce-settle")};
   }});
@@ -669,7 +702,7 @@ export function createApp(options: AppOptions = {}) {
   },authorize:async(req,guildId,scope,module) => {
     if(scope==="master") return master(req);
     if(scope==="admin") return administrator(req);
-    const s=await session(req.headers.cookie),g=await scoped(req.headers.cookie,guildId);
+    const s=await session(req.headers.cookie),g=await scoped(req.headers,guildId);
     if((scope==="operate" || module) && !g.scopes?.some(value=>value==="*"||(module && value===module))) throw new HttpError(403,"scope-denied","Your role cannot access these server controls.");
     return {userId:String(s.discord_user_id)};
   }});

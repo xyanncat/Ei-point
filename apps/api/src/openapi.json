@@ -56,6 +56,16 @@
                     },
                     "isMaster": {
                       "type": "boolean"
+                    },
+                    "realRole": {
+                      "$ref": "#/components/schemas/Role"
+                    },
+                    "preview": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Master-only role preview under test (user|admin), otherwise null."
                     }
                   }
                 }

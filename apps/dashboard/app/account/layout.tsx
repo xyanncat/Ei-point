@@ -16,7 +16,7 @@ import "../../components/staff/staff.css";
 
 function AccountTabs() {
   const path = usePathname();
-  const { role, isAdmin, isMaster } = useStaff();
+  const { role, isAdmin, isMaster, realRole, preview, setPreview } = useStaff();
   const tabs = [
     { href: "/account/servers", label: "Servers" },
     ...(isAdmin || isMaster
@@ -26,21 +26,55 @@ function AccountTabs() {
   ];
   const active = (href: string) =>
     path === href || (href === "/account/servers" && path === "/account");
+  // Testing switch. Rendered for the master identity alone: walk the admin
+  // and user segments with one login. The API enforces the preview too, so
+  // the data on screen is the data that segment really gets.
+  const segments = ["master", "admin", "user"] as const;
   return (
-    <nav className="world-tabs" aria-label="Account sections">
-      {tabs.map((tab) => (
-        <Link
-          key={tab.href}
-          href={tab.href}
-          aria-current={active(tab.href) ? "page" : undefined}
-        >
-          {tab.label}
-        </Link>
-      ))}
-      <span className={`world-pill${isMaster ? " world-pill--master" : isAdmin ? " world-pill--admin" : ""}`}>
-        {role}
-      </span>
-    </nav>
+    <>
+      <nav className="world-tabs" aria-label="Account sections">
+        {tabs.map((tab) => (
+          <Link
+            key={tab.href}
+            href={tab.href}
+            aria-current={active(tab.href) ? "page" : undefined}
+          >
+            {tab.label}
+          </Link>
+        ))}
+        <span className={`world-pill${isMaster ? " world-pill--master" : isAdmin ? " world-pill--admin" : ""}`}>
+          {role}
+        </span>
+      </nav>
+      {realRole === "master" ? (
+        <div className="world-row" role="group" aria-label="Test the account as another segment">
+          <span className="world-note">View as</span>
+          {segments.map((segment) => {
+            const selected =
+              (preview ?? "master") === segment;
+            return (
+              <button
+                key={segment}
+                type="button"
+                className="icon-button"
+                aria-pressed={selected}
+                onClick={() =>
+                  setPreview(segment === "master" ? null : segment)
+                }
+              >
+                {segment === "master" ? "Master" : segment === "admin" ? "Admin" : "User"}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      {preview ? (
+        <p className="world-note" role="status">
+          Previewing as {preview}. The screens and the data match that
+          segment; master controls stay out of reach until you switch back.
+        </p>
+      ) : null}
+    </>
   );
 }
 
