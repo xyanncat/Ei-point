@@ -394,10 +394,21 @@
 .sf-sections { display: grid; gap: 1rem; margin-bottom: 1.4rem; }
 .sf-section-group { display: grid; gap: 0.45rem; }
 .sf-section-label { margin: 0; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.16em; color: var(--sf-dim); }
-/* ---- inside a server block ---- */
+/* ---- inside a server block: sidebar nav left, content right ---- */
 .sf-server-inside { display: grid; gap: 0.4rem; }
 .sf-server-inside__head { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
 .sf-server-inside__title { margin: 0; font-size: 1.35rem; letter-spacing: 0.01em; }
+.sf-workspace-layout { display: grid; grid-template-columns: 17.5rem minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+.sf-workspace-side { position: sticky; top: 1rem; }
+.sf-workspace-side .sf-sections { margin-bottom: 0; }
+.sf-workspace-side .world-tabs { flex-direction: column; align-items: stretch; border-radius: 18px; width: 100%; }
+.sf-workspace-side .world-tab { display: flex; text-align: left; justify-content: flex-start; }
+.sf-workspace-main { min-width: 0; }
+.sf-workspace-note { grid-column: 1 / -1; }
+@media (max-width: 900px) {
+  .sf-workspace-layout { grid-template-columns: 1fr; }
+  .sf-workspace-side { position: static; }
+}
 @media (prefers-reduced-motion: reduce) {
   .sf-card { transition: none; }
   .sf-server-box { transition: none; }

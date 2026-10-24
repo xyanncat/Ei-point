@@ -666,8 +666,11 @@ export function ServerWorkspace({
   }
 
   return (
-    <>
-      <SectionNav section={section} onSelect={selectSection} />
+    <div className="sf-workspace-layout">
+      <div className="sf-workspace-side">
+        <SectionNav section={section} onSelect={selectSection} />
+      </div>
+      <div className="sf-workspace-main">
       <section aria-label={`${guildName || "Server"} workspace`}>
         {section === "overview" ? (
           <OverviewSection
@@ -768,13 +771,14 @@ export function ServerWorkspace({
         ) : null}
         {GAPS[section] ? <Gap title={section} /> : null}
       </section>
-      <p className="world-note" style={{ marginTop: "1.2rem" }}>
+      </div>
+      <p className="world-note sf-workspace-note" style={{ marginTop: "1.2rem" }}>
         Signed in with {role} access to {guildName || "this server"}.{" "}
         {isMaster
           ? "As the master account you see every approved server and no bot can refuse your commands."
           : "Everything here applies to this server only."}
       </p>
-    </>
+      </div>
   );
 }
 
