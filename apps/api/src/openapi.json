@@ -881,6 +881,13 @@
           "approved": {
             "type": "boolean"
           },
+          "icon": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Discord CDN icon hash for this guild, when Discord shares one."
+          },
           "scopes": {
             "type": "array",
             "items": {

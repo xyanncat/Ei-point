@@ -11,6 +11,40 @@ import { useOverview } from "../../../components/staff/use-overview";
 import { PageHeader, Empty } from "../../../components/staff/ui";
 import { ServerWorkspace } from "../../../components/account/server-sections";
 
+function guildIconUrl(guildId: string, icon: string | null | undefined) {
+  if (!icon) return null;
+  const animated = icon.startsWith("a_");
+  const hash = animated ? icon.slice(2) : icon;
+  if (!/^[0-9a-f]{32}$/i.test(hash)) return null;
+  const extension = animated ? "gif" : "webp";
+  return `https://cdn.discordapp.com/icons/${encodeURIComponent(guildId)}/${icon}.${extension}?size=128`;
+}
+
+function ServerIcon({ guildId, name, icon }: { guildId: string; name: string; icon?: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const url = failed ? null : guildIconUrl(guildId, icon);
+  if (!url) {
+    return (
+      <span className="sf-server-box__mark" aria-hidden="true">
+        {name.charAt(0).toUpperCase()}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={url}
+      alt=""
+      width={56}
+      height={56}
+      loading="lazy"
+      decoding="async"
+      draggable={false}
+      className="sf-server-box__icon"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export default function ServersPage() {
   const { guilds, guild, setGuild, guildName, role, isAdmin, isMaster } = useStaff();
   const { data, busy, error, refresh } = useOverview();
@@ -74,11 +108,16 @@ export default function ServersPage() {
                   className="sf-server-box"
                   onClick={() => openServer(entry.guildId)}
                 >
-                  <span className="sf-server-box__mark" aria-hidden="true">
-                    {entry.name.charAt(0).toUpperCase()}
+                  <ServerIcon guildId={entry.guildId} name={entry.name} icon={entry.icon} />
+                  <span className="sf-server-box__body">
+                    <span className="sf-server-box__name">{entry.name}</span>
+                    <span className="sf-server-box__hint">
+                      {(entry.scopes ?? []).includes("*") ? "Full access" : "Configured access"}
+                    </span>
                   </span>
-                  <span className="sf-server-box__name">{entry.name}</span>
-                  <span className="sf-server-box__hint">Open</span>
+                  <span className="sf-server-box__chevron" aria-hidden="true">
+                    →
+                  </span>
                 </button>
               ))}
             </div>

@@ -53,6 +53,8 @@ export interface GuildInfo {
   guildId: string;
   name: string;
   approved: boolean;
+  /** Discord CDN icon hash, when Discord shares one. */
+  icon?: string | null;
   scopes?: string[];
 }
 

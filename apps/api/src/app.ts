@@ -253,6 +253,7 @@ export function createApp(options: AppOptions = {}) {
         guildId: g.guild_id,
         name: g.name,
         approved: true,
+        icon: null,
         scopes: ["*"],
       }));
     const memberships: Record<string, any>[] = [];
@@ -315,6 +316,7 @@ export function createApp(options: AppOptions = {}) {
           guildId: g.guild_id,
           name: g.name,
           approved: true,
+          icon: typeof membership.icon === "string" ? membership.icon : null,
           scopes,
         });
     }

@@ -250,6 +250,8 @@ export interface components {
             guildId: string;
             name: string;
             approved: boolean;
+            /** @description Discord CDN icon hash for this guild, when Discord shares one. */
+            icon?: string | null;
             scopes?: string[];
         };
         ErrorEnvelope: {
