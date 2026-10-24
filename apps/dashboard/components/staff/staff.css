@@ -378,6 +378,20 @@
 .sf-card__meta { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
 .sf-card__foot { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.15rem; }
 .sf-card__editor { grid-column: 1 / -1; }
+/* ---- server boxes: one square block per server ---- */
+.sf-server-grid { display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); margin-bottom: 1.4rem; }
+.sf-server-box { aspect-ratio: 1; display: grid; align-content: center; justify-items: center; gap: 0.5rem; padding: 1rem; border-radius: var(--sf-radius); border: 1px solid var(--sf-line-soft); background: color-mix(in srgb, var(--sf-surface) 62%, transparent); color: var(--sf-text); font: inherit; cursor: pointer; text-align: center; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); transition: border-color 160ms, transform 160ms, box-shadow 160ms; }
+.sf-server-box:hover { border-color: color-mix(in srgb, var(--sf-orchid) 55%, transparent); transform: translateY(-2px); }
+.sf-server-box[data-selected="true"] { border-color: var(--sf-orchid); box-shadow: 0 10px 28px rgba(125, 40, 86, 0.35); }
+.sf-server-box__mark { width: 3rem; height: 3rem; border-radius: 12px; display: grid; place-items: center; font-family: var(--k-font-display, serif); font-size: 1.5rem; color: var(--sf-text); background: linear-gradient(135deg, var(--sf-wine), color-mix(in srgb, var(--sf-orchid) 55%, transparent)); border: 1px solid color-mix(in srgb, var(--sf-orchid) 35%, transparent); }
+.sf-server-box__name { font-weight: 600; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.sf-server-box__hint { color: var(--sf-dim); font-size: 0.8rem; }
+
+/* ---- section nav inside a server block ---- */
+.sf-sections { display: grid; gap: 1rem; margin-bottom: 1.4rem; }
+.sf-section-group { display: grid; gap: 0.45rem; }
+.sf-section-label { margin: 0; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.16em; color: var(--sf-dim); }
 @media (prefers-reduced-motion: reduce) {
   .sf-card { transition: none; }
+  .sf-server-box { transition: none; }
 }

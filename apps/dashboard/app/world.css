@@ -925,7 +925,8 @@
 }
 
 .world-tabs button.world-tab:hover { color: var(--k-text); }
-.world-tabs button.world-tab[aria-selected="true"] { color: var(--k-text); }
+.world-tabs button.world-tab[aria-selected="true"],
+.world-tabs button.world-tab[aria-current="true"] { color: var(--k-text); }
 
 .world-tab__pill {
   position: absolute;
