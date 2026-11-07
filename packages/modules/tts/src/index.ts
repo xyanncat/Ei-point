@@ -148,13 +148,14 @@ export function createTtsQueue(opts: {
   const deadlineMs = opts.deadlineMs ?? TTS_DEADLINE_MS;
   if (!Number.isFinite(deadlineMs) || deadlineMs <= 0 || deadlineMs > TTS_DEADLINE_MS) throw new Error("Invalid TTS deadline");
   let active = 0;
-  const waiting: Array<() => void> = [];
+  type Waiting = { enqueuedAt: number; start: () => void };
+  const waiting: Waiting[] = [];
 
-  async function run(text: string, voice: string): Promise<TtsAudio> {
+  async function run(text: string, voice: string, remainingMs: number): Promise<TtsAudio> {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const timeout = new Promise<never>((_,reject) => {
-      timer=setTimeout(()=>{controller.abort();reject(new Error("deadline-exceeded"));},deadlineMs);
+      timer=setTimeout(()=>{controller.abort();reject(new Error("deadline-exceeded"));},remainingMs);
     });
     try {
       return await Promise.race([opts.synthesize(text, voice, controller.signal),timeout]);
@@ -169,12 +170,20 @@ export function createTtsQueue(opts: {
     if (active >= TTS_CONCURRENT && waiting.length >= TTS_QUEUE_MAX) {
       return { ok: false as const, reason: "queue-full" as const };
     }
+    const enqueuedAt = Date.now();
     if (active >= TTS_CONCURRENT) {
-      await new Promise<void>((resolve) => waiting.push(resolve));
+      await new Promise<void>((resolve) => waiting.push({ enqueuedAt, start: resolve }));
+    }
+    // Total deadline includes the queue wait (§6): work out what is left of
+    // the caller's budget now that a slot is free.
+    if (Date.now() - enqueuedAt >= deadlineMs) {
+      const next = waiting.shift();
+      if (next != null) next.start();
+      return { ok: false as const, reason: "all-failed" as const };
     }
     active++;
     try {
-      const audio = await run(validated.text, normalizeVoice(voice));
+      const audio = await run(validated.text, normalizeVoice(voice), deadlineMs - (Date.now() - enqueuedAt));
       return { ok: true as const, audio, cacheKey: ttsCacheKey(opts.provider, voice, validated.text) };
     } catch (error) {
       if (error instanceof Error && "code" in error && error.code === "TTS_QUEUE_FULL") {
@@ -184,7 +193,7 @@ export function createTtsQueue(opts: {
     } finally {
       active--;
       const next = waiting.shift();
-      if (next != null) next();
+      if (next != null) next.start();
     }
   }
 

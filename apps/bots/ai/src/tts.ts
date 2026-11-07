@@ -1,4 +1,12 @@
 // Cyrene TTS wiring: /speak, /tts, /leave, and /search.
+//
+// Provider selection (redesign infrastructure §6). The queue, caps, caching
+// key and error contract are unchanged; only "who synthesizes" moves.
+//   TTS_PROVIDER unset/empty/local -> POST TTS_URL {text,voice,format} -> WAV (host default)
+//   TTS_PROVIDER=google            -> Google Cloud Text-to-Speech -> MP3
+//   TTS_PROVIDER=openai            -> OpenAI-compatible /v1/audio/speech -> audio bytes
+// Remote providers never fall back to a local model silently; a failure is a
+// typed failure and the user gets a text answer, not a surprise process start.
 
 import { SlashCommandBuilder } from "discord.js";
 import type { Pool } from "pg";
@@ -6,9 +14,11 @@ import {
   createTtsQueue,
   normalizeVoice,
   validateTtsInput,
+  TTS_DEADLINE_MS,
   TTS_MAX_CHARS,
   type TtsSynthesizeFn,
 } from "@ei-point/module-tts";
+import { createFailureGate, fetchWithBoundedRetry, readBoundedBody } from "./http.js";
 
 export const ttsCommandDefinitions = [
   new SlashCommandBuilder()
@@ -37,13 +47,36 @@ export const ttsCommandDefinitions = [
     .addStringOption((opt) => opt.setName("query").setDescription("Search query").setRequired(true).setMaxLength(300)),
 ];
 
-const MAX_TTS_AUDIO_BYTES = 8 * 1024 * 1024;
+export const MAX_TTS_AUDIO_BYTES = 8 * 1024 * 1024;
 const WAV_MIME_TYPES = new Set(["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"]);
+// Formats a compressed provider may return; ffmpeg in the voice path decodes
+// them, and the bounded byte check applies identically.
+const PROVIDER_MIME_TYPES = new Set([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/ogg",
+  "audio/opus",
+  "audio/aac",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/wave",
+  "audio/vnd.wave",
+  "application/octet-stream",
+]);
 
-function makeTtsProvider(): TtsSynthesizeFn {
-  const apiUrl = process.env.TTS_URL ?? "http://127.0.0.1:3120/v1/audio/speech";
+/** One synthesis budget, queue wait included, capped at the module maximum. */
+export function ttsTotalDeadlineMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.TTS_TOTAL_DEADLINE_SECONDS?.trim();
+  if (!raw) return TTS_DEADLINE_MS;
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) return TTS_DEADLINE_MS;
+  return Math.min(Math.round(seconds * 1000), TTS_DEADLINE_MS);
+}
+
+function makeLocalTtsProvider(env: NodeJS.ProcessEnv, fetchFn: typeof fetch): TtsSynthesizeFn {
+  const apiUrl = env.TTS_URL ?? "http://127.0.0.1:3120/v1/audio/speech";
   return async (text, voice, signal) => {
-    const res = await fetch(apiUrl, {
+    const res = await fetchFn(apiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "audio/wav" },
       body: JSON.stringify({ text, voice, format: "wav" }),
@@ -63,33 +96,200 @@ function makeTtsProvider(): TtsSynthesizeFn {
       throw new Error("tts-audio-too-large");
     }
     if (!res.body) throw new Error("tts-empty-audio");
-    const reader = res.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_TTS_AUDIO_BYTES) {
-        await reader.cancel();
-        throw new Error("tts-audio-too-large");
-      }
-      chunks.push(value);
-    }
-    if (size === 0) throw new Error("tts-empty-audio");
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
+    const bytes = await readBoundedBody(res.body, MAX_TTS_AUDIO_BYTES, "tts-audio-too-large");
+    if (bytes.byteLength === 0) throw new Error("tts-empty-audio");
     return { mime: "audio/wav", bytes };
   };
 }
 
+/** Default voice for Google when the deployment does not set one. */
+export const GOOGLE_DEFAULT_VOICE = "en-US-Standard-C";
+
+/** `en-US-Chirp3-HD-Aoede` -> `en-US`; a bare locale passes through. */
+export function googleLanguageCode(voice: string): string {
+  const parts = voice.split("-");
+  if (parts.length >= 2 && parts[0]!.length === 2) return `${parts[0]}-${parts[1]}`;
+  return "en-US";
+}
+
+function makeGoogleTtsProvider(env: NodeJS.ProcessEnv, fetchFn: typeof fetch): TtsSynthesizeFn {
+  const apiKey = env.GOOGLE_TTS_API_KEY?.trim() ?? "";
+  const voiceName = env.GOOGLE_TTS_VOICE?.trim() || GOOGLE_DEFAULT_VOICE;
+  const gate = createFailureGate();
+  if (!apiKey) {
+    // Configured without a key is an operator error, not a user error: fail
+    // closed with a clear code, never fall back to the local process.
+    return async () => {
+      throw Object.assign(new Error("tts-provider-unconfigured"), { code: "TTS_UNCONFIGURED" });
+    };
+  }
+  return async (text, _voice, signal) => {
+    if (!gate.allow()) throw new Error("tts-provider-circuit-open");
+    let res: Response;
+    try {
+      res = await fetchWithBoundedRetry(
+        fetchFn,
+        "https://texttospeech.googleapis.com/v1/text:synthesize",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            // Header keeps the key out of URLs, which survive in logs.
+            "X-Goog-Api-Key": apiKey,
+          },
+          body: JSON.stringify({
+            input: { text },
+            voice: { languageCode: googleLanguageCode(voiceName), name: voiceName },
+            audioConfig: { audioEncoding: "MP3", sampleRateHertz: 24000 },
+          }),
+          signal,
+        },
+        { retryDelayMs: 750 },
+      );
+    } catch (error) {
+      gate.fail();
+      throw error;
+    }
+    if (res.status === 429) {
+      gate.fail();
+      throw Object.assign(new Error("tts-quota-exhausted"), { code: "TTS_QUOTA" });
+    }
+    if (!res.ok) {
+      gate.fail();
+      throw new Error(`tts-${res.status}`);
+    }
+    if (!res.body) {
+      gate.fail();
+      throw new Error("tts-empty-audio");
+    }
+    let payload: { audioContent?: unknown };
+    try {
+      const bytes = await readBoundedBody(res.body, 12 * 1024 * 1024, "tts-audio-too-large");
+      payload = JSON.parse(new TextDecoder().decode(bytes)) as { audioContent?: unknown };
+    } catch (error) {
+      gate.fail();
+      throw error;
+    }
+    if (typeof payload.audioContent !== "string" || payload.audioContent.length === 0) {
+      gate.fail();
+      throw new Error("tts-empty-audio");
+    }
+    // Base64 inflates by ~4/3; check before decoding so a hostile/unbounded
+    // response cannot allocate past the audio bound.
+    if (payload.audioContent.length > Math.ceil((MAX_TTS_AUDIO_BYTES * 4) / 3) + 4) {
+      gate.fail();
+      throw new Error("tts-audio-too-large");
+    }
+    const audio = Buffer.from(payload.audioContent, "base64");
+    if (audio.byteLength === 0) {
+      gate.fail();
+      throw new Error("tts-empty-audio");
+    }
+    if (audio.byteLength > MAX_TTS_AUDIO_BYTES) {
+      gate.fail();
+      throw new Error("tts-audio-too-large");
+    }
+    gate.ok();
+    return { mime: "audio/mpeg", bytes: new Uint8Array(audio) };
+  };
+}
+
+function makeOpenAiTtsProvider(env: NodeJS.ProcessEnv, fetchFn: typeof fetch): TtsSynthesizeFn {
+  const defaultUrl = "https://api.openai.com/v1/audio/speech";
+  const apiUrl = env.TTS_PROVIDER_URL?.trim() || defaultUrl;
+  const apiKey = env.TTS_PROVIDER_KEY?.trim() ?? "";
+  const model = env.TTS_PROVIDER_MODEL?.trim() || "tts-1";
+  const gate = createFailureGate();
+  return async (text, voice, signal) => {
+    if (!gate.allow()) throw new Error("tts-provider-circuit-open");
+    let res: Response;
+    try {
+      res = await fetchWithBoundedRetry(
+        fetchFn,
+        apiUrl,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg, audio/wav, audio/ogg",
+            ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+          },
+          body: JSON.stringify({ model, input: text, voice: normalizeVoice(voice), response_format: "mp3" }),
+          signal,
+        },
+        { retryDelayMs: 750 },
+      );
+    } catch (error) {
+      gate.fail();
+      throw error;
+    }
+    if (res.status === 429) {
+      gate.fail();
+      throw Object.assign(new Error("tts-quota-exhausted"), { code: "TTS_QUOTA" });
+    }
+    if (res.status === 404) {
+      // Wrong URL is an operator error, not an outage; keep it loud and distinct.
+      throw new Error("tts-provider-not-found");
+    }
+    if (!res.ok) {
+      gate.fail();
+      throw new Error(`tts-${res.status}`);
+    }
+    const mime = res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
+    if (!res.body) {
+      gate.fail();
+      throw new Error("tts-empty-audio");
+    }
+    const contentLength = Number(res.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > MAX_TTS_AUDIO_BYTES) {
+      await res.body.cancel().catch(() => {});
+      gate.fail();
+      throw new Error("tts-audio-too-large");
+    }
+    let bytes: Uint8Array;
+    try {
+      bytes = await readBoundedBody(res.body, MAX_TTS_AUDIO_BYTES, "tts-audio-too-large");
+    } catch (error) {
+      gate.fail();
+      throw error;
+    }
+    if (bytes.byteLength === 0) {
+      gate.fail();
+      throw new Error("tts-empty-audio");
+    }
+    gate.ok();
+    // Trust the header only when it names a known audio type; otherwise the
+    // bytes still went through the bounded read and ffmpeg will sniff them.
+    const resolved = PROVIDER_MIME_TYPES.has(mime) && mime !== "application/octet-stream" ? mime : "audio/mpeg";
+    return { mime: resolved as "audio/mpeg" | "audio/ogg" | "audio/wav", bytes };
+  };
+}
+
+/** Resolve the configured provider; local unless explicitly moved (fail closed). */
+export function makeTtsProvider(env: NodeJS.ProcessEnv = process.env, fetchFn: typeof fetch = fetch): TtsSynthesizeFn {
+  const provider = (env.TTS_PROVIDER ?? "local").trim().toLowerCase();
+  if (provider === "" || provider === "local") return makeLocalTtsProvider(env, fetchFn);
+  if (provider === "google") return makeGoogleTtsProvider(env, fetchFn);
+  if (provider === "openai") return makeOpenAiTtsProvider(env, fetchFn);
+  return async () => {
+    throw Object.assign(new Error("tts-provider-unknown"), { code: "TTS_UNCONFIGURED" });
+  };
+}
+
+/** Provider name used in cache keys and status; never in user-facing copy. */
+export function ttsProviderName(env: NodeJS.ProcessEnv = process.env): string {
+  const provider = (env.TTS_PROVIDER ?? "local").trim().toLowerCase();
+  if (provider === "" || provider === "local") return "pocket-local";
+  if (provider === "google") return "google-tts";
+  if (provider === "openai") return "openai-tts";
+  return "unconfigured";
+}
+
 const ttsQueue = createTtsQueue({
-  provider: "pocket-local",
+  provider: ttsProviderName(),
   synthesize: makeTtsProvider(),
+  deadlineMs: ttsTotalDeadlineMs(),
 });
 
 const TTS_VOICE_KEY = "tts.voice";
@@ -178,7 +378,9 @@ export async function respondToTtsCommand(
           ? "TTS service is at capacity. Try again shortly."
           : res.reason === "input-rejected"
             ? "That text was refused for safety."
-          : "Cyrene's local TTS service is not ready. Try again after service health recovers.",
+            : ttsProviderName() === "pocket-local"
+              ? "Cyrene's local TTS service is not ready. Try again after service health recovers."
+              : "Cyrene's voice service is temporarily unavailable. Please try again shortly.",
       );
       return true;
     }
@@ -190,7 +392,12 @@ export async function respondToTtsCommand(
 }
 
 export function ttsStatus() {
-  return { inFlight: ttsQueue.inFlight(), queued: ttsQueue.queued() };
+  return {
+    inFlight: ttsQueue.inFlight(),
+    queued: ttsQueue.queued(),
+    provider: ttsProviderName(),
+    local: ttsProviderName() === "pocket-local",
+  };
 }
 
 export async function synthesizeSpeech(text: string, guildId: string, pool: Pool): Promise<{ mime: string; bytes: Uint8Array }> {

@@ -70,9 +70,10 @@ async function drainCyreneQueue(session: CyreneVoiceSession): Promise<void> {
       const text = session.queue.shift()!;
       try {
         const voice = await import("@discordjs/voice");
-        // Pocket is fast enough to speak a short message in one request. Using
-        // one request avoids restarting its voice/prosody at every sentence;
-        // only over-limit messages fall back to bounded sentence chunks.
+        // One request per short message avoids restarting voice/prosody at
+        // every sentence; only over-limit messages fall back to bounded
+        // sentence chunks. The provider is configurable (local or remote);
+        // voice is applied by the adapter, so chunking is unchanged.
         const chunks = text.length <= TTS_CHUNK_CHARS ? [text] : splitSpeechChunks(text);
         const prefetch = (chunk: string) => {
           const task = synthesizeSpeech(chunk, session.guildId, pool);
@@ -461,7 +462,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         return;
       }
 
-      if (await respondToCommonCommand(interaction, "Cyrene", "Mention Cyrene in a text channel to chat. Use `/speak`, `/tts`, `/leave`, `/search`, or `/translate` for local voice and translation features.")) return;
+      if (await respondToCommonCommand(interaction, "Cyrene", "Mention Cyrene in a text channel to chat. Use `/speak`, `/tts`, `/leave`, `/search`, or `/translate` for voice and translation features.")) return;
 
       await interaction.deferReply();
       if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) {

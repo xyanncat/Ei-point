@@ -68,6 +68,22 @@ describe("provider router", () => {
     });
     assert.deepEqual(await r.ask([]), { ok: false, reason: "all-failed" });
   });
+
+  it("counts queue wait against the caller's deadline", { timeout: 10_000 }, async () => {
+    const slow = (_p: unknown, signal: AbortSignal) =>
+      new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
+    const r = createRouter({ primary: slow as never, fallback: slow as never, deadlineMs: 50 });
+    const actives = [r.ask([]), r.ask([])];
+    const queuedStart = Date.now();
+    const queued = await r.ask([]);
+    const elapsed = Date.now() - queuedStart;
+    assert.deepEqual(queued, { ok: false, reason: "all-failed" });
+    // Previously a queued caller came off the queue with a fresh
+    // primary+fallback window (≈3× the deadline); the shared budget bounds the
+    // total (wait + both attempts) to roughly one deadline.
+    assert.ok(elapsed < 3 * 50, `queued request took ${elapsed}ms for a 50ms budget`);
+    await Promise.all(actives);
+  });
 });
 
 describe("budgets", () => {

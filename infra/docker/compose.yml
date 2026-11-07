@@ -273,7 +273,13 @@ services:
       # Release manifests add the local TTS URL only when tts is part of that release.
       TTS_PROVIDER_URL: ${TTS_PROVIDER_URL:-}
       TTS_PROVIDER_KEY: ${TTS_PROVIDER_KEY:-}
-      TTS_PROVIDER_NAME: ${TTS_PROVIDER_NAME:-default}
+      # Remote AI providers (redesign infrastructure §6); unset = local models.
+      TTS_PROVIDER: ${TTS_PROVIDER:-}
+      GOOGLE_TTS_API_KEY: ${GOOGLE_TTS_API_KEY:-}
+      GOOGLE_TTS_VOICE: ${GOOGLE_TTS_VOICE:-}
+      TTS_TOTAL_DEADLINE_SECONDS: ${TTS_TOTAL_DEADLINE_SECONDS:-}
+      TRANSLATION_PROVIDER: ${TRANSLATION_PROVIDER:-}
+      GOOGLE_TRANSLATE_API_KEY: ${GOOGLE_TRANSLATE_API_KEY:-}
     volumes:
       - type: bind
         source: ${CYRENE_PERSONA_MEMORY_FILE:-../../.models/Cyrene_Chat_Roleplay_Memory.md}

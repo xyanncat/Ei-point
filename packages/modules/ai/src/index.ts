@@ -55,13 +55,14 @@ export function createRouter(opts: {
   const deadlineMs = opts.deadlineMs ?? AI_DEADLINE_MS;
   if (!Number.isFinite(deadlineMs) || deadlineMs <= 0 || deadlineMs > AI_DEADLINE_MS) throw new Error("Invalid AI deadline");
   let active = 0;
-  const waiting: Array<() => void> = [];
+  type Waiting = { enqueuedAt: number; start: () => void };
+  const waiting: Waiting[] = [];
 
-  async function runWith(provider: ProviderFn, prompt: ChatMessage[]): Promise<ProviderResult> {
+  async function runWith(provider: ProviderFn, prompt: ChatMessage[], budgetMs: number): Promise<ProviderResult> {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => { controller.abort(); reject(new Error("deadline-exceeded")); }, deadlineMs / 2);
+      timer = setTimeout(() => { controller.abort(); reject(new Error("deadline-exceeded")); }, budgetMs);
     });
     try {
       return await Promise.race([provider(prompt, controller.signal), timeout]);
@@ -70,20 +71,41 @@ export function createRouter(opts: {
     }
   }
 
+  /**
+   * The deadline is the CALLER's budget: queue wait counts, so a slot-holder
+   * either runs within what is left or passes its slot on (redesign
+   * infrastructure §6). The remainder is split evenly between the primary and
+   * fallback attempts; an attempt that fails early leaves its leftover to the
+   * other one, so the total never exceeds the stated deadline.
+   */
   async function ask(prompt: ChatMessage[]) {
     if (active >= AI_CONCURRENT && waiting.length >= AI_QUEUE_MAX) {
       return { ok: false as const, reason: "queue-full" as const };
     }
+    const enqueuedAt = Date.now();
     if (active >= AI_CONCURRENT) {
-      await new Promise<void>((resolve) => waiting.push(resolve));
+      await new Promise<void>((resolve) => waiting.push({ enqueuedAt, start: resolve }));
     }
+    const remaining = deadlineMs - (Date.now() - enqueuedAt);
+    if (remaining <= 0) {
+      const next = waiting.shift();
+      if (next != null) next.start();
+      return { ok: false as const, reason: "all-failed" as const };
+    }
+    const firstBudget = Math.ceil(remaining / 2);
     active++;
     try {
+      const firstStartedAt = Date.now();
       try {
-        const result = await runWith(opts.primary, prompt);
+        const result = await runWith(opts.primary, prompt, firstBudget);
         return { ok: true as const, result, via: "primary" as const };
       } catch {
-        const result = await runWith(opts.fallback, prompt);
+        // The leftover is what the primary did not use. A 1ms floor keeps an
+        // instant fallback usable even when the abort timer overshoots its
+        // stated budget (Windows timer resolution); a slow fallback still gets
+        // aborted at ~1ms, so the overshoot stays bounded.
+        const fallbackBudget = Math.max(1, remaining - (Date.now() - firstStartedAt));
+        const result = await runWith(opts.fallback, prompt, fallbackBudget);
         return { ok: true as const, result, via: "fallback" as const };
       }
     } catch {
@@ -91,7 +113,7 @@ export function createRouter(opts: {
     } finally {
       active--;
       const next = waiting.shift();
-      if (next != null) next();
+      if (next != null) next.start();
     }
   }
 
