@@ -13,6 +13,11 @@
 //   - logged-in sub-pages open on their own character scene of the same film
 //   - prefers-reduced-motion never plays the film: the scene still stands in
 //   - a hidden tab stops decoding; returning resumes
+//
+// Media paths come from components/media.ts, never from a literal here
+// (redesign infrastructure §5). Still mode attaches NO source and NO audio
+// element at all: suppressing playback is not the same as suppressing the
+// download, and the old code paid the bytes either way.
 import {
   createContext,
   useContext,
@@ -24,10 +29,11 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
+import { FILM_1080, FILM_540, SCENE_POSTERS, SOUNDTRACK } from "./media";
 
-const FILM_MP4 = "/media/film-1080.mp4";
-const FILM_MOBILE = "/media/film-540.mp4";
-const SOUNDTRACK_SRC = "/media/loop.mp3";
+const FILM_MP4 = FILM_1080;
+const FILM_MOBILE = FILM_540;
+const SOUNDTRACK_SRC = SOUNDTRACK;
 
 /** The soundtrack sits at 20%: present, never in front of the reading. */
 const BASE_VOLUME = 0.2;
@@ -46,7 +52,7 @@ type Scene = {
 };
 
 const DEFAULT_SCENE: Scene = {
-  poster: "/media/posters/ambient.jpg",
+  poster: SCENE_POSTERS.ambient,
   time: 0,
   label: "Ei point",
 };
@@ -55,31 +61,31 @@ const DEFAULT_SCENE: Scene = {
 function sceneForPath(pathname: string): Scene {
   if (pathname.startsWith("/account/services"))
     return {
-      poster: "/media/posters/ch4-stage.jpg",
+      poster: SCENE_POSTERS.stage,
       time: 60,
       label: "Services",
     };
   if (pathname.startsWith("/account/orders/"))
     return {
-      poster: "/media/posters/ch8-orb.jpg",
+      poster: SCENE_POSTERS.orb,
       time: 140,
       label: "Order detail",
     };
   if (pathname.startsWith("/account/orders"))
     return {
-      poster: "/media/posters/ch7-throne.jpg",
+      poster: SCENE_POSTERS.throne,
       time: 124,
       label: "Purchase logs",
     };
   if (pathname.startsWith("/account"))
     return {
-      poster: "/media/posters/ch3-starfield.jpg",
+      poster: SCENE_POSTERS.starfield,
       time: 42,
       label: "Servers",
     };
   if (pathname === "/login")
     return {
-      poster: "/media/posters/ch2-street.jpg",
+      poster: SCENE_POSTERS.street,
       time: 22,
       label: "Sign in",
     };
@@ -271,6 +277,20 @@ export function WorldProvider({
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [reduce, soundOn]);
 
+  // Bad media URLs degrade to scenery rather than to a broken player. The
+  // poster (already painted underneath) stays; nothing retries in a loop.
+  const [filmBroken, setFilmBroken] = useState(false);
+  useEffect(() => {
+    setFilmBroken(false);
+  }, [scene.time]);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || reduce) return;
+    const onError = () => setFilmBroken(true);
+    video.addEventListener("error", onError, true);
+    return () => video.removeEventListener("error", onError, true);
+  }, [reduce]);
+
   // The film never leaves the frame. As the reader moves down the page the
   // crop walks down the source and the picture grows very slightly, so the
   // site reads as one continuous shot rather than a looping background.
@@ -307,6 +327,11 @@ export function WorldProvider({
     [soundOn],
   );
 
+  // Still mode renders a poster and nothing else. No <video> without sources,
+  // no <audio>: the browser has nothing to fetch. `reduce` is the single
+  // decision point — reduced motion or a data-saver connection.
+  const still = reduce;
+
   return (
     <WorldContext.Provider value={value}>
       <div className={`world world--${tone}`} aria-hidden="true">
@@ -323,7 +348,7 @@ export function WorldProvider({
           loop
           playsInline
           autoPlay={!reduce}
-          preload="auto"
+          preload={still || filmBroken ? "none" : "auto"}
           style={
             reduce
               ? undefined
@@ -334,8 +359,15 @@ export function WorldProvider({
                 } as never)
           }
         >
-          <source src={FILM_MOBILE} type="video/mp4" media="(max-width: 820px)" />
-          <source src={FILM_MP4} type="video/mp4" />
+          {/* Still mode attaches no rendition at all — a source element is a
+              download request, and `preload="none"` does not stop autoplay
+              from pulling bytes once the element can play. */}
+          {still || filmBroken ? null : (
+            <>
+              <source src={FILM_MOBILE} type="video/mp4" media="(max-width: 820px)" />
+              <source src={FILM_MP4} type="video/mp4" />
+            </>
+          )}
         </motion.video>
         <div className="world__scrim" />
         {tone === "calm" ? (
@@ -347,7 +379,12 @@ export function WorldProvider({
         <div className="world__grain" />
         <div className="world__vignette" />
       </div>
-      <audio ref={audioRef} src={SOUNDTRACK_SRC} loop preload="auto" />
+      <audio
+        ref={audioRef}
+        src={still ? undefined : SOUNDTRACK_SRC}
+        loop
+        preload={still ? "none" : "auto"}
+      />
       {children}
     </WorldContext.Provider>
   );
