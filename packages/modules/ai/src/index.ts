@@ -151,6 +151,46 @@ export const USAGE_TODAY_SQL = `
   FROM ai.usage_ledger
   WHERE guild_id = $1 AND user_id = $2 AND created_at >= date_trunc('day', now())`;
 
+// --- Per-provider cost units: characters for speech/translation (§6). -------
+// `provider` values carry a capability prefix ("tts:…", "translate:…") so
+// daily sums stay per capability without schema churn.
+export const RECORD_UNITS_USAGE_SQL = `
+  INSERT INTO ai.usage_ledger (guild_id, user_id, provider, units)
+  VALUES ($1, $2, $3, $4)`;
+
+export const USAGE_UNITS_TODAY_SQL = `
+  SELECT COALESCE(SUM(units), 0) AS used
+  FROM ai.usage_ledger
+  WHERE guild_id = $1 AND user_id = $2 AND provider LIKE $3
+    AND created_at >= date_trunc('day', now())`;
+
+export const USAGE_UNITS_TODAY_GLOBAL_SQL = `
+  SELECT COALESCE(SUM(units), 0) AS used
+  FROM ai.usage_ledger
+  WHERE provider LIKE $1 AND created_at >= date_trunc('day', now())`;
+
+export const PENDING_UNITS_SQL = `
+  SELECT COALESCE(SUM(tokens), 0) AS reserved
+  FROM ai.budget_reservations
+  WHERE kind = $1 AND guild_id = $2 AND user_id = $3 AND expires_at > now()`;
+
+/**
+ * Impure admission math for unit budgets (pure for tests). Pending
+ * reservations of the same kind count because they have not settled or
+ * expired yet; other kinds keep separate caps.
+ */
+export function unitBudgetExceeded(
+  usedUnits: number,
+  pendingUnits: number,
+  globalUsedUnits: number,
+  reservedUnits: number,
+  perUserDailyCap: number,
+  globalDailyCap: number,
+): boolean {
+  if (usedUnits + pendingUnits + reservedUnits > perUserDailyCap) return true;
+  return globalUsedUnits + reservedUnits > globalDailyCap;
+}
+
 
 /** OpenAI-compatible HTTP adapter. Configuration and all malformed/error responses fail closed. */
 export function makeHttpProvider(apiUrl?: string, apiKey?: string, request: typeof fetch = fetch, model?: string): ProviderFn {

@@ -29,6 +29,15 @@ the account owners. There is no deployed revision, image ID or health status to 
    attempt (which could total ≈3× the stated window when queued).
 4. **Compose/.env hygiene.** Dead `TTS_PROVIDER_NAME` removed; the real provider variables are wired to bot-ai;
    `.env.example` gained the missing `GOOGLE_TTS_API_KEY=` line; docs describe exactly one auth path.
+5. **PostgreSQL daily character budgets for speech + translation (§6, second pass).** Chat already reserved tokens
+   atomically (`ai.budget_reservations` + advisory locks); speech and translation had *no* accounting at all. Now both
+   reserve characters under the same lock key before spending, settle what was actually spoken/translated, release on
+   failure, and refuse across per-guild+user and global daily ceilings (`TTS_DAILY_BUDGET_CHARS[_GLOBAL]`,
+   `TRANSLATION_DAILY_BUDGET_CHARS[_GLOBAL]`; defaults 30k/300k and 25k/250k chars). Cost units stay scoped per
+   capability: `ai.usage_ledger.units` (new column) against `provider = tts:…/translate:…` prefixes, and
+   `ai.budget_reservations.kind` (`chat|tts|translate`) keeps voice holds from crowding chat tokens. Voice-chat
+   messages reserve the whole message at admission (never cut off mid-play; unused tail refunds on settle) and
+   `/usage` now shows voice + translation character totals. Migration: `infra/postgres/migrations/021_ai_cost_units.sql`.
 
 ## Verified locally (fresh runs on this revision)
 
@@ -41,6 +50,15 @@ the account owners. There is no deployed revision, image ID or health status to 
 | `node scripts/check-feature-coverage.mjs` | structural exit 0; 179 rows |
 | `corepack pnpm -r typecheck` for bot-ai/module-tts/module-ai + dashboard | clean |
 
+Second pass (character budgets) — fresh runs:
+
+| Check | Result |
+|---|---|
+| `corepack pnpm --filter @ei-point/bot-ai test` | 54 passed / 0 failed (adds budget admission + command-level suites) |
+| `corepack pnpm --filter @ei-point/module-ai test` | 13 passed / 0 failed |
+| `node --test tests/ai/database.test.mjs` (embedded Postgres, applies all migrations incl. 021) | 10 passed / 0 failed |
+| `node --test tests/operations/*.test.mjs` + `node scripts/check-resource-budget.mjs` | 63 passed / 0 failed; budget ok (unchanged arithmetic) |
+
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 
 - Google billing/project provisioning and API enablement (`texttospeech.googleapis.com`,
@@ -52,6 +70,8 @@ the account owners. There is no deployed revision, image ID or health status to 
   before provisioning (treated as targets, not measured results).
 - VPS checkout sync at `/opt/ei-point`, rebuild/redeploy of affected services, and the live Discord acceptance pass —
   none executable from this checkout.
+- §6's optional private TTL cache for repeated identical speech/translation: `ttsCacheKey()` is computed but nothing
+  stores results yet. Deferred as low-value for the current per-guild traffic; revisit if provider bills spike.
 
 ## Secrets
 

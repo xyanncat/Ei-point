@@ -19,6 +19,7 @@ import {
   type TtsSynthesizeFn,
 } from "@ei-point/module-tts";
 import { createFailureGate, fetchWithBoundedRetry, readBoundedBody } from "./http.js";
+import { releaseUnitReservation, reserveUnitBudget, settleUnitUsage } from "./budget.js";
 
 export const ttsCommandDefinitions = [
   new SlashCommandBuilder()
@@ -370,9 +371,23 @@ export async function respondToTtsCommand(
       await ctx.reply(why);
       return true;
     }
+    // Admit the character cost before spending it — same PostgreSQL
+    // reservation machinery the chat budget uses (redesign infra §6).
+    const admitted = await reserveUnitBudget(pool, {
+      guildId: ctx.guildId,
+      userId: ctx.userId,
+      kind: "tts",
+      units: checked.text.length,
+      providerPattern: "tts:%",
+    });
+    if (!admitted.ok) {
+      await ctx.reply(admitted.message);
+      return true;
+    }
     const voice = normalizeVoice(ctx.requestedVoice ?? (await getGuildVoice(pool, ctx.guildId)));
     const res = await ttsQueue.synthesize(checked.text, voice);
     if (!res.ok) {
+      await releaseUnitReservation(pool, admitted.reservation);
       await ctx.reply(
         res.reason === "queue-full"
           ? "TTS service is at capacity. Try again shortly."
@@ -383,6 +398,17 @@ export async function respondToTtsCommand(
               : "Cyrene's voice service is temporarily unavailable. Please try again shortly.",
       );
       return true;
+    }
+    try {
+      await settleUnitUsage(pool, {
+        reservation: admitted.reservation,
+        guildId: ctx.guildId,
+        userId: ctx.userId,
+        provider: `tts:${ttsProviderName()}`,
+        units: checked.text.length,
+      });
+    } catch {
+      // Audio succeeded; an accounting error must not block delivery.
     }
     await ctx.sendAudio(res.audio);
     return true;

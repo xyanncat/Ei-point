@@ -8,6 +8,7 @@ import pg from "pg";
 import EmbeddedPostgres from "../helpers/embedded-postgres.mjs";
 import { processConversation, answerCyreneSearch } from "../../apps/bots/ai/dist/commands.js";
 import { acquireVoiceLease } from "../../apps/bots/ai/dist/voice-lease.js";
+import { reserveUnitBudget, settleUnitUsage, TTS_UNITS_GLOBAL, TTS_UNITS_PER_USER } from "../../apps/bots/ai/dist/budget.js";
 let server, pool;
 const guild = "100000000000000001",
   identity = "custom-crew";
@@ -127,3 +128,34 @@ test("Cyrene /search reports an honest unavailable state and records nothing",as
  for(const table of ["usage_ledger","messages","budget_reservations"])
    assert.equal((await pool.query(`SELECT count(*)::int count FROM ai.${table}`)).rows[0].count,0);
 });
+test("unit budget admission reserves per capability and leaves chat admission alone",async()=>{
+  const g="guild",u="user";
+  const admitted=await reserveUnitBudget(pool,{guildId:g,userId:u,kind:"tts",units:500,providerPattern:"tts:%"});
+  assert.equal(admitted.ok,true);
+  const rows=(await pool.query("SELECT kind, tokens FROM ai.budget_reservations")).rows;
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].kind,"tts");
+  assert.equal(Number(rows[0].tokens),500);
+  // Chat sums only chat-kind reservations, so a voice hold never crowds chat.
+  const chatPending=(await pool.query("SELECT COALESCE(SUM(tokens),0) reserved FROM ai.budget_reservations WHERE kind='chat' AND guild_id=$1 AND user_id=$2 AND expires_at>now()",[g,u])).rows[0].reserved;
+  assert.equal(Number(chatPending),0);
+  await settleUnitUsage(pool,{reservation:admitted.reservation,guildId:g,userId:u,provider:"tts:pocket-local",units:320});
+  assert.equal((await pool.query("SELECT count(*)::int count FROM ai.budget_reservations")).rows[0].count,0);
+  const ledger=(await pool.query("SELECT provider, units FROM ai.usage_ledger")).rows;
+  assert.equal(ledger.length,1);
+  assert.equal(ledger[0].provider,"tts:pocket-local");
+  assert.equal(Number(ledger[0].units),320);
+});
+test("unit budget refuses at the per-guild+user cap without holding a reservation",async()=>{
+  await pool.query("INSERT INTO ai.usage_ledger (guild_id,user_id,provider,units) VALUES ($1,$2,'tts:pocket-local',$3)",["guild","user",TTS_UNITS_PER_USER]);
+  const admitted=await reserveUnitBudget(pool,{guildId:"guild",userId:"user",kind:"tts",units:500,providerPattern:"tts:%"});
+  assert.deepEqual(admitted,{ok:false,message:"Your remaining daily AI budget is too small for this request."});
+  assert.equal((await pool.query("SELECT count(*)::int count FROM ai.budget_reservations")).rows[0].count,0);
+});
+test("unit budget refuses at the global cap even with personal headroom",async()=>{
+  await pool.query("INSERT INTO ai.usage_ledger (guild_id,user_id,provider,units) VALUES ($1,$2,'tts:pocket-local',$3)",["other-guild","other-user",TTS_UNITS_GLOBAL]);
+  const admitted=await reserveUnitBudget(pool,{guildId:"guild",userId:"user",kind:"tts",units:500,providerPattern:"tts:%"});
+  assert.equal(admitted.ok,false);
+  assert.equal((await pool.query("SELECT count(*)::int count FROM ai.budget_reservations WHERE guild_id='guild'")).rows[0].count,0);
+});
+

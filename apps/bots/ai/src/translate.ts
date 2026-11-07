@@ -1,4 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
+import type { Pool } from "pg";
+import { releaseUnitReservation, reserveUnitBudget, settleUnitUsage } from "./budget.js";
 import { createFailureGate, fetchWithBoundedRetry, readBoundedBody } from "./http.js";
 
 export const TRANSLATION_MAX_CHARS = 500;
@@ -293,18 +295,61 @@ export const LOCAL_TRANSLATION_UNAVAILABLE =
   "Cyrene's local translation model is not ready. Please retry after its health check recovers.";
 export const TRANSLATION_UNAVAILABLE =
   "Translation is temporarily unavailable. Please retry shortly.";
+export const INVALID_TRANSLATION_MESSAGE =
+  "Use a supported language name and text of up to 500 characters. For example: Arabic, English, or Japanese. Sensitive-looking keys are not sent for translation.";
 
-export async function respondToTranslationCommand(input: TranslationRequest): Promise<string> {
-  const result = await translationQueue.translate(input);
-  if (result.ok) return result.text;
-  if (result.reason === "invalid-input") return "Use a supported language name and text of up to 500 characters. For example: Arabic, English, or Japanese. Sensitive-looking keys are not sent for translation.";
-  if (result.reason === "queue-full") return "Cyrene's translation service is busy. Please retry shortly.";
-  return translationQueueProvider() === "local" ? LOCAL_TRANSLATION_UNAVAILABLE : TRANSLATION_UNAVAILABLE;
+export interface TranslationBudgetContext {
+  pool: Pool;
+  guildId: string;
+  userId: string;
+}
+
+/**
+ * One translation: validated, admitted against the PostgreSQL daily character
+ * budget, then settled with what the configured provider actually billed.
+ * Accounting failures never block a successful result.
+ */
+export async function respondToTranslationCommand(input: TranslationRequest, budget: TranslationBudgetContext): Promise<string> {
+  const request = validateTranslationRequest(input);
+  if (!request) return INVALID_TRANSLATION_MESSAGE;
+  const admission = await reserveUnitBudget(budget.pool, {
+    guildId: budget.guildId,
+    userId: budget.userId,
+    kind: "translate",
+    units: request.text.length,
+    providerPattern: "translate:%",
+  });
+  if (!admission.ok) return admission.message;
+  try {
+    const result = await translationQueue.translate(input);
+    if (result.ok) {
+      const provider = translationQueueProvider() === "google" ? "translate:google" : "translate:local";
+      try {
+        await settleUnitUsage(budget.pool, {
+          reservation: admission.reservation,
+          guildId: budget.guildId,
+          userId: budget.userId,
+          provider,
+          units: request.text.length,
+        });
+      } catch {
+        // The user already holds the translation; an accounting error must not
+        // swallow it. The reservation was best-effort released.
+      }
+      return result.text;
+    }
+    await releaseUnitReservation(budget.pool, admission.reservation);
+    if (result.reason === "queue-full") return "Cyrene's translation service is busy. Please retry shortly.";
+    return translationQueueProvider() === "local" ? LOCAL_TRANSLATION_UNAVAILABLE : TRANSLATION_UNAVAILABLE;
+  } catch (error) {
+    await releaseUnitReservation(budget.pool, admission.reservation);
+    throw error;
+  }
 }
 
 /** The configured provider, resolved once, for honest user-facing messages. */
 let resolvedProvider: "local" | "google" | "unknown" | null = null;
-function translationQueueProvider(): "local" | "google" | "unknown" {
+export function translationQueueProvider(): "local" | "google" | "unknown" {
   if (resolvedProvider === null) {
     const provider = (process.env.TRANSLATION_PROVIDER ?? "local").trim().toLowerCase();
     resolvedProvider = provider === "" || provider === "local" ? "local" : provider === "google" ? "google" : "unknown";

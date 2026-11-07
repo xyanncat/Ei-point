@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { SlashCommandBuilder } from "discord.js";
 import type { Pool } from "pg";
+import { TTS_UNITS_PER_USER, TRANSLATION_UNITS_PER_USER } from "./budget.js";
 import {
   buildPromptWindow,
   summarizeConversation,
@@ -10,6 +11,7 @@ import {
   SAVE_SUMMARY_SQL,
   RECORD_USAGE_SQL,
   USAGE_TODAY_SQL,
+  USAGE_UNITS_TODAY_SQL,
   type ChatMessage,
   type ProviderResult,
 } from "@ei-point/module-ai";
@@ -139,7 +141,7 @@ export async function processConversation(
     await admission.query("BEGIN");
     await admission.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`ai-budget:${guildId}:${userId}`]);
     const usage = await admission.query<{used: string}>(USAGE_TODAY_SQL, [guildId, userId]);
-    const pending = await admission.query<{reserved: string}>("SELECT COALESCE(SUM(tokens),0) reserved FROM ai.budget_reservations WHERE guild_id=$1 AND user_id=$2 AND expires_at>now()", [guildId,userId]);
+    const pending = await admission.query<{reserved: string}>("SELECT COALESCE(SUM(tokens),0) reserved FROM ai.budget_reservations WHERE kind='chat' AND guild_id=$1 AND user_id=$2 AND expires_at>now()", [guildId,userId]);
     if (Number(usage.rows[0]?.used ?? 0) + Number(pending.rows[0]?.reserved ?? 0) + reservedTokens > dailyBudgetCap) {
       await admission.query("ROLLBACK");
       return "Your remaining daily AI budget is too small for this request.";
@@ -253,10 +255,21 @@ export async function respondToAiCommand(
     const used = Number(res.rows[0]?.used ?? 0);
     const cap = req.dailyBudgetCap;
     const pct = Math.min(100, Math.round((used / cap) * 100));
+    let extras = "";
+    try {
+      const voice = await pool.query<{ used: string }>(USAGE_UNITS_TODAY_SQL, [guildId, userId, "tts:%"]);
+      const translation = await pool.query<{ used: string }>(USAGE_UNITS_TODAY_SQL, [guildId, userId, "translate:%"]);
+      extras =
+        `\n• Voice Characters: **${Number(voice.rows[0]?.used ?? 0).toLocaleString()}** / ${TTS_UNITS_PER_USER.toLocaleString()}` +
+        `\n• Translation Characters: **${Number(translation.rows[0]?.used ?? 0).toLocaleString()}** / ${TRANSLATION_UNITS_PER_USER.toLocaleString()}`;
+    } catch {
+      // The token line still answers even if the unit sums are unavailable.
+    }
     await req.reply(
       `📊 **Your AI Usage Today:**\n` +
         `• Tokens Used: **${used.toLocaleString()}** / ${cap.toLocaleString()} (${pct}%)\n` +
-        `• Status: ${pct >= 100 ? "🔴 Limit Reached" : "🟢 Available"}`,
+        extras +
+        `\n• Status: ${pct >= 100 ? "🔴 Limit Reached" : "🟢 Available"}`,
     );
     return;
   }

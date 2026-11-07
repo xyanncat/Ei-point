@@ -25,7 +25,8 @@ import {
   respondToAiCommand,
   processConversation,
 } from "./commands.js";
-import { synthesizeSpeech, ttsCommandDefinitions, respondToTtsCommand } from "./tts.js";
+import { synthesizeSpeech, ttsCommandDefinitions, respondToTtsCommand, ttsProviderName } from "./tts.js";
+import { releaseUnitReservation, reserveUnitBudget, settleUnitUsage } from "./budget.js";
 import { extractVoiceChatText, splitSpeechChunks, TTS_CHUNK_CHARS, TTS_MAX_CHARS } from "@ei-point/module-tts";
 import { respondToTranslationCommand, translationCommandDefinition } from "./translate.js";
 import { prepareCyrenePersonaPrompt } from "./persona.js";
@@ -37,12 +38,20 @@ const TRANSLATION_NAME = translationCommandDefinition.name;
 // Cyrene voice sessions: guildId -> voice connection (lazy @discordjs/voice).
 const voiceSessions = new Map<string, { destroy: () => void }>();
 const pendingVoice = new Set<string>();
+type CyreneVoiceUtterance = {
+  text: string;
+  /** The requester who owns the reserved character budget. */
+  userId: string;
+  /** Set when admission granted a reservation; cleared when settled. */
+  reservation: string | null;
+};
+
 type CyreneVoiceSession = {
   channelId: string;
   guildId: string;
   connection: import("@discordjs/voice").VoiceConnection;
   player: import("@discordjs/voice").AudioPlayer;
-  queue: string[];
+  queue: CyreneVoiceUtterance[];
   busy: boolean;
   owner: string;
   leaseTimer: ReturnType<typeof setInterval>;
@@ -53,6 +62,9 @@ async function stopCyreneSession(guildId: string): Promise<void> {
   const session = cyreneVoiceSessions.get(guildId);
   if (!session) return;
   cyreneVoiceSessions.delete(guildId);
+  for (const item of session.queue) {
+    if (item.reservation) void releaseUnitReservation(pool, item.reservation).catch(() => {});
+  }
   session.queue.length = 0;
   clearInterval(session.leaseTimer);
   try { session.player.stop(true); session.connection.destroy(); } catch { /* already disconnected */ }
@@ -67,7 +79,8 @@ async function drainCyreneQueue(session: CyreneVoiceSession): Promise<void> {
   session.busy = true;
   try {
     while (session.queue.length && cyreneVoiceSessions.get(session.guildId) === session) {
-      const text = session.queue.shift()!;
+      const utterance = session.queue.shift()!;
+      const { text, reservation } = utterance;
       try {
         const voice = await import("@discordjs/voice");
         // One request per short message avoids restarting voice/prosody at
@@ -85,12 +98,37 @@ async function drainCyreneQueue(session: CyreneVoiceSession): Promise<void> {
         // Start the first chunk, then keep exactly one synthesis in flight while
         // the previous chunk plays so audio starts before the whole message is ready.
         let pending: Promise<{ bytes: Uint8Array }> | null = chunks.length ? prefetch(chunks[0]!) : null;
-        for (let index = 0; index < chunks.length; index++) {
-          const audio = pending ? await pending : null;
-          pending = index + 1 < chunks.length ? prefetch(chunks[index + 1]!) : null;
-          if (!audio || cyreneVoiceSessions.get(session.guildId) !== session) return;
-          session.player.play(voice.createAudioResource(Readable.from(Buffer.from(audio.bytes)), { inputType: voice.StreamType.Arbitrary }));
-          await voice.entersState(session.player, voice.AudioPlayerStatus.Idle, 120_000);
+        let spokenChars = 0;
+        try {
+          for (let index = 0; index < chunks.length; index++) {
+            const audio = pending ? await pending : null;
+            pending = index + 1 < chunks.length ? prefetch(chunks[index + 1]!) : null;
+            if (!audio || cyreneVoiceSessions.get(session.guildId) !== session) return;
+            spokenChars += chunks[index]!.length;
+            session.player.play(voice.createAudioResource(Readable.from(Buffer.from(audio.bytes)), { inputType: voice.StreamType.Arbitrary }));
+            await voice.entersState(session.player, voice.AudioPlayerStatus.Idle, 120_000);
+          }
+        } finally {
+          // Settle what was actually spoken and release the rest of the
+          // reservation; a stopped session mid-message refunds the cut tail.
+          if (reservation) {
+            try {
+              if (spokenChars > 0) {
+                await settleUnitUsage(pool, {
+                  reservation,
+                  guildId: session.guildId,
+                  userId: utterance.userId,
+                  provider: `tts:${ttsProviderName()}`,
+                  units: spokenChars,
+                });
+              } else {
+                await releaseUnitReservation(pool, reservation);
+              }
+            } catch {
+              // The reservation either settled or expires at end of day; a
+              // release failure must not break the voice session loop.
+            }
+          }
         }
       } catch (err) {
         console.error("cyrene voice chat message was not spoken:", err instanceof Error ? err.message : String(err));
@@ -356,7 +394,20 @@ client.on(Events.MessageCreate, async (message) => {
       void message.reply(toEiEmbedPayload("My voice queue is full. Please wait for a few messages to finish.", "Cyrene")).catch(() => {});
       return;
     }
-    session.queue.push(spoken);
+    // Reserve the whole message's character budget at admission so a long
+    // message is never cut off mid-play; unused chunks release on settle.
+    const admitted = await reserveUnitBudget(pool, {
+      guildId: message.guildId!,
+      userId: message.author.id,
+      kind: "tts",
+      units: spoken.length,
+      providerPattern: "tts:%",
+    });
+    if (!admitted.ok) {
+      void message.reply(toEiEmbedPayload(admitted.message, "Cyrene")).catch(() => {});
+      return;
+    }
+    session.queue.push({ text: spoken, userId: message.author.id, reservation: admitted.reservation });
     voiceChatCooldown.set(cooldownKey, Date.now());
   } catch (err) {
     console.error("cyrene voice chat authorization failed:", err instanceof Error ? err.message : String(err));
@@ -476,11 +527,14 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
       }
 
       if (interaction.commandName === TRANSLATION_NAME) {
-        const result = await respondToTranslationCommand({
-          text: String(options.text ?? ""),
-          targetLanguage: String(options.target_language ?? ""),
-          ...(typeof options.source_language === "string" ? { sourceLanguage: options.source_language } : {}),
-        });
+        const result = await respondToTranslationCommand(
+          {
+            text: String(options.text ?? ""),
+            targetLanguage: String(options.target_language ?? ""),
+            ...(typeof options.source_language === "string" ? { sourceLanguage: options.source_language } : {}),
+          },
+          { pool, guildId: interaction.guildId, userId: interaction.user.id },
+        );
         await interaction.editReply({ content: fitDiscord(result), allowedMentions: { parse: [] } });
         return;
       }
