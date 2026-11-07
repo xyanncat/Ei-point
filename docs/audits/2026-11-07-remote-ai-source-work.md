@@ -38,6 +38,7 @@ the account owners. There is no deployed revision, image ID or health status to 
    `ai.budget_reservations.kind` (`chat|tts|translate`) keeps voice holds from crowding chat tokens. Voice-chat
    messages reserve the whole message at admission (never cut off mid-play; unused tail refunds on settle) and
    `/usage` now shows voice + translation character totals. Migration: `infra/postgres/migrations/021_ai_cost_units.sql`.
+   **Committed as `874c302` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
 
 ## Verified locally (fresh runs on this revision)
 
