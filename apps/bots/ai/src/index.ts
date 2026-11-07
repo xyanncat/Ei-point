@@ -302,17 +302,22 @@ function fitDiscord(text: string, limit = 2000): string {
 
 if (!process.env.AI_PROVIDER_PRIMARY || !process.env.AI_PROVIDER_PRIMARY_MODEL?.trim()) throw new Error("AI_PROVIDER_PRIMARY and AI_PROVIDER_PRIMARY_MODEL are required");
 if ([process.env.AI_PROVIDER_FALLBACK, process.env.AI_PROVIDER_FALLBACK_KEY, process.env.AI_PROVIDER_FALLBACK_MODEL].some(Boolean) && (!process.env.AI_PROVIDER_FALLBACK || !process.env.AI_PROVIDER_FALLBACK_MODEL?.trim())) throw new Error("Fallback provider URL and model must be configured together; its key is optional for local endpoints");
+// An explicit ceiling wins; otherwise reasoning models (Groq gpt-oss, …) get
+// the larger default from the AI module.
+const maxTokens = Number(process.env.AI_MAX_TOKENS ?? "");
 const primaryProvider = makeHttpProvider(
   process.env.AI_PROVIDER_PRIMARY,
   process.env.AI_PROVIDER_PRIMARY_KEY,
   fetch,
   process.env.AI_PROVIDER_PRIMARY_MODEL,
+  Number.isFinite(maxTokens) && maxTokens > 0 ? Math.round(maxTokens) : undefined,
 );
 const fallbackProvider = makeHttpProvider(
   process.env.AI_PROVIDER_FALLBACK,
   process.env.AI_PROVIDER_FALLBACK_KEY,
   fetch,
   process.env.AI_PROVIDER_FALLBACK_MODEL,
+  Number.isFinite(maxTokens) && maxTokens > 0 ? Math.round(maxTokens) : undefined,
 );
 
 const router = createRouter({

@@ -96,6 +96,18 @@ test('the real off-host backup includes private paths through the shared invento
   assert.deepEqual(incomplete.missing.map((entry) => entry.id).sort(), ['cyrene-reference-audio'], 'a missing required private asset must be reported');
 });
 
+test('the off-host script accepts a Google Drive repository through rclone and requires rclone plus its config', () => {
+  // restic has no native Google Drive backend; the rclone backend is the
+  // supported path. The repository stays encrypted by restic before upload.
+  assert.match(restic, /rclone:\*/, 'the off-host allowlist must accept an rclone: repository');
+  assert.match(restic, /command -v rclone/, 'an rclone: repository must require the rclone binary');
+  assert.match(restic, /RCLONE_CONFIG/, 'an rclone: repository must require an explicit rclone configuration');
+  assert.match(restic, /rclone configuration file is missing/, 'a missing rclone configuration must fail closed');
+  // Native backends stay available, including Google Cloud Storage.
+  for (const backend of ['s3:', 'gs:', 'b2:', 'azure:', 'sftp:', 'rest:'])
+    assert.match(restic, new RegExp(backend.replace(':', ':')), `the ${backend} backend must stay supported`);
+});
+
 test('the off-host restic volume set covers the private artwork and the physical pgbackrest repository, never live pgdata', () => {
   // Regression guard: the wal-archive/pgbackrest volume is classification
   // "database" but must still ride the off-host set; the live pgdata volume must not.

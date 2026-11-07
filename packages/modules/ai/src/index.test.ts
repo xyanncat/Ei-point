@@ -143,3 +143,51 @@ it("supports local compatible endpoints without an API key", async () => {
   assert.equal(result.text,"local reply");
   assert.equal(new Headers(captured?.headers).has("authorization"), false);
 });
+
+it("gives reasoning models a larger completion ceiling", async () => {
+  let sentBody: any;
+  const provider = makeHttpProvider("https://api.groq.test/openai/v1/chat/completions", "k", async (_url, init) => {
+    sentBody = JSON.parse(String(init?.body));
+    return Response.json({choices:[{message:{content:"answer"}}],usage:{prompt_tokens:4,completion_tokens:3}});
+  }, "openai/gpt-oss-20b");
+  await provider([{role:"user",content:"hello"}],new AbortController().signal);
+  assert.equal(sentBody.max_tokens,4096);
+});
+
+it("retries once with max_completion_tokens when the host rejects max_tokens", async () => {
+  const bodies: any[] = [];
+  const provider = makeHttpProvider("https://api.groq.test/openai/v1/chat/completions", "k", async (_url, init) => {
+    bodies.push(JSON.parse(String(init?.body)));
+    if (bodies.length === 1) {
+      return new Response(JSON.stringify({error:{message:"Unsupported parameter: 'max_tokens' is not supported. Use 'max_completion_tokens' instead."}}),{status:400,headers:{"Content-Type":"application/json"}});
+    }
+    return Response.json({choices:[{message:{content:"reasoned answer"}}],usage:{prompt_tokens:4,completion_tokens:3}});
+  }, "openai/gpt-oss-20b");
+  const result = await provider([{role:"user",content:"hello"}],new AbortController().signal);
+  assert.equal(result.text,"reasoned answer");
+  assert.equal(bodies.length,2);
+  assert.equal(bodies[0].max_tokens,4096);
+  assert.equal(bodies[1].max_completion_tokens,4096);
+  assert.equal("max_tokens" in bodies[1],false);
+});
+
+it("does not retry a 400 that is not about the token field", async () => {
+  let calls = 0;
+  const provider = makeHttpProvider("https://api.groq.test/openai/v1/chat/completions", "k", async () => {
+    calls += 1;
+    return new Response(JSON.stringify({error:{message:"invalid model"}}),{status:400});
+  }, "openai/gpt-oss-20b");
+  await assert.rejects(provider([{role:"user",content:"hello"}],new AbortController().signal),/provider-http-400/);
+  assert.equal(calls,1);
+});
+
+it("ignores reasoning content and never returns it as the answer", async () => {
+  const provider = makeHttpProvider("https://api.groq.test/openai/v1/chat/completions", "k", async () =>
+    Response.json({
+      choices:[{message:{role:"assistant",content:"final answer",reasoning_content:"secret chain of thought"}}],
+      usage:{prompt_tokens:4,completion_tokens:3},
+    }), "openai/gpt-oss-20b");
+  const result = await provider([{role:"user",content:"hello"}],new AbortController().signal);
+  assert.equal(result.text,"final answer");
+  assert.equal(result.text.includes("chain of thought"),false);
+});

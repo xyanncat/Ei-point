@@ -39,6 +39,18 @@ the account owners. There is no deployed revision, image ID or health status to 
    messages reserve the whole message at admission (never cut off mid-play; unused tail refunds on settle) and
    `/usage` now shows voice + translation character totals. Migration: `infra/postgres/migrations/021_ai_cost_units.sql`.
    **Committed as `874c302` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
+6. **Hosted free-tier providers: Groq chat + OpenRouter speech (operator direction, 2026-11-07).** Chat runs on
+   Groq's `openai/gpt-oss-20b`; speech runs on OpenRouter's `fish-audio/s2.1-pro-free:free`, rotating to
+   `heygen/heygen-voice-1-turbo:free` and `hexgrad/kokoro-82m` when a model is rate limited. The adapter targets
+   OpenRouter's dedicated OpenAI-compatible `/api/v1/audio/speech` endpoint (raw audio bytes). A 429 cools one model
+   and rotates; a non-rate-limit rejection is never rotated, so a bad voice fails loudly instead of silently changing
+   voice. **Voice cloning is implemented behind `TTS_PROVIDER_REFERENCE_AUDIO_PATH` and is off by default** — unset,
+   no private reference audio leaves the host. Groq reasoning models get a larger completion ceiling and one retry
+   with `max_completion_tokens`; chain-of-thought is never returned as the reply.
+7. **Off-host backups on Google Drive.** `RESTIC_REPOSITORY` now accepts `rclone:*` (restic's supported path to
+   Drive — restic has no native Drive backend). The script requires the `rclone` binary and an explicit
+   `RCLONE_CONFIG`, and fails closed without them. restic encrypts and deduplicates before upload, so the 5 TB Drive
+   account holds ciphertext only; native `gs:`/`s3:`/`b2:`/`azure:`/`sftp:`/`rest:` remain supported.
 
 ## Verified locally (fresh runs on this revision)
 
@@ -60,6 +72,15 @@ Second pass (character budgets) — fresh runs:
 | `node --test tests/ai/database.test.mjs` (embedded Postgres, applies all migrations incl. 021) | 10 passed / 0 failed |
 | `node --test tests/operations/*.test.mjs` + `node scripts/check-resource-budget.mjs` | 63 passed / 0 failed; budget ok (unchanged arithmetic) |
 
+Third pass (hosted providers + Drive backup) — fresh runs:
+
+| Check | Result |
+|---|---|
+| `corepack pnpm --filter @ei-point/bot-ai test` | 63 passed / 0 failed (9 new OpenRouter speech tests) |
+| `corepack pnpm --filter @ei-point/module-ai test` | 17 passed / 0 failed (4 new Groq reasoning-model tests) |
+| `node --test infra/backup/durable-assets.test.mjs` | 9 passed / 0 failed (rclone/Drive path asserted) |
+| `corepack pnpm --filter @ei-point/bot-ai typecheck` + `--filter @ei-point/module-ai build` | clean |
+
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 
 - Google billing/project provisioning and API enablement (`texttospeech.googleapis.com`,
@@ -73,6 +94,20 @@ Second pass (character budgets) — fresh runs:
   none executable from this checkout.
 - §6's optional private TTL cache for repeated identical speech/translation: `ttsCacheKey()` is computed but nothing
   stores results yet. Deferred as low-value for the current per-guild traffic; revisit if provider bills spike.
+
+Operator steps this round (source is ready; the checkout cannot perform them):
+
+1. **Groq chat** — create a key, then set `AI_PROVIDER_PRIMARY=https://api.groq.com/openai/v1/chat/completions`,
+   `AI_PROVIDER_PRIMARY_MODEL=openai/gpt-oss-20b`, `AI_PROVIDER_PRIMARY_KEY=<key>`. A free OpenRouter chat model as
+   `AI_PROVIDER_FALLBACK` keeps the existing primary→fallback router useful.
+2. **OpenRouter speech** — set `TTS_PROVIDER=openrouter`, `OPENROUTER_API_KEY=<key>` and (optionally) the rotation
+   list `TTS_PROVIDER_MODELS`. Leave `TTS_PROVIDER_REFERENCE_AUDIO_PATH` empty unless voice cloning is wanted; if it
+   is set, mount that file read-only into the bot-ai container.
+3. **Google Drive off-host backups** — on the backup host run `rclone config` (remote `drive`, dedicated account),
+   set `RESTIC_REPOSITORY=rclone:drive:eipoint-backup` and `RCLONE_CONFIG`, then `restic init` and `restic snapshots`
+   before enabling the timer.
+4. **GCS media** — create the bucket, upload the film/audio/posters, set `NEXT_PUBLIC_MEDIA_BASE_URL`, verify the
+   URLs, and only then exclude the originals from the Docker context (phase-1 close-out).
 
 ## Secrets
 

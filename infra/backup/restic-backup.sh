@@ -9,7 +9,16 @@ set -a
 set +a
 : "${RESTIC_REPOSITORY:?Configure an off-host restic repository explicitly}"
 : "${RESTIC_PASSWORD:?Configure an encryption password explicitly}"
-case "$RESTIC_REPOSITORY" in s3:*|sftp:*|rest:*|azure:*|gs:*|b2:*) ;; *) echo 'Off-host repository URL required' >&2; exit 1;; esac
+# Off-host backends. `rclone:*` covers services restic cannot speak natively
+# (Google Drive, for example); restic still encrypts before upload, so the
+# remote only ever stores ciphertext.
+case "$RESTIC_REPOSITORY" in s3:*|sftp:*|rest:*|azure:*|gs:*|b2:*|rclone:*) ;; *) echo 'Off-host repository URL required' >&2; exit 1;; esac
+if [[ "$RESTIC_REPOSITORY" == rclone:* ]]; then
+  command -v rclone >/dev/null 2>&1 || { echo 'rclone is required for an rclone: repository' >&2; exit 1; }
+  : "${RCLONE_CONFIG:?Set RCLONE_CONFIG to the rclone configuration file for an rclone: repository}"
+  [[ -f "$RCLONE_CONFIG" ]] || { echo 'rclone configuration file is missing' >&2; exit 1; }
+  export RCLONE_CONFIG
+fi
 export RESTIC_REPOSITORY RESTIC_PASSWORD
 export AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY:-${AWS_ACCESS_KEY_ID:-}}"
 export AWS_SECRET_ACCESS_KEY="${S3_SECRET_KEY:-${AWS_SECRET_ACCESS_KEY:-}}"

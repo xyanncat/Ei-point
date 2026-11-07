@@ -8,6 +8,22 @@ The PostgreSQL image is built from `infra/backup/Dockerfile`. Mount the `pgbackr
 
 Configure `RESTIC_REPOSITORY` to an off-host URL and `RESTIC_PASSWORD` in the deployment environment. Initialize the encrypted restic repository deliberately using the same settings and `restic init`, then verify `restic snapshots` before enabling `ei-point-restic-backup.timer`. A missing configuration, inaccessible repository, or authentication failure causes the service to fail; it never initializes automatically. The private/secret set — `CYRENE_REFERENCE_AUDIO_PATH`, `CYRENE_PERSONA_MEMORY_FILE`, `ENV_FILE` — and the unique/private Docker volumes (`artwork`, `pgbackrest`) are resolved from the checked-in inventory (`infra/backup/durable-assets.mjs`; operator view: `docs/operations/durable-assets.md`). Public model weights are reprovisioned from their pinned manifests and are deliberately excluded. A required private asset that is unset or missing refuses the backup before any repository call. The local and off-host scripts share a lock. A local backup that overlaps a timer run causes that off-host run to fail visibly and retry at the next scheduled activation.
 
+### Google Drive as the off-host repository
+
+restic has no native Google Drive backend, so Drive is reached through restic's `rclone:` backend — the supported route for services restic cannot speak natively:
+
+```sh
+# once, on the backup host, with a dedicated backup account
+rclone config                      # remote name: drive, type: drive, scope: drive
+export RCLONE_CONFIG=/root/.config/rclone/rclone.conf
+export RESTIC_REPOSITORY=rclone:drive:eipoint-backup
+export RESTIC_PASSWORD='<from the operator secret store>'
+restic init                        # deliberate operator action, never automatic
+restic snapshots                   # verify before enabling the timer
+```
+
+`RESTIC_REPOSITORY=rclone:drive:<path>` is accepted by `restic-backup.sh`; the script refuses to run an `rclone:` repository when the `rclone` binary is missing or when `RCLONE_CONFIG` is unset or points at a missing file. `gs:` (Google Cloud Storage), `s3:`, `b2:`, `azure:`, `sftp:` and `rest:` remain supported, so the repository can move without changing the script. restic encrypts and deduplicates before upload, so the Drive account only ever stores ciphertext and incremental snapshots; the remote never sees a plaintext database, persona file or reference audio. Use a dedicated account rather than a personal login, and expect the Drive API to be the slowest transport: restic packs and deduplicates, so routine snapshots stay small, but a full repository rebuild moves far more data.
+
 Run a logical drill against an explicit artifact directory:
 
 ```sh

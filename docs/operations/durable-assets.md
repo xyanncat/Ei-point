@@ -37,6 +37,20 @@ off-host set. Public model directories are intentionally excluded. The script
 fails closed when the inventory resolves no private paths or a required asset is
 missing.
 
+## Off-host repository (Google Drive through rclone)
+
+`RESTIC_REPOSITORY` accepts the native backends (`s3:`, `b2:`, `azure:`, `gs:`,
+`sftp:`, `rest:`) and `rclone:*`. restic has no native Google Drive backend, so
+a Drive repository is addressed through restic's rclone backend:
+`RESTIC_REPOSITORY=rclone:drive:eipoint-backup`. The script then requires the
+`rclone` binary and an explicit `RCLONE_CONFIG` file and refuses to run
+without them; `rclone init`/`restic init` is a deliberate operator action, never
+automatic. The repository is encrypted by restic before upload and deduplicated
+across snapshots, so the Drive account holds ciphertext only — the database,
+persona memory, reference audio and deployment secrets never leave the host in
+plaintext. Use a dedicated backup account rather than a personal login, and
+expect Drive to be the slowest transport for a full repository rebuild.
+
 ## Proposed RPO/RTO (targets, not achieved claims)
 
 These numbers are **proposed targets**. They are not claimed as achieved until a

@@ -3,9 +3,13 @@
 // the local adapter must be selectable purely by configuration.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   googleLanguageCode,
   makeTtsProvider,
+  openRouterTtsModels,
   ttsProviderName,
   ttsTotalDeadlineMs,
   MAX_TTS_AUDIO_BYTES,
@@ -106,6 +110,180 @@ describe("TTS provider selection", () => {
       jsonResponse({ audioContent: tooBig.toString("base64") })) as typeof fetch;
     const synthesize = makeTtsProvider({ TTS_PROVIDER: "google", GOOGLE_TTS_API_KEY: "k" }, fetchFn);
     await assert.rejects(synthesize("hi", "default", neverAborted()), /tts-audio-too-large/);
+  });
+});
+
+describe("OpenRouter speech provider", () => {
+  it("posts to the OpenAI-compatible speech endpoint and omits a voice unless configured", async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown>; headers: Record<string, string> }> = [];
+    const fetchFn = (async (url: string, init: RequestInit) => {
+      calls.push({
+        url: String(url),
+        body: JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>,
+        headers: (init.headers ?? {}) as Record<string, string>,
+      });
+      return new Response(new Uint8Array([0x49, 0x44, 0x33]), { status: 200, headers: { "Content-Type": "audio/mpeg" } });
+    }) as typeof fetch;
+    const synthesize = makeTtsProvider({ TTS_PROVIDER: "openrouter", OPENROUTER_API_KEY: "or-key" }, fetchFn);
+    const audio = await synthesize("hello", "default", neverAborted());
+    assert.equal(audio.mime, "audio/mpeg");
+    assert.deepEqual([...audio.bytes], [0x49, 0x44, 0x33]);
+    assert.equal(calls[0]!.url, "https://openrouter.ai/api/v1/audio/speech");
+    assert.equal(calls[0]!.body.model, "fish-audio/s2.1-pro-free:free");
+    assert.equal(calls[0]!.body.input, "hello");
+    assert.equal(calls[0]!.body.response_format, "mp3");
+    // Fish Audio has no stock voices; sending one would be rejected.
+    assert.equal("voice" in calls[0]!.body, false);
+    assert.equal(calls[0]!.headers.Authorization, "Bearer or-key");
+    assert.equal(ttsProviderName({ TTS_PROVIDER: "openrouter" }), "openrouter-speech");
+  });
+
+  it("sends a configured voice and delivery instructions", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      calls.push(JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>);
+      return new Response(new Uint8Array([1]), { status: 200, headers: { "Content-Type": "audio/mpeg" } });
+    }) as typeof fetch;
+    const synthesize = makeTtsProvider(
+      {
+        TTS_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "or-key",
+        TTS_PROVIDER_VOICE: "alloy",
+        TTS_PROVIDER_INSTRUCTIONS: "warm and gentle",
+      },
+      fetchFn,
+    );
+    await synthesize("hello", "default", neverAborted());
+    assert.equal(calls[0]!.voice, "alloy");
+    assert.equal(calls[0]!.instructions, "warm and gentle");
+  });
+
+  it("rotates to the next model after a rate limit and succeeds", async () => {
+    const seen: string[] = [];
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body ?? "{}")) as { model: string };
+      seen.push(body.model);
+      if (seen.length === 1) return new Response("slow down", { status: 429 });
+      return new Response(new Uint8Array([7]), { status: 200, headers: { "Content-Type": "audio/mpeg" } });
+    }) as typeof fetch;
+    const synthesize = makeTtsProvider(
+      {
+        TTS_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "or-key",
+        TTS_PROVIDER_MODELS: "fish-audio/s2.1-pro-free:free,hexgrad/kokoro-82m",
+      },
+      fetchFn,
+    );
+    const audio = await synthesize("hello", "default", neverAborted());
+    assert.deepEqual([...audio.bytes], [7]);
+    assert.deepEqual(seen, ["fish-audio/s2.1-pro-free:free", "hexgrad/kokoro-82m"]);
+  });
+
+  it("reports an honest quota failure when every model is rate limited", async () => {
+    let calls = 0;
+    const fetchFn = (async () => {
+      calls += 1;
+      return new Response("slow down", { status: 429 });
+    }) as typeof fetch;
+    const synthesize = makeTtsProvider(
+      {
+        TTS_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "or-key",
+        TTS_PROVIDER_MODELS: "fish-audio/s2.1-pro-free:free,hexgrad/kokoro-82m",
+      },
+      fetchFn,
+    );
+    await assert.rejects(
+      synthesize("hello", "default", neverAborted()),
+      (error: unknown) => error instanceof Error && (error as Error & { code?: string }).code === "TTS_QUOTA",
+    );
+    assert.equal(calls, 2);
+  });
+
+  it("does not rotate a rejected request: a bad voice is an operator error", async () => {
+    let calls = 0;
+    const fetchFn = (async () => {
+      calls += 1;
+      return new Response("bad voice", { status: 400 });
+    }) as typeof fetch;
+    const synthesize = makeTtsProvider(
+      {
+        TTS_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "or-key",
+        TTS_PROVIDER_MODELS: "fish-audio/s2.1-pro-free:free,hexgrad/kokoro-82m",
+      },
+      fetchFn,
+    );
+    await assert.rejects(synthesize("hello", "default", neverAborted()), /tts-provider-rejected-400/);
+    assert.equal(calls, 1);
+  });
+
+  it("clones a reference voice only when one is configured", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "ei-openrouter-"));
+    const reference = join(directory, "cyrene.mp3");
+    await writeFile(reference, Buffer.from([0x49, 0x44, 0x33]));
+    const bodies: Array<Record<string, unknown>> = [];
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>);
+      return new Response(new Uint8Array([1]), { status: 200, headers: { "Content-Type": "audio/mpeg" } });
+    }) as typeof fetch;
+
+    const without = makeTtsProvider({ TTS_PROVIDER: "openrouter", OPENROUTER_API_KEY: "or-key" }, fetchFn);
+    await without("hello", "default", neverAborted());
+    assert.equal("input_references" in bodies[0]!, false);
+
+    const withReference = makeTtsProvider(
+      {
+        TTS_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "or-key",
+        TTS_PROVIDER_REFERENCE_AUDIO_PATH: reference,
+        TTS_PROVIDER_REFERENCE_TEXT: "reference transcript",
+      },
+      fetchFn,
+    );
+    await withReference("hello", "default", neverAborted());
+    const references = bodies[1]!.input_references as Array<Record<string, unknown>>;
+    assert.equal(references.length, 2);
+    assert.match(String((references[0]!.input_audio as { data: string }).data), /^data:audio\/mpeg;base64,/);
+    assert.equal(references[1]!.type, "text");
+  });
+
+  it("fails closed when a configured reference audio file is missing", async () => {
+    let called = false;
+    const fetchFn = (async () => {
+      called = true;
+      return new Response(new Uint8Array([1]), { status: 200, headers: { "Content-Type": "audio/mpeg" } });
+    }) as typeof fetch;
+    const synthesize = makeTtsProvider(
+      {
+        TTS_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "or-key",
+        TTS_PROVIDER_REFERENCE_AUDIO_PATH: join(tmpdir(), "ei-missing-reference.mp3"),
+      },
+      fetchFn,
+    );
+    await assert.rejects(synthesize("hello", "default", neverAborted()), /tts-reference-unavailable/);
+    assert.equal(called, false);
+  });
+
+  it("without a key it fails closed and never calls the provider", async () => {
+    let called = false;
+    const fetchFn = (async () => {
+      called = true;
+      return new Response(new Uint8Array([1]), { status: 200, headers: { "Content-Type": "audio/mpeg" } });
+    }) as typeof fetch;
+    const synthesize = makeTtsProvider({ TTS_PROVIDER: "openrouter" }, fetchFn);
+    await assert.rejects(synthesize("hi", "default", neverAborted()), /tts-provider-unconfigured/);
+    assert.equal(called, false);
+  });
+
+  it("uses the configured rotation order and the free-tier defaults", () => {
+    assert.deepEqual(openRouterTtsModels({}), [
+      "fish-audio/s2.1-pro-free:free",
+      "heygen/heygen-voice-1-turbo:free",
+      "hexgrad/kokoro-82m",
+    ]);
+    assert.deepEqual(openRouterTtsModels({ TTS_PROVIDER_MODELS: "a/b , c/d " }), ["a/b", "c/d"]);
   });
 });
 

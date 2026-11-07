@@ -192,16 +192,80 @@ export function unitBudgetExceeded(
 }
 
 
+/**
+ * Reasoning hosts (Groq's gpt-oss, QwQ, …) reject `max_tokens` in favour of
+ * `max_completion_tokens` and spend part of that budget thinking, so they get
+ * both a larger ceiling and the alternate field on request.
+ */
+const REASONING_MODEL_PATTERN = /gpt-oss|reasoner|reasoning|thinking|qwq/i;
+const DEFAULT_MAX_TOKENS = 1000;
+const REASONING_MAX_TOKENS = 4096;
+
+function concatBytes(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
+
+/** Read at most `limit` bytes of an error body; the body is advisory only. */
+async function readBoundedErrorText(response: Response, limit = 4096): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel().catch(() => {});
+        break;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    // An unreadable error body must not mask the HTTP failure.
+  } finally {
+    reader.releaseLock();
+  }
+  return new TextDecoder().decode(concatBytes(chunks));
+}
+
 /** OpenAI-compatible HTTP adapter. Configuration and all malformed/error responses fail closed. */
-export function makeHttpProvider(apiUrl?: string, apiKey?: string, request: typeof fetch = fetch, model?: string): ProviderFn {
+export function makeHttpProvider(
+  apiUrl?: string,
+  apiKey?: string,
+  request: typeof fetch = fetch,
+  model?: string,
+  maxTokens?: number,
+): ProviderFn {
+  const limit = maxTokens ?? (model && REASONING_MODEL_PATTERN.test(model) ? REASONING_MAX_TOKENS : DEFAULT_MAX_TOKENS);
   return async (messages, signal) => {
     if (!apiUrl) throw new Error("provider-not-configured");
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-    const response = await request(apiUrl, {
+    const shared = { ...(model ? { model } : {}), messages };
+    let response = await request(apiUrl, {
       method: "POST", headers,
-      body: JSON.stringify({ ...(model ? { model } : {}), messages, max_tokens: 1000 }), signal,
+      body: JSON.stringify({ ...shared, max_tokens: limit }), signal,
     });
+    if (response.status === 400) {
+      // The body names the offending field; retry once with the modern name.
+      const detail = await readBoundedErrorText(response);
+      if (/max_tokens|max_completion_tokens/i.test(detail)) {
+        response = await request(apiUrl, {
+          method: "POST", headers,
+          body: JSON.stringify({ ...shared, max_completion_tokens: limit }), signal,
+        });
+      }
+    }
     if (!response.ok) throw new Error(`provider-http-${response.status}`);
     const data = await response.json() as any;
     const text = data?.choices?.[0]?.message?.content;
