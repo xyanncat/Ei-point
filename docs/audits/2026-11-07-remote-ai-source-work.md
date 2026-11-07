@@ -51,6 +51,7 @@ the account owners. There is no deployed revision, image ID or health status to 
    Drive — restic has no native Drive backend). The script requires the `rclone` binary and an explicit
    `RCLONE_CONFIG`, and fails closed without them. restic encrypts and deduplicates before upload, so the 5 TB Drive
    account holds ciphertext only; native `gs:`/`s3:`/`b2:`/`azure:`/`sftp:`/`rest:` remain supported.
+   **Committed as `e4579bf` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
 
 ## Verified locally (fresh runs on this revision)
 
@@ -80,6 +81,8 @@ Third pass (hosted providers + Drive backup) — fresh runs:
 | `corepack pnpm --filter @ei-point/module-ai test` | 17 passed / 0 failed (4 new Groq reasoning-model tests) |
 | `node --test infra/backup/durable-assets.test.mjs` | 9 passed / 0 failed (rclone/Drive path asserted) |
 | `corepack pnpm --filter @ei-point/bot-ai typecheck` + `--filter @ei-point/module-ai build` | clean |
+| `corepack pnpm test` (full repo chain: every package suite, phase 4/phase 6 gates, controls DB, AI/workers/operations/runtime/moderation/backup suites, resource budget) | passed end to end — final gate: 113 passed / 0 failed; `Resource budget ok (pool mode)` |
+| `bash -n infra/backup/restic-backup.sh` + live run with `RESTIC_REPOSITORY=rclone:drive:…` | syntax ok; fails closed with `rclone is required for an rclone: repository` (binary absent); `gs:` still accepted by the allowlist |
 
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 
