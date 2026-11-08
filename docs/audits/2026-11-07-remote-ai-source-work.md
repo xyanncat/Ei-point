@@ -71,6 +71,7 @@ the account owners. There is no deployed revision, image ID or health status to 
    Translation adapter still available as `google`; `local` is accepted only as a legacy alias. Pre-removal release
    manifests that still carry the `hy-mt2` image remain valid so `rollback.sh` can restore the old translation
    runtime — the removed service is an optional legacy key, never required by a new release.
+   **Committed as `d56a42f` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
 
 ## Verified locally (fresh runs on this revision)
 
@@ -120,7 +121,7 @@ Fifth pass (Hy-MT2 removal) — fresh runs:
 | `node --test tests/operations/deploy.test.mjs` | 1 passed / 0 failed (local and hosted deploys, legacy rollback) |
 | `node --test infra/backup/durable-assets.test.mjs` | 9 passed / 0 failed (single reprovisionable Pocket asset) |
 | `node scripts/check-feature-coverage.mjs` | structural exit 0; 179 rows still map to existing targets and tests |
-| full `corepack pnpm test` chain | rerun below |
+| full `corepack pnpm test` chain | passed end to end — final gate 113 passed / 0 failed; `Resource budget ok (pool mode): 12544 shares / 24.5 GiB; concurrent 25.75 GiB` |
 
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 
