@@ -13,27 +13,29 @@ One rule decides everything — `localModelServices()` in `scripts/lib/operation
 |---|---|---|
 | `TTS_PROVIDER` | unset, empty or `local` | `tts` **in** the runtime |
 | `TTS_PROVIDER` | `google`, `openai`, `openrouter` | `tts` **out** |
-| `TRANSLATION_PROVIDER` | unset, empty or `local` | `hy-mt2` **in** the runtime |
-| `TRANSLATION_PROVIDER` | `google` | `hy-mt2` **out** |
+
+Translation has no local model service at all any more (Hy-MT2 was removed on
+2026-11-09): it uses the configured chat provider by default
+(`TRANSLATION_PROVIDER` unset/`chat`) or Google Cloud Translation
+(`TRANSLATION_PROVIDER=google`).
 
 That single rule drives:
 
-- **deploy** (`scripts/deploy.sh`): the model services are pulled and started
-  only while their provider is local. A hosted provider passes
-  `--allow-missing-tts` / `--allow-missing-hy-mt2` to the release manifest and
-  skips the model `up` step.
+- **deploy** (`scripts/deploy.sh`): the TTS service is pulled and started only
+  while its provider is local. A hosted TTS provider passes `--allow-missing-tts`
+  to the release manifest and skips the model `up` step.
 - **release manifest** (`scripts/release-manifest.mjs`): a manifest without the
-  model images validates from the environment alone, and the model client URLs
-  are wired only when their image is in the release.
+  TTS image validates from the environment alone, and the TTS client URL is
+  wired only when its image is in the release.
 - **roster and health** (`scripts/release-roster.mjs`,
-  `scripts/health-fleet.mjs`): the model health target disappears with the
-  release.
+  `scripts/health-fleet.mjs`): no model health target remains; translation is
+  hosted and TTS readiness is covered by its Compose healthcheck.
 - **resource budget** (`scripts/check-resource-budget.mjs`): the rendered stack
   is filtered to the release roster, so the budget reflects what actually runs.
-  The approved local baseline is 28.5 GiB / 14 592 shares; with both models
-  hosted it is **20.5 GiB / 8 448 shares** (arithmetic, not measured RAM).
+  The approved local baseline is 24.5 GiB / 12 544 shares; with TTS hosted it
+  is **20.5 GiB / 8 448 shares** (arithmetic, not measured RAM).
 - **Compose** (`infra/docker/compose.yml`): `bot-ai` no longer hard-depends on
-  `tts`/`hy-mt2`; deploy starts the models before the bots when they are local.
+  `tts`; deploy starts it before the bots when it is local.
 
 ## Preconditions (phase 2 gate)
 
@@ -43,8 +45,9 @@ Do not flip the providers until the hosted path has passed a live check:
    Japanese and an English sample; the voice sounds acceptable to the owner.
 2. `AI_PROVIDER_PRIMARY` (Groq, `openai/gpt-oss-20b`) answers a persona prompt
    with correct usage fields and no chain-of-thought leakage.
-3. `TRANSLATION_PROVIDER=google` (or `local`) translates the owner's important
-   languages correctly.
+3. Translation: the default chat provider translates the owner's important
+   languages correctly (`TRANSLATION_PROVIDER` unset or `chat`), or Google
+   Translation is configured explicitly.
 4. A forced `429` produces the honest "busy" response, not a local fallback.
 
 ## Cutover
@@ -53,22 +56,22 @@ Do not flip the providers until the hosted path has passed a live check:
 # 1. In the deployment environment file (/srv/ei-point/.env):
 TTS_PROVIDER=openrouter
 OPENROUTER_API_KEY=<key>
-TRANSLATION_PROVIDER=google
-GOOGLE_TRANSLATE_API_KEY=<key>
-# Leave TTS_URL / HY_MT2_URL / *_MODEL_PATH alone: they are unused while the
-# providers are hosted, and the release drops the services either way.
+# Translation needs no local service; leave TRANSLATION_PROVIDER unset to use
+# the chat provider, or set it to google with GOOGLE_TRANSLATE_API_KEY.
+# Leave TTS_URL / POCKET_* alone: unused while TTS is hosted, and the release
+# drops the service either way.
 
-# 2. Build a release manifest WITHOUT the tts and hy-mt2 images
-#    (the normal CI release flow does this; the model images are simply not
+# 2. Build a release manifest WITHOUT the tts image
+#    (the normal CI release flow does this; the model image is simply not
 #    produced for that release).
 
 # 3. Deploy from the backup-verified release:
 BACKUP_SNAPSHOT=<verified snapshot> bash scripts/deploy.sh <release.json>
 
-# 4. Verify the model services are gone and everything else is ready:
+# 4. Verify the TTS service is gone and everything else is ready:
 docker compose --project-name ei-point ps --format '{{.Service}}'
-node scripts/health-fleet.mjs <release.json>   # no hy-mt2 target
-docker stats --no-stream                        # no tts/hy-mt2 rows
+node scripts/health-fleet.mjs <release.json>
+docker stats --no-stream
 ```
 
 Then run the live Discord acceptance: `/speak` (hosted voice), `/translate`

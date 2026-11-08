@@ -42,8 +42,8 @@ describe("Cyrene translation input", () => {
   });
 });
 
-describe("bounded Hy-MT2 queue", () => {
-  it("serializes local inference and rejects requests over the waiting limit", async () => {
+describe("bounded translation queue", () => {
+  it("serializes requests and rejects requests over the waiting limit", async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const queue = createTranslationQueue(async ({ text }) => {
@@ -68,7 +68,7 @@ describe("bounded Hy-MT2 queue", () => {
     assert.equal(queue.queued(), 0);
   });
 
-  it("turns a stalled local model into a bounded timeout failure", async () => {
+  it("turns a stalled provider into a bounded timeout failure", async () => {
     const queue = createTranslationQueue(() => new Promise<string>(() => {}), { deadlineMs: 5 });
     assert.deepEqual(await queue.translate({ text: "hello", targetLanguage: "Arabic" }), { ok: false, reason: "unavailable" });
     assert.equal(queue.inFlight(), 0);

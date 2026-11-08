@@ -28,7 +28,6 @@ Classification drives the policy:
 | `deployment-secret` | operator | secret | `ENV_FILE` (`.env`) | off-host restic (encrypted) | filesystem perms 600 | restic tier (≤24 h copy age) | restore to 0600 and re-run release health gates | 6 h |
 | `pocket-tts-weights` | operator (pocket-tts) | reprovisionable | `POCKET_TTS_HF_CACHE_PATH` | `scripts/prepare_pocket_model.py --revision <sha>` | HF snapshot revision + manifest sha256 | n/a (public, gated) | Pocket loads pinned snapshot offline; `tts` ready | n/a |
 | `cyrene-pocket-voice-state` | cyrene (pocket-tts) | unique-private | `POCKET_TTS_VOICE_STATE_PATH` | off-host restic (encrypted) | sha256 `c053f46f…` | restic tier (≤24 h copy age) | voice-state sha256 matches before `tts` starts ready | 6 h |
-| `hy-mt2-weights` | operator (hy-mt2) | reprovisionable | `HY_MT2_MODEL_PATH` | `scripts/prepare_hymt2_model.py --revision <sha>` | `ei-point-model.json` + `.sha256` | n/a (public) | checksum check passes; `/health` ok | n/a |
 
 `infra/backup/restic-backup.sh` resolves the unique/private and secret host paths
 and the private Docker volumes from this inventory (`--list-private` and

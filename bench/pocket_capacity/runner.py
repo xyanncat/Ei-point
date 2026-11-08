@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bounded open-loop harness for Pocket TTS / Hy-MT2 capacity tests.
+"""Bounded open-loop harness for Pocket TTS / translation capacity tests.
 
 This harness is for a verified isolated staging deployment only. It refuses
 known production targets and requires EI_BENCH_ISOLATED=1 plus --execute.

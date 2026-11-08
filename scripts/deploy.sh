@@ -37,7 +37,6 @@ provider_is_local() {
 MODEL_SERVICES=()
 MANIFEST_FLAGS=()
 if provider_is_local "${TTS_PROVIDER:-}"; then MODEL_SERVICES+=(tts); else MANIFEST_FLAGS+=(--allow-missing-tts); fi
-if provider_is_local "${TRANSLATION_PROVIDER:-}"; then MODEL_SERVICES+=(hy-mt2); else MANIFEST_FLAGS+=(--allow-missing-hy-mt2); fi
 node scripts/release-manifest.mjs "$RELEASE_MANIFEST" "$WORK/release.compose.json" ${MANIFEST_FLAGS[@]+"${MANIFEST_FLAGS[@]}"}
 mapfile -t BOTS < <(sed '/^$/d' "$WORK/release.compose.json.bots")
 COMPOSE=(docker compose --project-name ei-point --env-file "$ENV_FILE" -f infra/docker/compose.yml -f "$WORK/release.compose.json")

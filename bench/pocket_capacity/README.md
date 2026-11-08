@@ -1,6 +1,6 @@
-# Pocket TTS / Hy-MT2 isolated capacity harness
+# Pocket TTS / translation isolated capacity harness
 
-**Do not run this against the live Ei Point VPS, its `tts`/`hy-mt2` services,
+**Do not run this against the live Ei Point VPS, its `tts` service,
 its Docker project, or its nine-CPU `ei-point.slice`.** The harness refuses
 known production hosts and requires `EI_BENCH_ISOLATED=1` before it will send
 load. A second Compose project on the same VPS is still sharing CPU, memory
@@ -13,7 +13,7 @@ Use a separate existing VM or host with:
 - its own Docker daemon, images, database, volumes, queues, caches and network;
 - no production Discord tokens, bot processes, public routes, payment providers,
   moderation effects, backup jobs or production database;
-- comparable visible CPU features, Pocket/Hy-MT2 versions, model/voice-state
+- comparable visible CPU features, Pocket TTS and translation provider versions, model/voice-state
   revisions and admission limits;
 - a hard test CPU/memory budget and a free-space reserve of at least 20% plus
   scratch allowance;

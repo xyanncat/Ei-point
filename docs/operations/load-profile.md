@@ -16,7 +16,7 @@ RAM/disk uncapped). Member-count assumptions need owner confirmation.
 | AI chat concurrency / queue / deadline | 2 / 20 / 60 s | `packages/modules/ai` (`AI_CONCURRENT`, `AI_QUEUE_MAX`, `AI_DEADLINE_MS`) |
 | AI daily budget | 25,000 tokens/user/day (default) | `AI_DAILY_BUDGET_TOKENS` |
 | TTS synthesis concurrency / queue / deadline | 2 / 10 / 90 s | `packages/modules/tts` |
-| Translation concurrency / queue / deadline | 1 slot / 8 / 60 s | Hy-MT2 service + bot queue |
+| Translation concurrency / queue / deadline | 1 slot / 8 / 60 s | hosted provider + bot queue |
 | Text input caps | 500 chars (speak/translate/voice-chat), 300 (search query) | module validators |
 | Checkout rate limit | 30 requests/min per client bucket (1-minute window) | `commerce.checkout_rate_limits` |
 | Per-user cooldowns | 5 s (AI mentions, voice-chat reading) | bot runtime |

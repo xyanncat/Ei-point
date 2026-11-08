@@ -14,7 +14,7 @@ exec 9>"$STATE_DIR/deploy.lock"
 flock -n 9 || { echo 'Another release operation is active' >&2; exit 1; }
 WORK=$(mktemp -d "$STATE_DIR/rollback.XXXXXX")
 trap 'rm -rf -- "$WORK"' EXIT
-node scripts/release-manifest.mjs "$PREVIOUS" "$WORK/previous.compose.json" --allow-missing-tts --allow-missing-hy-mt2
+node scripts/release-manifest.mjs "$PREVIOUS" "$WORK/previous.compose.json" --allow-missing-tts
 mapfile -t BOTS < <(sed '/^$/d' "$WORK/previous.compose.json.bots")
 COMPOSE=(docker compose --project-name ei-point --env-file "$ENV_FILE" -f infra/docker/compose.yml -f "$WORK/previous.compose.json")
 if [[ "$(cat "$WORK/previous.compose.json.tts")" == 1 ]]; then

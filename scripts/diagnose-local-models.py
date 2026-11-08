@@ -27,21 +27,19 @@ print(json.dumps({
 """
 
 BENCHMARK = r"""
-const kind=process.argv[1], tts=kind==='tts';
 for(let index=1;index<=3;index++){
  const number=index===3?1:index;
  const text=`Hello there. This is benchmark sample ${number}.`;
- const body=tts?{text,voice:'default',format:'wav'}:{messages:[{role:'user',content:`Translate into French. Output only the translation.\n${text}`}],temperature:0.7,top_p:0.6,top_k:20,repeat_penalty:1.05,max_tokens:700,stream:false};
- const endpoint=tts?'http://tts:3120/v1/audio/speech':'http://hy-mt2:3121/v1/chat/completions';
+ const body={text,voice:'default',format:'wav'};
+ const endpoint='http://tts:3120/v1/audio/speech';
  const start=performance.now();
  try{
   const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(120000)});
   const headers_seconds=(performance.now()-start)/1000;
   const bytes=Buffer.from(await response.arrayBuffer());
   const total_seconds=(performance.now()-start)/1000;
-  let data=null,audio_seconds=null;
-  if(!tts&&response.ok){try{data=JSON.parse(bytes.toString('utf8'));}catch{}}
-  if(tts&&response.ok&&bytes.toString('ascii',0,4)==='RIFF'){
+  let audio_seconds=null;
+  if(response.ok&&bytes.toString('ascii',0,4)==='RIFF'){
    let rate=null;
    for(let at=12;at+8<=bytes.length;){
     const id=bytes.toString('ascii',at,at+4),size=bytes.readUInt32LE(at+4),body=at+8;
@@ -50,8 +48,8 @@ for(let index=1;index<=3;index++){
     at=body+size+(size%2);
    }
   }
-  console.log(JSON.stringify({kind,index,repeated_input:index===3,input_chars:text.length,status:response.status,headers_seconds,total_seconds,bytes:bytes.length,audio_seconds,real_time_factor:audio_seconds?total_seconds/audio_seconds:null,usage:data?.usage,timings:data?.timings,translation:data?.choices?.[0]?.message?.content}));
- }catch(error){console.log(JSON.stringify({kind,index,error:error.name,total_seconds:(performance.now()-start)/1000}));}
+  console.log(JSON.stringify({kind:'tts',index,repeated_input:index===3,input_chars:text.length,status:response.status,headers_seconds,total_seconds,bytes:bytes.length,audio_seconds,real_time_factor:audio_seconds?total_seconds/audio_seconds:null}));
+ }catch(error){console.log(JSON.stringify({kind:'tts',index,error:error.name,total_seconds:(performance.now()-start)/1000}));}
 }
 """
 
@@ -72,20 +70,16 @@ def main():
     for item in items:
         service=item['Config'].get('Labels',{}).get('com.docker.compose.service','')
         services[service]=item['Id']
-        if service not in {'bot-ai','hy-mt2','tts'}:
+        if service not in {'bot-ai','tts'}:
             continue
         host=item['HostConfig']
         print(json.dumps({'service':service,'image_id':item['Image'],'limits':{k:host.get(k) for k in ['NanoCpus','CpuQuota','CpuPeriod','CpuShares','CpusetCpus','CgroupParent','Memory']},'health':item['State'].get('Health',{}).get('Status'),'restarts':item['RestartCount']}),flush=True)
-        if service=='hy-mt2':
-            cmd=item['Config'].get('Cmd') or []
-            print(json.dumps({'translation_settings':{flag:cmd[cmd.index(flag)+1] for flag in ['--threads','--threads-batch','--parallel','--ctx-size'] if flag in cmd and cmd.index(flag)+1<len(cmd)}}),flush=True)
     if 'tts' in services:
         print(run(['docker','exec',services['tts'],'python','-c',TORCH],60),flush=True)
     if args.benchmark:
         if 'bot-ai' not in services:
             parser.error('Benchmark requires a running bot-ai container with model-network access.')
-        for kind in ['tts','translation']:
-            print(run(['docker','exec',services['bot-ai'],'node','--input-type=module','-e',BENCHMARK,kind],390),flush=True)
+        print(run(['docker','exec',services['bot-ai'],'node','--input-type=module','-e',BENCHMARK],390),flush=True)
 
 
 if __name__=='__main__':

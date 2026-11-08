@@ -52,17 +52,25 @@ the account owners. There is no deployed revision, image ID or health status to 
    `RCLONE_CONFIG`, and fails closed without them. restic encrypts and deduplicates before upload, so the 5 TB Drive
    account holds ciphertext only; native `gs:`/`s3:`/`b2:`/`azure:`/`sftp:`/`rest:` remain supported.
    **Committed as `e4579bf` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
-8. **Phase 3 runtime cutover — local models become optional (this round).** One rule, `localModelServices()` in
-   `scripts/lib/operations.mjs`, maps `TTS_PROVIDER`/`TRANSLATION_PROVIDER` to whether `tts`/`hy-mt2` belong to the
-   runtime. It drives the release manifest (a manifest without the model images now validates from the environment
-   alone, and the model client URLs are wired only when the image is present), the deploy script (models are pulled
-   and started only while local), the roster and fleet health check (the `hy-mt2` probe disappears with the release),
-   and the resource budget (the rendered stack is filtered to the release roster, so a hosted release is checked at
-   **20.5 GiB / 8 448 shares** instead of the local 28.5 GiB / 14 592 shares — arithmetic, not measured RAM).
-   `bot-ai` no longer hard-depends on `tts`/`hy-mt2` in Compose; deploy still starts models before bots when they are
-   local. The resource checker also reads `RESOURCE_CPU_CEILING` / `RESOURCE_MEMORY_CEILING_GIB` from the environment
-   and fails closed when the CPU ceiling disagrees with `infra/systemd/ei-point.slice`, so the §12 host decision is a
-   configuration change, not a code change. Runbook: `docs/operations/remote-ai-cutover.md`.
+8. **Phase 3 runtime cutover — local TTS becomes optional (round 3; the Hy-MT2 half was superseded by item 9).** One
+   rule, `localModelServices()` in `scripts/lib/operations.mjs`, maps `TTS_PROVIDER` to whether `tts` belongs to the
+   runtime. It drives the release manifest (a manifest without the TTS image validates from the environment alone, and
+   the TTS client URL is wired only when the image is present), the deploy script (TTS is pulled and started only
+   while local), the roster and fleet health check, and the resource budget (the rendered stack is filtered to the
+   release roster, so a hosted release is checked at **20.5 GiB / 8 448 shares** instead of the local
+   24.5 GiB / 12 544 shares — arithmetic, not measured RAM). `bot-ai` no longer hard-depends on `tts` in Compose;
+   deploy still starts it before the bots when it is local. The resource checker also reads
+   `RESOURCE_CPU_CEILING` / `RESOURCE_MEMORY_CEILING_GIB` and fails closed when the CPU ceiling disagrees with
+   `infra/systemd/ei-point.slice`, so the §12 host decision is a configuration change, not a code change.
+   Runbook: `docs/operations/remote-ai-cutover.md`.
+9. **Hy-MT2 removed (2026-11-09).** Translation no longer runs a local model. The `hy-mt2` Compose service, its
+   Dockerfile/start script, model-preparation script and requirements, operations guide and model-integrity test are
+   deleted; the bot-ai environment, translation network, release roster, resource budget, durable-asset inventory and
+   docs no longer reference it. `/translate` now uses the configured OpenAI-compatible chat provider by default
+   (`TRANSLATION_PROVIDER` unset/`chat`; the URL/key/model already configured for Groq) with the Google Cloud
+   Translation adapter still available as `google`; `local` is accepted only as a legacy alias. Pre-removal release
+   manifests that still carry the `hy-mt2` image remain valid so `rollback.sh` can restore the old translation
+   runtime — the removed service is an optional legacy key, never required by a new release.
 
 ## Verified locally (fresh runs on this revision)
 
@@ -103,13 +111,24 @@ Fourth pass (phase 3 runtime cutover) — fresh runs:
 | `bash -n scripts/deploy.sh` | syntax ok |
 | `node scripts/check-resource-budget.mjs` | ok at 9 CPU / 28.5 GiB; `RESOURCE_CPU_CEILING=8` correctly fails against the unchanged `CPUQuota=900%` slice |
 
+Fifth pass (Hy-MT2 removal) — fresh runs:
+
+| Check | Result |
+|---|---|
+| `corepack pnpm --filter @ei-point/bot-ai typecheck` + `test` | clean; 65 passed / 0 failed (translation-via-chat tests, legacy provider fail-closed) |
+| `node --test tests/operations/release.test.mjs tests/operations/resource-budget.test.mjs` | 30 passed / 0 failed (roster without Hy-MT2, legacy manifest accepted, 24.5 GiB local / 20.5 GiB hosted) |
+| `node --test tests/operations/deploy.test.mjs` | 1 passed / 0 failed (local and hosted deploys, legacy rollback) |
+| `node --test infra/backup/durable-assets.test.mjs` | 9 passed / 0 failed (single reprovisionable Pocket asset) |
+| `node scripts/check-feature-coverage.mjs` | structural exit 0; 179 rows still map to existing targets and tests |
+| full `corepack pnpm test` chain | rerun below |
+
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 
 - Google billing/project provisioning and API enablement (`texttospeech.googleapis.com`,
   `translation.googleapis.com`); learner/quota verification.
-- Release roster, manifest, validator and health-check changes that remove `tts`/`hy-mt2` from the normal production
-  path — only after remote adapters pass a live/staging check (phase 3 gate). Until then the roster stays as-is and
-  every default keeps today's behaviour.
+- Release roster, manifest, validator and health-check changes are in place: `hy-mt2` is removed entirely, and `tts`
+  stays optional while a hosted TTS provider is configured. The live provider acceptance still gates the production
+  cutover.
 - 9-CPU pool arithmetic in `check-resource-budget.mjs` and the 8 GiB envelope — pending the §12 host-size decisions
   before provisioning (treated as targets, not measured results).
 - VPS checkout sync at `/opt/ei-point`, rebuild/redeploy of affected services, and the live Discord acceptance pass —

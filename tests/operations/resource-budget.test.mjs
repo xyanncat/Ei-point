@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+﻿import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -16,10 +16,10 @@ test('approved pool allocation validates with the aggregate cgroup cap', () => {
   const result = validateResourceBudget(approved());
   assert.equal(result.ok, true, JSON.stringify(result.violations));
   assert.equal(result.mode, 'pool');
-  assert.equal(result.runtime.shares, 14592);
-  assert.equal(result.runtime.memoryGiB, 28.5);
-  assert.equal(result.concurrent.shares, 15104);
-  assert.equal(result.concurrent.memoryGiB, 29.75);
+  assert.equal(result.runtime.shares, 12544);
+  assert.equal(result.runtime.memoryGiB, 24.5);
+  assert.equal(result.concurrent.shares, 13056);
+  assert.equal(result.concurrent.memoryGiB, 25.75);
 });
 
 test('pool mode requires the aggregate cgroup parent on every runtime service', () => {
@@ -111,7 +111,7 @@ test('infra compose stays in sync with the approved pool allocation', () => {
     assert.equal(parent[1], POOL_CGROUP_PARENT);
   }
 });
-test('hosted providers remove the local model services from the approved budget', async () => {
+test('hosted TTS removes its service from the approved budget', async () => {
   const { approvedRuntimeFor } = await import('../../scripts/check-resource-budget.mjs');
   const local = approvedRuntimeFor({});
   assert.equal(local.tts.memoryGiB, 4);

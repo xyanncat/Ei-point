@@ -2,47 +2,48 @@ import {readFile,stat,realpath} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {resolve,join,basename,sep} from 'node:path';
-export const releaseServices=['postgres','nginx','api','web','workers','tts','hy-mt2','bot-kafka','bot-himiko','bot-community','bot-ai','bot-music','bot-commerce'];
+export const releaseServices=['postgres','nginx','api','web','workers','tts','bot-kafka','bot-himiko','bot-community','bot-ai','bot-music','bot-commerce'];
 export const defaultBots=[['bot-kafka','kafka',3108],['bot-himiko','himiko',3107],['bot-community','silverwolf',3103],['bot-ai','cyrene',3104],['bot-music','robin',3105],['bot-commerce','cipher',3106]].map(([service,botKey,port])=>({service,botKey,port}));
 
 /**
  * Which local model services the selected providers still need
- * (redesign infrastructure §6/§10 phase 3). Unset or `local` keeps the model
- * container; any hosted provider removes it from the normal runtime. The
- * mapping is the single source of truth for deploy, release and health checks.
+ * (redesign infrastructure §6/§10 phase 3). TTS is the only local model left:
+ * translation runs on the configured hosted provider (Hy-MT2 removed
+ * 2026-11-09). Unset or `local` keeps the TTS container; a hosted provider
+ * removes it from the normal runtime.
  */
 export function localModelServices(env=process.env){
   const normalized=name=>String(env?.[name]??'').trim().toLowerCase();
   const tts=normalized('TTS_PROVIDER');
-  const translation=normalized('TRANSLATION_PROVIDER');
-  return {tts:tts===''||tts==='local','hy-mt2':translation===''||translation==='local'};
+  return {tts:tts===''||tts==='local'};
 }
 
-/** The full release roster with model services removed when hosted providers are configured. */
+/** The full release roster with the TTS service removed when a hosted provider is configured. */
 export function releaseServicesFor(env=process.env){
   const local=localModelServices(env);
-  return releaseServices.filter(name=>name==='tts'||name==='hy-mt2'?local[name]:true);
+  return releaseServices.filter(name=>name==='tts'?local.tts:true);
 }
 
-/** Fleet readiness targets for a release, or for the provider selection when no release is given. */
-export function fleetTargets(release=null,env=process.env){
+/** Fleet readiness targets for a release (models are hosted; no model probe remains). */
+export function fleetTargets(release=null){
   const bots=release?.bots??defaultBots;
-  const local=localModelServices(env);
-  const includeModels=release?Object.hasOwn(release.images??{},'hy-mt2'):local['hy-mt2'];
   return [
     {name:'nginx',url:'http://127.0.0.1:8080/healthz',kind:'text'},
     {name:'api',url:'http://127.0.0.1:3001/readyz',kind:'json'},
-    ...(includeModels?[{name:'hy-mt2',url:'http://127.0.0.1:3121/health',kind:'model'}]:[]),
     ...bots.map(({botKey:name,port})=>({name,url:`http://127.0.0.1:${port}/health/ready`,kind:'json'})),
   ];
 }
-export function validateRelease(value,{allowMissingTts=false,allowMissingHyMt2=false}={}){
+export function validateRelease(value,{allowMissingTts=false}={}){
  if(!value||typeof value.id!=='string'||!/^[-a-zA-Z0-9_.]{1,80}$/.test(value.id)||!value.images||typeof value.images!=='object')throw Error('Invalid release manifest');
  const bots=value.bots??defaultBots;
  if(!Array.isArray(bots)||bots.some(b=>!/^bot-[a-z0-9-]+$/.test(b.service)||['bot-security','bot-moderation'].includes(b.service)||!/^[-a-z0-9]+$/.test(b.botKey)||!Number.isInteger(b.port)||b.port<1024||b.port>65535)||new Set(bots.map(b=>b.service)).size!==bots.length||new Set(bots.map(b=>b.botKey)).size!==bots.length||new Set(bots.map(b=>b.port)).size!==bots.length)throw Error('Invalid or overlapping bot roster');
- const expected=['postgres','nginx','api','web','workers',...(allowMissingTts&&!Object.hasOwn(value.images,'tts')?[]:['tts']),...(allowMissingHyMt2&&!Object.hasOwn(value.images,'hy-mt2')?[]:['hy-mt2']),...bots.map(b=>b.service)];
- if(Object.keys(value.images).some(key=>!expected.includes(key)))throw Error('Unsupported or overlapping release service');
- for(const name of expected)if(typeof value.images[name]!=='string'||!/^[-a-zA-Z0-9._/:]+@sha256:[a-f0-9]{64}$/.test(value.images[name]))throw Error(`Immutable image digest required: ${name}`);
+ const expected=['postgres','nginx','api','web','workers',...(allowMissingTts&&!Object.hasOwn(value.images,'tts')?[]:['tts']),...bots.map(b=>b.service)];
+ // `hy-mt2` was removed on 2026-11-09. A pre-removal manifest may still carry
+ // its image so a rollback can start the old translation runtime; it is never
+ // required and never part of a new release.
+ const legacy=Object.hasOwn(value.images,'hy-mt2')?['hy-mt2']:[];
+ if(Object.keys(value.images).some(key=>!expected.includes(key)&&!legacy.includes(key)))throw Error('Unsupported or overlapping release service');
+ for(const name of [...expected,...legacy])if(typeof value.images[name]!=='string'||!/^[-a-zA-Z0-9._/:]+@sha256:[a-f0-9]{64}$/.test(value.images[name]))throw Error(`Immutable image digest required: ${name}`);
  value.bots=bots;
  return value;
 }

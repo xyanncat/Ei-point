@@ -3,12 +3,11 @@ import {dirname,resolve} from 'node:path';
 import {validateRelease,localModelServices} from './lib/operations.mjs';
 const [source,output]=process.argv.slice(2);
 if(!source||!output)throw Error('Usage: node scripts/release-manifest.mjs release.json output.compose.json');
-// A hosted provider removes its local model image from the normal roster; the
+// A hosted TTS provider removes its local image from the normal roster; the
 // manifest then validates without it. Explicit flags stay supported.
 const local=localModelServices(process.env);
 const release=validateRelease(JSON.parse(await readFile(source,'utf8')),{
   allowMissingTts:process.argv.includes('--allow-missing-tts')||!local.tts,
-  allowMissingHyMt2:process.argv.includes('--allow-missing-hy-mt2')||!local['hy-mt2'],
 });
 // Compose rejects `build: null` on a service whose base definition declares no build
 // ("services.<name>.build must be a string"), so only neutralise builds that
@@ -29,6 +28,8 @@ services.migrate=pinned('migrate',release.images.api);
 if(services['bot-ai']){
  const aiEnvironment={};
  if(release.images['tts'])aiEnvironment.TTS_URL='http://tts:3120/v1/audio/speech';
+ // Legacy only: a pre-removal release may still carry the Hy-MT2 image so a
+ // rollback can run its old translation runtime. New releases never include it.
  if(release.images['hy-mt2'])aiEnvironment.HY_MT2_URL='http://hy-mt2:3121/v1/chat/completions';
  if(Object.keys(aiEnvironment).length)services['bot-ai'].environment=aiEnvironment;
 }

@@ -33,7 +33,6 @@ export const APPROVED_RUNTIME = {
   web: { shares: 1024, memoryGiB: 1, cgroupParent: POOL_CGROUP_PARENT },
   "bot-community": { shares: 512, memoryGiB: 2, cgroupParent: POOL_CGROUP_PARENT },
   "bot-ai": { shares: 512, memoryGiB: 2, cgroupParent: POOL_CGROUP_PARENT },
-  "hy-mt2": { shares: 2048, memoryGiB: 4, cgroupParent: POOL_CGROUP_PARENT },
   tts: { shares: 4096, memoryGiB: 4, cgroupParent: POOL_CGROUP_PARENT },
   "bot-music": { shares: 512, memoryGiB: 2, cgroupParent: POOL_CGROUP_PARENT },
   "bot-kafka": { shares: 512, memoryGiB: 1.5, cgroupParent: POOL_CGROUP_PARENT },
@@ -57,7 +56,7 @@ export const APPROVED_MAINTENANCE = {
 export function approvedRuntimeFor(env = process.env) {
   const local = localModelServices(env);
   return Object.fromEntries(
-    Object.entries(APPROVED_RUNTIME).filter(([name]) => (name === "tts" || name === "hy-mt2" ? local[name] : true)),
+    Object.entries(APPROVED_RUNTIME).filter(([name]) => (name === "tts" ? local.tts : true)),
   );
 }
 

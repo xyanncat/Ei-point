@@ -288,10 +288,48 @@ describe("OpenRouter speech provider", () => {
 });
 
 describe("translation provider selection", () => {
-  it("defaults to the local worker without a provider variable", () => {
+  it("defaults to the chat worker without a provider variable", () => {
     // Constructing must not throw or attempt a fetch; no call is made here.
     assert.doesNotThrow(() => makeTranslationWorker({}));
     assert.doesNotThrow(() => makeTranslationWorker({ TRANSLATION_PROVIDER: "" }));
+    assert.doesNotThrow(() => makeTranslationWorker({ TRANSLATION_PROVIDER: "local" }));
+  });
+
+  it("translates through the configured OpenAI-compatible chat provider", async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown>; auth: string | undefined }> = [];
+    const fetchFn = (async (url: string, init: RequestInit) => {
+      calls.push({
+        url: String(url),
+        body: JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>,
+        auth: (init.headers as Record<string, string> | undefined)?.Authorization,
+      });
+      return jsonResponse({ choices: [{ message: { content: "Bonjour" } }] });
+    }) as typeof fetch;
+    const worker = makeTranslationWorker(
+      {
+        AI_PROVIDER_PRIMARY: "https://api.groq.com/openai/v1/chat/completions",
+        AI_PROVIDER_PRIMARY_KEY: "gsk-test",
+        AI_PROVIDER_PRIMARY_MODEL: "openai/gpt-oss-20b",
+      },
+      fetchFn,
+    );
+    const text = await worker({ text: "Hello", targetLanguage: "French" }, neverAborted());
+    assert.equal(text, "Bonjour");
+    assert.equal(calls[0]!.url, "https://api.groq.com/openai/v1/chat/completions");
+    assert.equal(calls[0]!.body.model, "openai/gpt-oss-20b");
+    assert.equal(calls[0]!.auth, "Bearer gsk-test");
+    assert.equal("temperature" in calls[0]!.body, false);
+    assert.match(String((calls[0]!.body.messages as Array<{ content: string }>)[1]!.content), /from untrusted|untrusted content/i);
+  });
+
+  it("fails closed when the chat provider is not configured", async () => {
+    let called = false;
+    const worker = makeTranslationWorker({}, (async () => {
+      called = true;
+      return jsonResponse({});
+    }) as typeof fetch);
+    await assert.rejects(worker({ text: "x", targetLanguage: "French" }, neverAborted()), /translation-provider-unconfigured/);
+    assert.equal(called, false);
   });
 
   it("Google translation maps supported language names to BCP-47 codes", () => {

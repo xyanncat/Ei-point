@@ -3,11 +3,10 @@
 // model endpoints, which refuse connections in a test environment, so the
 // release-on-failure paths here run deterministically fast. The full SQLite…
 // rather: the real-pool admission/settle SQL is covered in tests/ai/database.test.mjs.
-import { describe, it } from "node:test";
+import { before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Pool, PoolClient } from "pg";
 import { respondToTtsCommand, type TtsCommandContext } from "./tts.js";
-import { LOCAL_TRANSLATION_UNAVAILABLE, respondToTranslationCommand } from "./translate.js";
 import { TRANSLATION_UNITS_PER_USER } from "./budget.js";
 
 interface Recorded { sql: string; params?: unknown[] | undefined }
@@ -82,9 +81,18 @@ describe("/speak budget admission", () => {
 });
 
 describe("/translate budget admission", () => {
+  // The deployed translation queue is built at module import from the chat
+  // provider configuration. Clear it first so these tests never reach a real
+  // provider on a developer machine; the worker then fails closed.
+  let translate: typeof import("./translate.js");
+  before(async () => {
+    delete process.env.AI_PROVIDER_PRIMARY;
+    translate = await import("./translate.js");
+  });
+
   it("refuses valid text when the daily character budget is spent", async () => {
     const fake = makeBudgetFake(String(TRANSLATION_UNITS_PER_USER + 1));
-    const result = await respondToTranslationCommand(
+    const result = await translate.respondToTranslationCommand(
       { text: "Hello", targetLanguage: "French" },
       { pool: fake.pool, guildId: "g", userId: "u" },
     );
@@ -92,13 +100,13 @@ describe("/translate budget admission", () => {
     assert.equal(fake.calls.some((c) => c.sql.includes("INSERT INTO ai.budget_reservations")), false);
   });
 
-  it("releases the hold when the local model is unreachable", async () => {
+  it("releases the hold when the translation provider is unavailable", async () => {
     const fake = makeBudgetFake("0");
-    const result = await respondToTranslationCommand(
+    const result = await translate.respondToTranslationCommand(
       { text: "Hello", targetLanguage: "French" },
       { pool: fake.pool, guildId: "g", userId: "u" },
     );
-    assert.equal(result, LOCAL_TRANSLATION_UNAVAILABLE);
+    assert.equal(result, translate.TRANSLATION_UNAVAILABLE);
     const texts = fake.calls.map((c) => c.sql);
     assert.ok(texts.some((t) => t.includes("INSERT INTO ai.budget_reservations")));
     assert.ok(texts.some((t) => t.includes("DELETE FROM ai.budget_reservations WHERE reservation_id=$1")));
