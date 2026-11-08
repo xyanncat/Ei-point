@@ -10,6 +10,13 @@ STATE_DIR=${RELEASE_STATE_DIR:-$ROOT_DIR/.releases}
 HEALTH_ATTEMPTS=${RELEASE_HEALTH_ATTEMPTS:-180}
 [[ "$HEALTH_ATTEMPTS" =~ ^[1-9][0-9]{0,2}$ ]] && (( HEALTH_ATTEMPTS<=180 )) || { echo 'RELEASE_HEALTH_ATTEMPTS must be between 1 and 180' >&2; exit 1; }
 [[ -f "$ENV_FILE" && -f "$RELEASE_MANIFEST" ]] || { echo 'Release and environment files required' >&2; exit 1; }
+# The deployment environment decides whether the local model services are part
+# of this release (redesign infrastructure §6/§10 phase 3). It is the same
+# root-readable file passed to Compose, and sourcing it here keeps deploy,
+# backup and rollback reading one configuration.
+set -a
+. "$ENV_FILE"
+set +a
 : "${BACKUP_SNAPSHOT:?Select a verified BACKUP_SNAPSHOT before deployment}"
 node scripts/verify-backup.mjs "$BACKUP_SNAPSHOT" --max-age-hours "${DEPLOY_BACKUP_MAX_AGE_HOURS:-24}" >/dev/null
 USE=$(df -P "$ROOT_DIR" | awk 'NR==2{gsub(/%/,"",$5);print $5}')
@@ -19,13 +26,27 @@ exec 9>"$STATE_DIR/deploy.lock"
 flock -n 9 || { echo 'Another deployment is active' >&2; exit 1; }
 WORK=$(mktemp -d "$STATE_DIR/deploy.XXXXXX")
 trap 'rm -rf -- "$WORK"' EXIT
-node scripts/release-manifest.mjs "$RELEASE_MANIFEST" "$WORK/release.compose.json"
+# Local model services are pulled and started only while their provider is
+# still the local default. A hosted provider removes the service from this
+# release; the manifest then omits its image and the health check omits it too.
+provider_is_local() {
+  local value
+  value=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+  [[ -z "$value" || "$value" == "local" ]]
+}
+MODEL_SERVICES=()
+MANIFEST_FLAGS=()
+if provider_is_local "${TTS_PROVIDER:-}"; then MODEL_SERVICES+=(tts); else MANIFEST_FLAGS+=(--allow-missing-tts); fi
+if provider_is_local "${TRANSLATION_PROVIDER:-}"; then MODEL_SERVICES+=(hy-mt2); else MANIFEST_FLAGS+=(--allow-missing-hy-mt2); fi
+node scripts/release-manifest.mjs "$RELEASE_MANIFEST" "$WORK/release.compose.json" ${MANIFEST_FLAGS[@]+"${MANIFEST_FLAGS[@]}"}
 mapfile -t BOTS < <(sed '/^$/d' "$WORK/release.compose.json.bots")
 COMPOSE=(docker compose --project-name ei-point --env-file "$ENV_FILE" -f infra/docker/compose.yml -f "$WORK/release.compose.json")
 "${COMPOSE[@]}" config --quiet
 "${COMPOSE[@]}" config --format json > "$WORK/render.compose.json"
-node scripts/check-resource-budget.mjs "$WORK/render.compose.json"
-"${COMPOSE[@]}" pull postgres nginx api web workers tts hy-mt2 "${BOTS[@]}" migrate
+# The rendered stack still defines every base service; the release roster says
+# which of them actually run in this deployment.
+node scripts/check-resource-budget.mjs "$WORK/render.compose.json" --release "$WORK/release.compose.json.roster.json"
+"${COMPOSE[@]}" pull postgres nginx api web workers migrate ${MODEL_SERVICES[@]+"${MODEL_SERVICES[@]}"} "${BOTS[@]}"
 # A single identity must never have old and replacement handlers running together.
 "${COMPOSE[@]}" --profile legacy-disabled stop bot-security bot-moderation
 bash scripts/stop-retired-bots.sh "$WORK/release.compose.json.bots"
@@ -35,7 +56,9 @@ docker exec --user postgres "$pgid" sh -c 'exec pgbackrest --stanza=ei-point --p
 docker exec --user postgres "$pgid" sh -c 'exec pgbackrest --stanza=ei-point --pg1-user="$POSTGRES_USER" check'
 # Do not mutate the schema until WAL archiving has a usable repository.
 "${COMPOSE[@]}" --profile maintenance run --rm --no-deps migrate
-"${COMPOSE[@]}" up -d --no-build --wait --wait-timeout 900 tts hy-mt2
+if ((${#MODEL_SERVICES[@]})); then
+  "${COMPOSE[@]}" up -d --no-build --wait --wait-timeout 900 "${MODEL_SERVICES[@]}"
+fi
 "${COMPOSE[@]}" up -d --no-build --remove-orphans --wait --wait-timeout 120 api web workers "${BOTS[@]}" nginx
 healthy=false
 for ((attempt=1; attempt<=HEALTH_ATTEMPTS; attempt++)); do

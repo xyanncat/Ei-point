@@ -313,8 +313,9 @@ services:
       start_period: 30s
     depends_on:
       postgres: { condition: service_healthy }
-      tts: { condition: service_started }
-      hy-mt2: { condition: service_started }
+      # The local model services are intentionally not hard dependencies: a
+      # release may run with hosted providers (redesign infrastructure §6), and
+      # deploy.sh starts the models before the bots whenever they are local.
     logging: { driver: json-file, options: { max-size: 10m, max-file: "5" } }
 
   hy-mt2:

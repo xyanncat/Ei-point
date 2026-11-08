@@ -4,6 +4,38 @@ import {createHash} from 'node:crypto';
 import {resolve,join,basename,sep} from 'node:path';
 export const releaseServices=['postgres','nginx','api','web','workers','tts','hy-mt2','bot-kafka','bot-himiko','bot-community','bot-ai','bot-music','bot-commerce'];
 export const defaultBots=[['bot-kafka','kafka',3108],['bot-himiko','himiko',3107],['bot-community','silverwolf',3103],['bot-ai','cyrene',3104],['bot-music','robin',3105],['bot-commerce','cipher',3106]].map(([service,botKey,port])=>({service,botKey,port}));
+
+/**
+ * Which local model services the selected providers still need
+ * (redesign infrastructure §6/§10 phase 3). Unset or `local` keeps the model
+ * container; any hosted provider removes it from the normal runtime. The
+ * mapping is the single source of truth for deploy, release and health checks.
+ */
+export function localModelServices(env=process.env){
+  const normalized=name=>String(env?.[name]??'').trim().toLowerCase();
+  const tts=normalized('TTS_PROVIDER');
+  const translation=normalized('TRANSLATION_PROVIDER');
+  return {tts:tts===''||tts==='local','hy-mt2':translation===''||translation==='local'};
+}
+
+/** The full release roster with model services removed when hosted providers are configured. */
+export function releaseServicesFor(env=process.env){
+  const local=localModelServices(env);
+  return releaseServices.filter(name=>name==='tts'||name==='hy-mt2'?local[name]:true);
+}
+
+/** Fleet readiness targets for a release, or for the provider selection when no release is given. */
+export function fleetTargets(release=null,env=process.env){
+  const bots=release?.bots??defaultBots;
+  const local=localModelServices(env);
+  const includeModels=release?Object.hasOwn(release.images??{},'hy-mt2'):local['hy-mt2'];
+  return [
+    {name:'nginx',url:'http://127.0.0.1:8080/healthz',kind:'text'},
+    {name:'api',url:'http://127.0.0.1:3001/readyz',kind:'json'},
+    ...(includeModels?[{name:'hy-mt2',url:'http://127.0.0.1:3121/health',kind:'model'}]:[]),
+    ...bots.map(({botKey:name,port})=>({name,url:`http://127.0.0.1:${port}/health/ready`,kind:'json'})),
+  ];
+}
 export function validateRelease(value,{allowMissingTts=false,allowMissingHyMt2=false}={}){
  if(!value||typeof value.id!=='string'||!/^[-a-zA-Z0-9_.]{1,80}$/.test(value.id)||!value.images||typeof value.images!=='object')throw Error('Invalid release manifest');
  const bots=value.bots??defaultBots;

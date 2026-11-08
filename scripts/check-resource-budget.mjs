@@ -9,9 +9,20 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { defaultBots, localModelServices } from "./lib/operations.mjs";
 
-export const CPU_CEILING = 9;
-export const MEMORY_CEILING_GIB = null;
+function envPositive(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive finite number`);
+  return value;
+}
+
+// Host-size decisions (§12) are configuration, not code: override the envelope
+// without editing the checker. Unset keeps today's approved host.
+export const CPU_CEILING = envPositive("RESOURCE_CPU_CEILING", 9);
+export const MEMORY_CEILING_GIB = envPositive("RESOURCE_MEMORY_CEILING_GIB", null);
 export const POOL_CGROUP_PARENT = "ei-point.slice";
 
 /** Approved runtime allocation. Keep in sync with infra/docker/compose.yml. */
@@ -36,6 +47,19 @@ export const APPROVED_MAINTENANCE = {
   migrate: { shares: 256, memoryGiB: 0.25, cgroupParent: POOL_CGROUP_PARENT },
   backup: { shares: 256, memoryGiB: 1, cgroupParent: POOL_CGROUP_PARENT },
 };
+
+/**
+ * The approved runtime set for the selected providers. Hosted TTS or
+ * translation removes the corresponding local model from the normal runtime
+ * (redesign infrastructure §10 phase 3), so the budget is checked against the
+ * real roster rather than a permanently local one.
+ */
+export function approvedRuntimeFor(env = process.env) {
+  const local = localModelServices(env);
+  return Object.fromEntries(
+    Object.entries(APPROVED_RUNTIME).filter(([name]) => (name === "tts" || name === "hy-mt2" ? local[name] : true)),
+  );
+}
 
 const RUNTIME_SERVICES = new Set(Object.keys(APPROVED_RUNTIME));
 const MAINTENANCE_SERVICES = new Set(Object.keys(APPROVED_MAINTENANCE));
@@ -154,19 +178,59 @@ export function validateResourceBudget(services, { cpu = CPU_CEILING, memoryGiB 
   return { ok: violations.length === 0, violations, mode: poolMode ? "pool" : hardMode ? "hard" : "invalid", runtime, maintenance, concurrent };
 }
 
+/** CPUQuota from the project slice, in percent (900 = 9 CPUs). */
+export function cpuQuotaPercent(text) {
+  const match = /^\s*CPUQuota=(\d+)%\s*$/mu.exec(text);
+  return match ? Number(match[1]) : null;
+}
+
 async function main() {
-  const file = process.argv[2];
-  let services = { ...APPROVED_RUNTIME, ...APPROVED_MAINTENANCE };
+  const args = process.argv.slice(2);
+  const releaseIndex = args.indexOf("--release");
+  const releasePath = releaseIndex >= 0 ? args[releaseIndex + 1] : null;
+  const file = args.find((arg, index) => !arg.startsWith("--") && (releaseIndex < 0 || index !== releaseIndex + 1));
+  let services = { ...approvedRuntimeFor(process.env), ...APPROVED_MAINTENANCE };
+  const rosterViolations = [];
   if (file) {
     const compose = JSON.parse(await readFile(resolve(file), "utf8"));
+    let rendered = serviceResourcesFromCompose(compose);
+    // A rendered stack still carries every service the base compose defines.
+    // When the release roster is supplied, only its services are in the
+    // deployment; the rest are definitions, not running containers.
+    if (releasePath) {
+      const release = JSON.parse(await readFile(resolve(releasePath), "utf8"));
+      const bots = release.bots ?? defaultBots;
+      const rostered = new Set([
+        ...(release.images && typeof release.images === "object" ? Object.keys(release.images) : []),
+        ...bots.map((bot) => bot.service),
+      ]);
+      for (const name of rostered) {
+        if (!(name in rendered)) rosterViolations.push(`${name}: rostered service missing from the rendered stack`);
+      }
+      rendered = Object.fromEntries(Object.entries(rendered).filter(([name]) => rostered.has(name)));
+    }
     // Rendered releases contain runtime services only; add the maintenance allowances
     // that overlap them during deploy/backup windows (constants win over missing rows).
-    services = { ...APPROVED_MAINTENANCE, ...serviceResourcesFromCompose(compose) };
+    services = { ...APPROVED_MAINTENANCE, ...rendered };
   }
   const result = validateResourceBudget(services);
-  if (!result.ok) {
-    console.error(`Resource budget check failed: ${result.violations.length} violation(s).`);
-    for (const violation of result.violations) console.error(`- ${violation}`);
+  const violations = [...rosterViolations, ...result.violations];
+  // The slice unit is the real aggregate cap; a ceiling that disagrees with it
+  // is a false claim, not a configuration preference.
+  let sliceQuota = null;
+  try {
+    sliceQuota = cpuQuotaPercent(await readFile(new URL("../infra/systemd/ei-point.slice", import.meta.url), "utf8"));
+  } catch {
+    sliceQuota = null;
+  }
+  if (sliceQuota !== CPU_CEILING * 100) {
+    violations.push(
+      `infra/systemd/ei-point.slice CPUQuota=${sliceQuota ?? "missing"}% must match the configured ${CPU_CEILING} CPU ceiling (${CPU_CEILING * 100}%)`,
+    );
+  }
+  if (violations.length > 0) {
+    console.error(`Resource budget check failed: ${violations.length} violation(s).`);
+    for (const violation of violations) console.error(`- ${violation}`);
     process.exitCode = 1;
     return;
   }

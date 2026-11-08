@@ -111,3 +111,67 @@ test('infra compose stays in sync with the approved pool allocation', () => {
     assert.equal(parent[1], POOL_CGROUP_PARENT);
   }
 });
+test('hosted providers remove the local model services from the approved budget', async () => {
+  const { approvedRuntimeFor } = await import('../../scripts/check-resource-budget.mjs');
+  const local = approvedRuntimeFor({});
+  assert.equal(local.tts.memoryGiB, 4);
+  const remote = approvedRuntimeFor({ TTS_PROVIDER: 'openrouter', TRANSLATION_PROVIDER: 'google' });
+  assert.equal(remote.tts, undefined);
+  assert.equal(remote['hy-mt2'], undefined);
+  const result = validateResourceBudget({ ...remote, ...APPROVED_MAINTENANCE });
+  assert.equal(result.ok, true, JSON.stringify(result.violations));
+  assert.equal(result.runtime.memoryGiB, 20.5);
+  assert.equal(result.runtime.shares, 8448);
+});
+test('the CLI validates a rendered stack against the release roster', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = await mkdtemp(join(tmpdir(), 'ei-budget-roster-'));
+  try {
+    const render = {
+      services: Object.fromEntries(Object.entries(APPROVED_RUNTIME).map(([name, value]) => [name, {
+        cpu_shares: value.shares,
+        cgroup_parent: value.cgroupParent,
+        deploy: { resources: { limits: { memory: `${value.memoryGiB}GiB` } } },
+      }])),
+    };
+    const renderPath = join(dir, 'render.json');
+    await writeFile(renderPath, JSON.stringify(render));
+    const images = Object.fromEntries(Object.keys(APPROVED_RUNTIME).filter((name) => !['tts', 'hy-mt2'].includes(name)).map((name) => [name, `x/${name}@sha256:${'a'.repeat(64)}`]));
+    const rosterPath = join(dir, 'roster.json');
+    await writeFile(rosterPath, JSON.stringify({ id: 'remote', images, bots: [] }));
+    const script = fileURLToPath(new URL('../../scripts/check-resource-budget.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, [script, renderPath, '--release', rosterPath], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /20\.5 GiB/);
+    const brokenRoster = join(dir, 'broken.json');
+    await writeFile(brokenRoster, JSON.stringify({ id: 'broken', images: { ...images, nginx: `x/nginx@sha256:${'b'.repeat(64)}` }, bots: [{ service: 'bot-missing', botKey: 'missing', port: 3199 }] }));
+    const broken = spawnSync(process.execPath, [script, renderPath, '--release', brokenRoster], { encoding: 'utf8' });
+    assert.notEqual(broken.status, 0);
+    assert.match(broken.stderr, /rostered service missing/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+test('the host envelope is configuration and fails closed on invalid values', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const script = fileURLToPath(new URL('../../scripts/check-resource-budget.mjs', import.meta.url));
+  const capped = spawnSync(process.execPath, [script], { encoding: 'utf8', env: { ...process.env, RESOURCE_MEMORY_CEILING_GIB: '10' } });
+  assert.notEqual(capped.status, 0);
+  assert.match(capped.stderr, /exceeds ceiling/);
+  const invalid = spawnSync(process.execPath, [script], { encoding: 'utf8', env: { ...process.env, RESOURCE_CPU_CEILING: 'nonsense' } });
+  assert.notEqual(invalid.status, 0);
+});
+
+test('the configured CPU ceiling must match the slice quota', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const script = fileURLToPath(new URL('../../scripts/check-resource-budget.mjs', import.meta.url));
+  const mismatched = spawnSync(process.execPath, [script], { encoding: 'utf8', env: { ...process.env, RESOURCE_CPU_CEILING: '8' } });
+  assert.notEqual(mismatched.status, 0);
+  assert.match(mismatched.stderr, /CPUQuota=900%/);
+  const matching = spawnSync(process.execPath, [script], { encoding: 'utf8', env: { ...process.env, RESOURCE_CPU_CEILING: '9' } });
+  assert.equal(matching.status, 0, matching.stderr);
+});
+

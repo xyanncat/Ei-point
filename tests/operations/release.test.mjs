@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {validateRelease,verifyBackup,readyPayload,probeFleet} from '../../scripts/lib/operations.mjs';
+import {validateRelease,verifyBackup,readyPayload,probeFleet,localModelServices,releaseServicesFor,fleetTargets} from '../../scripts/lib/operations.mjs';
 const services=['postgres','nginx','api','web','workers','tts','hy-mt2','bot-kafka','bot-himiko','bot-community','bot-ai','bot-music','bot-commerce'];
 test('release refuses mutable tags, incomplete fleet and legacy overlapping identities',()=>{
  const images=Object.fromEntries(services.map(s=>[s,`example/${s}@sha256:${'a'.repeat(64)}`]));
@@ -165,3 +165,46 @@ test('backup verification requires real nonempty artifacts and detects corruptio
  await writeFile(join(dir,'backup.json'),JSON.stringify({version:1,createdAt:new Date().toISOString(),database:'ei_point',files}));
  await assert.rejects(verifyBackup(dir));
 });
+test('provider selection decides which local model services a release needs', () => {
+  assert.deepEqual(localModelServices({}), { tts: true, 'hy-mt2': true });
+  assert.deepEqual(localModelServices({ TTS_PROVIDER: 'local', TRANSLATION_PROVIDER: '' }), { tts: true, 'hy-mt2': true });
+  assert.deepEqual(localModelServices({ TTS_PROVIDER: 'openrouter', TRANSLATION_PROVIDER: 'google' }), { tts: false, 'hy-mt2': false });
+  assert.deepEqual(localModelServices({ TTS_PROVIDER: ' OpenRouter ', TRANSLATION_PROVIDER: 'LOCAL' }), { tts: false, 'hy-mt2': true });
+  assert.deepEqual(releaseServicesFor({ TTS_PROVIDER: 'openrouter', TRANSLATION_PROVIDER: 'google' }), services.filter((s) => !['tts', 'hy-mt2'].includes(s)));
+  assert.deepEqual(releaseServicesFor({}), services);
+});
+test('a release without local model images validates from the provider environment alone', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ei-release-remote-'));
+  try {
+    const script = fileURLToPath(new URL('../../scripts/release-manifest.mjs', import.meta.url));
+    const images = Object.fromEntries(services.filter((s) => !['tts', 'hy-mt2'].includes(s)).map((s) => [s, `example/${s}@sha256:${'4'.repeat(64)}`]));
+    const source = join(dir, 'remote.json');
+    await writeFile(source, JSON.stringify({ id: 'remote-release', images }));
+    const output = join(dir, 'remote.compose.json');
+    const result = spawnSync(process.execPath, [script, source, output], { encoding: 'utf8', env: { ...process.env, TTS_PROVIDER: 'openrouter', TRANSLATION_PROVIDER: 'google' } });
+    assert.equal(result.status, 0, result.stderr);
+    const compose = JSON.parse(await readFile(output, 'utf8'));
+    assert.equal(compose.services['bot-ai'].environment, undefined);
+    assert.equal(await readFile(`${output}.tts`, 'utf8'), '0\n');
+    assert.equal(await readFile(`${output}.hy-mt2`, 'utf8'), '0\n');
+    const local = spawnSync(process.execPath, [script, source, join(dir, 'local.compose.json')], { encoding: 'utf8', env: { ...process.env, TTS_PROVIDER: '', TRANSLATION_PROVIDER: '' } });
+    assert.notEqual(local.status, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+test('fleet readiness follows the release, then the provider selection', () => {
+  const local = fleetTargets(null, {});
+  assert.ok(local.some((target) => target.name === 'hy-mt2'));
+  const remote = fleetTargets(null, { TTS_PROVIDER: 'openrouter', TRANSLATION_PROVIDER: 'google' });
+  assert.equal(remote.some((target) => target.name === 'hy-mt2'), false);
+  assert.ok(remote.some((target) => target.name === 'cyrene'));
+  const oldManifest = { id: 'old', images: Object.fromEntries(services.filter((s) => !['tts', 'hy-mt2'].includes(s)).map((s) => [s, `x/${s}@sha256:${'0'.repeat(64)}`])), bots: [] };
+  assert.equal(fleetTargets(oldManifest, { TRANSLATION_PROVIDER: 'local' }).some((target) => target.name === 'hy-mt2'), false, 'the manifest wins over the environment');
+});
+test('the base compose does not hard-require the local model services', async () => {
+  const text = (await readFile(fileURLToPath(new URL('../../infra/docker/compose.yml', import.meta.url)), 'utf8')).replace(/\r\n/g, '\n');
+  assert.doesNotMatch(text, /tts: \{ condition: service_started \}/);
+  assert.doesNotMatch(text, /hy-mt2: \{ condition: service_started \}/);
+});
+

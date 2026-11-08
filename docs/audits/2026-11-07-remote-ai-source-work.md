@@ -52,6 +52,17 @@ the account owners. There is no deployed revision, image ID or health status to 
    `RCLONE_CONFIG`, and fails closed without them. restic encrypts and deduplicates before upload, so the 5 TB Drive
    account holds ciphertext only; native `gs:`/`s3:`/`b2:`/`azure:`/`sftp:`/`rest:` remain supported.
    **Committed as `e4579bf` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
+8. **Phase 3 runtime cutover — local models become optional (this round).** One rule, `localModelServices()` in
+   `scripts/lib/operations.mjs`, maps `TTS_PROVIDER`/`TRANSLATION_PROVIDER` to whether `tts`/`hy-mt2` belong to the
+   runtime. It drives the release manifest (a manifest without the model images now validates from the environment
+   alone, and the model client URLs are wired only when the image is present), the deploy script (models are pulled
+   and started only while local), the roster and fleet health check (the `hy-mt2` probe disappears with the release),
+   and the resource budget (the rendered stack is filtered to the release roster, so a hosted release is checked at
+   **20.5 GiB / 8 448 shares** instead of the local 28.5 GiB / 14 592 shares — arithmetic, not measured RAM).
+   `bot-ai` no longer hard-depends on `tts`/`hy-mt2` in Compose; deploy still starts models before bots when they are
+   local. The resource checker also reads `RESOURCE_CPU_CEILING` / `RESOURCE_MEMORY_CEILING_GIB` from the environment
+   and fails closed when the CPU ceiling disagrees with `infra/systemd/ei-point.slice`, so the §12 host decision is a
+   configuration change, not a code change. Runbook: `docs/operations/remote-ai-cutover.md`.
 
 ## Verified locally (fresh runs on this revision)
 
@@ -83,6 +94,14 @@ Third pass (hosted providers + Drive backup) — fresh runs:
 | `corepack pnpm --filter @ei-point/bot-ai typecheck` + `--filter @ei-point/module-ai build` | clean |
 | `corepack pnpm test` (full repo chain: every package suite, phase 4/phase 6 gates, controls DB, AI/workers/operations/runtime/moderation/backup suites, resource budget) | passed end to end — final gate: 113 passed / 0 failed; `Resource budget ok (pool mode)` |
 | `bash -n infra/backup/restic-backup.sh` + live run with `RESTIC_REPOSITORY=rclone:drive:…` | syntax ok; fails closed with `rclone is required for an rclone: repository` (binary absent); `gs:` still accepted by the allowlist |
+
+Fourth pass (phase 3 runtime cutover) — fresh runs:
+
+| Check | Result |
+|---|---|
+| `node --test tests/operations/*.test.mjs` | 71 passed / 0 failed (provider-aware roster/manifest/health, roster-filtered budget, remote deploy with mocked Docker, slice-quota coherence) |
+| `bash -n scripts/deploy.sh` | syntax ok |
+| `node scripts/check-resource-budget.mjs` | ok at 9 CPU / 28.5 GiB; `RESOURCE_CPU_CEILING=8` correctly fails against the unchanged `CPUQuota=900%` slice |
 
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 

@@ -22,7 +22,11 @@ test('deploy uses immutable images, stops overlapping handlers, gates readiness 
 if [[ "$*" == *'ps -q tts'* ]]; then echo tts-id
 elif [[ "$*" == *'ps -q hy-mt2'* ]]; then echo hy-id
 elif [[ "$*" == *'config --format json'* ]]; then
-  echo '{"services":{"postgres":{"deploy":{"resources":{"limits":{"cpus":"1.25","memory":"6G"}}}},"nginx":{"deploy":{"resources":{"limits":{"cpus":"0.15","memory":"512M"}}}},"api":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1G"}}}},"web":{"deploy":{"resources":{"limits":{"cpus":"0.30","memory":"1G"}}}},"workers":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"1536M"}}}},"tts":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"8G"}}}},"hy-mt2":{"deploy":{"resources":{"limits":{"cpus":"1.00","memory":"4G"}}}},"bot-kafka":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"1536M"}}}},"bot-himiko":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1536M"}}}},"bot-community":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"2G"}}}},"bot-ai":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"2G"}}}},"bot-music":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"2G"}}}},"bot-commerce":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"1536M"}}}}}}'
+  if [[ "\${MOCK_REMOTE:-0}" == 1 ]]; then
+    echo '{"services":{"postgres":{"deploy":{"resources":{"limits":{"cpus":"1.25","memory":"6G"}}}},"nginx":{"deploy":{"resources":{"limits":{"cpus":"0.15","memory":"512M"}}}},"api":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1G"}}}},"web":{"deploy":{"resources":{"limits":{"cpus":"0.30","memory":"1G"}}}},"workers":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"1536M"}}}},"bot-kafka":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"1536M"}}}},"bot-himiko":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1536M"}}}},"bot-community":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"2G"}}}},"bot-ai":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"2G"}}}},"bot-music":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"2G"}}}},"bot-commerce":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"1536M"}}}}}}'
+  else
+    echo '{"services":{"postgres":{"deploy":{"resources":{"limits":{"cpus":"1.25","memory":"6G"}}}},"nginx":{"deploy":{"resources":{"limits":{"cpus":"0.15","memory":"512M"}}}},"api":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1G"}}}},"web":{"deploy":{"resources":{"limits":{"cpus":"0.30","memory":"1G"}}}},"workers":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"1536M"}}}},"tts":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"8G"}}}},"hy-mt2":{"deploy":{"resources":{"limits":{"cpus":"1.00","memory":"4G"}}}},"bot-kafka":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"1536M"}}}},"bot-himiko":{"deploy":{"resources":{"limits":{"cpus":"0.35","memory":"1536M"}}}},"bot-community":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"2G"}}}},"bot-ai":{"deploy":{"resources":{"limits":{"cpus":"0.50","memory":"2G"}}}},"bot-music":{"deploy":{"resources":{"limits":{"cpus":"0.75","memory":"2G"}}}},"bot-commerce":{"deploy":{"resources":{"limits":{"cpus":"0.40","memory":"1536M"}}}}}}'
+  fi
 elif [[ "$1" == ps ]]; then echo api-id
 elif [[ "$*" == *'ps -q postgres'* ]]; then echo pg-id; fi`);
   await mock('node',`if [[ "$1" == *scripts/health-fleet.mjs ]]; then echo '{"ok":true}'; exit "\${MOCK_HEALTH_EXIT:-0}"; fi
@@ -42,6 +46,17 @@ exec "$REAL_NODE" "$@"`);
   const oldImages=Object.fromEntries(releaseServices.filter(service=>!['tts','hy-mt2'].includes(service)).map(service=>[service,`example/${service}@sha256:${'e'.repeat(64)}`]));
   const oldRelease=join(dir,'old-release.json');await writeFile(oldRelease,JSON.stringify({id:'old-release',images:oldImages}));
   await writeFile(log,'');result=run('scripts/rollback.sh',{},oldRelease);assert.equal(result.status,0,result.stderr);calls=await readFile(log,'utf8');assert.match(calls,/stop tts/);assert.match(calls,/stop hy-mt2/);
+  // Hosted providers: the local model services leave this release entirely.
+  const remoteEnv=join(dir,'env-remote');await writeFile(remoteEnv,'TTS_PROVIDER=openrouter\nTRANSLATION_PROVIDER=google\n');
+  const remoteImages=Object.fromEntries(releaseServices.filter(service=>!['tts','hy-mt2'].includes(service)).map(service=>[service,`example/${service}@sha256:${'a'.repeat(64)}`]));
+  const remoteRelease=join(dir,'remote-release.json');await writeFile(remoteRelease,JSON.stringify({id:'remote-release',images:remoteImages}));
+  await writeFile(log,'');
+  result=run('scripts/deploy.sh',{ENV_FILE:unix(remoteEnv),MOCK_REMOTE:'1'},remoteRelease);
+  assert.equal(result.status,0,result.stderr);
+  calls=await readFile(log,'utf8');
+  assert.match(calls,/pull postgres nginx api web workers migrate/);
+  assert.doesNotMatch(calls,/pull .*\btts\b/);
+  assert.doesNotMatch(calls,/wait-timeout 900/);
   await writeFile(release,JSON.stringify({id:'bad',images:{}}));await writeFile(log,'');result=run('scripts/deploy.sh');assert.notEqual(result.status,0);assert.equal(await readFile(log,'utf8'),'');
  }finally{await rm(dir,{recursive:true,force:true});}
 });
