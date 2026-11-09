@@ -70,4 +70,7 @@ test("the phone env template wires TTS to the device-local Piper bridge", () => 
   assert.match(env, /TTS_PROVIDER=local/u);
   assert.match(env, /TTS_URL=http:\/\/127\.0\.0\.1:3120\/v1\/audio\/speech/u);
   assert.match(env, /DATABASE_URL=/u);
+  // The bot reads ..._PATH; the old ..._FILE name silently falls back to .models.
+  assert.match(env, /CYRENE_PERSONA_MEMORY_PATH=/u);
+  assert.doesNotMatch(env, /CYRENE_PERSONA_MEMORY_FILE/u);
 });

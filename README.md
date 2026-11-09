@@ -174,7 +174,7 @@ The complete annotated list is in [`.env.example`](.env.example). Common configu
 | PostgreSQL | `DATABASE_URL`, `MIGRATION_DATABASE_URL` | Neon pooled application URL and the direct migration URL |
 | Discord | `DISCORD_*_BOT_TOKEN`, `DISCORD_TEST_GUILD_ID`, `DISCORD_MAIN_GUILD_ID`, `DISCORD_CLIENT_*` | Bot identities, guild allowlist, and OAuth |
 | Web/API | `SESSION_SECRET`, `CSRF_SECRET`, `VAULT_SECRET`, `INTERNAL_SERVICE_TOKEN`, `DASHBOARD_ORIGIN`, `API_PORT` | Session protection, service trust, and local routing |
-| AI/TTS | `AI_PROVIDER_PRIMARY*`, `AI_PROVIDER_FALLBACK*`, `AI_DEADLINE_MS`, `AI_DAILY_BUDGET_TOKENS`, `TTS_*`, `CYRENE_PERSONA_MEMORY_FILE` | Chat and TTS provider settings; optional local TTS model paths and bounded inference; persona memory mount |
+| AI/TTS | `AI_PROVIDER_PRIMARY*`, `AI_PROVIDER_FALLBACK*`, `AI_DEADLINE_MS`, `AI_DAILY_BUDGET_TOKENS`, `TTS_*`, `CYRENE_PERSONA_MEMORY_PATH` | Chat and TTS provider settings; optional local TTS model paths and bounded inference; persona memory mount |
 | Commerce | `UPI_PAYEE_*`, `RAZORPAY_PAYMENT_PAGE`, `COMMERCE_GUILD_ID`, `PAYMENT_ORIGIN`, `COMMERCE_REFERRAL_REWARD_MINOR`, `COMMERCE_STAFF_CHANNEL_ID` | Payment presentation, guild/referral configuration, and the staff channel that receives claim notifications |
 | Backup/ingress | GitHub Actions secrets (`NEON_DATABASE_URL`, `RESTIC_PASSWORD`, `RCLONE_CONFIG_B64`), tunnel variables | Nightly encrypted dump to Drive; optional external ingress |
 

@@ -130,6 +130,12 @@ the account owners. There is no deployed revision, image ID or health status to 
     address + TCP 3120). The old compose hostname fixture was replaced with loopback, and a regression test asserts
     the default local endpoint and `{text,voice,format}` body; the structural guard also checks the phone template.
     **Committed as `6c262c2` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`); full suite 59/59.**
+16. **Persona environment variable mismatch fixed (2026-11-09, found while deploying to the phone).** The bot reads
+    `CYRENE_PERSONA_MEMORY_PATH`, but `.env.example`, the phone template and the README used
+    `CYRENE_PERSONA_MEMORY_FILE`, so a phone deployment would silently fall back to `.models/…` and fail at startup.
+    The phone template now points at the Termux home
+    (`/data/data/com.termux/files/home/cyrene/Cyrene_Chat_Roleplay_Memory.md`), the other files use `_PATH`, and the
+    structural test forbids the stale `_FILE` name.
 
 ## Verified locally (fresh runs on this revision)
 
