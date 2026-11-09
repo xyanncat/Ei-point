@@ -94,6 +94,7 @@ identity_verified = False
 
 # Concurrency limits (§5): max 2 concurrent metadata resolutions
 metadata_semaphore = asyncio.Semaphore(2)
+runtime_tasks: set[asyncio.Task] = set()
 
 FFMPEG_OPTIONS: dict[str, str] = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -1089,7 +1090,25 @@ async def runtime_allowed(interaction: discord.Interaction) -> bool:
 
 
 async def global_interaction_check(interaction: discord.Interaction) -> bool:
-    if await runtime_allowed(interaction):
+    if interaction.guild_id is None or str(interaction.guild_id) not in ALLOWED_GUILDS or not isinstance(interaction.user, discord.Member):
+        await respond(interaction, "This bot, server, or command is disabled for your roles.", ephemeral=True)
+        return False
+
+    # Discord expires an unacknowledged interaction after 3 s. A Neon cold
+    # reconnect can take longer than that, so acknowledge first if the check is
+    # slow and let the task finish in the background.
+    check = asyncio.create_task(runtime_allowed(interaction))
+    runtime_tasks.add(check)
+    check.add_done_callback(runtime_tasks.discard)
+    try:
+        allowed = await asyncio.wait_for(asyncio.shield(check), timeout=2.0)
+    except asyncio.TimeoutError:
+        log.warning("Runtime check is slow (guild=%s command=%s); acknowledging and continuing.", interaction.guild_id, interaction.command.name if interaction.command else "?")
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+        return True
+
+    if allowed:
         return True
     if not db_ready:
         await respond(interaction, "❌ Robin's database is reconnecting. Please try again in a few seconds.", ephemeral=True)
@@ -1297,7 +1316,8 @@ async def cmd_play(interaction: discord.Interaction, link: str):
         await respond(interaction, "❌ This server is not approved for Ei Point.", ephemeral=True)
         return
 
-    await interaction.response.defer()
+    if not interaction.response.is_done():
+        await interaction.response.defer()
 
     member = interaction.user
     if not isinstance(member, discord.Member):
@@ -1365,7 +1385,8 @@ async def cmd_search(interaction: discord.Interaction, query: str):
         await respond(interaction, "❌ This server is not approved for Ei Point.", ephemeral=True)
         return
 
-    await interaction.response.defer()
+    if not interaction.response.is_done():
+        await interaction.response.defer()
 
     member = interaction.user
     if not isinstance(member, discord.Member) or not member.voice or not member.voice.channel:

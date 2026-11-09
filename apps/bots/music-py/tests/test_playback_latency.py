@@ -47,6 +47,11 @@ class PlaybackLatencyGuard(unittest.TestCase):
         self.assertIn("for fallback in (False, True)", helper)
         self.assertIn("YTDLP_EJS_ARGS if fallback", helper)
 
+    def test_global_check_defers_before_a_slow_database(self):
+        gate = self.function_source("global_interaction_check")
+        self.assertIn("asyncio.wait_for(asyncio.shield(check), timeout=2.0)", gate)
+        self.assertIn("interaction.response.defer()", gate)
+
 
 if __name__ == "__main__":
     unittest.main()
