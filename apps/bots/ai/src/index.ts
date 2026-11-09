@@ -336,7 +336,6 @@ const client = new Client({
 
 let stopping = false;
 let identityVerified = false;
-let lastDbReady = false;
 let activeCommands = 0;
 let cyrenePersona = "";
 const cyrenePersonaPath = process.env.CYRENE_PERSONA_MEMORY_PATH ?? ".models/Cyrene_Chat_Roleplay_Memory.md";
@@ -642,27 +641,9 @@ client.on(Events.GuildCreate, (guild) => {
   if (!allowed.includes(guild.id)) guarded("leave-unapproved", () => guild.leave());
 });
 
-async function updateStatus(): Promise<void> {
-  if (stopping || !identityVerified || !client.isReady()) return;
-  try {
-    const latency = Math.max(0, Math.round(client.ws.ping));
-    for (const service of [`bot-${botKey}`]) {
-      await pool.query(
-        `INSERT INTO ops.service_status(service, liveness, gateway, db_ready, latency_ms)
-         VALUES($1, 'ok', 'ok', true, $2)
-         ON CONFLICT(service) DO UPDATE SET liveness='ok', gateway='ok', db_ready=true, latency_ms=EXCLUDED.latency_ms, updated_at=now()`,
-        [service, latency],
-      );
-    }
-    lastDbReady = true;
-  } catch {
-    lastDbReady = false;
-  }
-}
-
-const statusTimer = setInterval(() => void updateStatus(), 5000);
-
-// HTTP Health Check
+// Readiness is probed on demand instead of by a background heartbeat: a
+// 5-second status write keeps a scale-to-zero database awake 24/7, which the
+// free Neon tier cannot sustain. Render uses /health/live (no database).
 const health = createServer((req, res) => {
   if (req.url === "/health/live") {
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -670,20 +651,28 @@ const health = createServer((req, res) => {
     return;
   }
   if (req.url === "/health/ready") {
-    const ready = identityVerified && client.isReady() && lastDbReady && !stopping;
-    res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ service: "bot-ai", status: ready ? "ready" : "degraded" }));
+    void (async () => {
+      let dbReady = false;
+      try {
+        await pool.query("SELECT 1");
+        dbReady = true;
+      } catch {
+        dbReady = false;
+      }
+      const ready = identityVerified && client.isReady() && dbReady && !stopping;
+      res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ service: "bot-ai", status: ready ? "ready" : "degraded" }));
+    })();
     return;
   }
   res.writeHead(404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "not_found" }));
 });
-health.listen(Number(process.env.AI_HEALTH_PORT ?? 3104), "0.0.0.0");
+health.listen(Number(process.env.PORT ?? process.env.AI_HEALTH_PORT ?? 3104), "0.0.0.0");
 
 async function shutdown(): Promise<void> {
   if (stopping) return;
   stopping = true;
-  clearInterval(statusTimer);
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();
   try {
@@ -717,7 +706,9 @@ client.once(Events.ClientReady, () => {
     await client.rest.put(Routes.applicationCommands(client.user!.id), {
       body: ALL_AI_COMMANDS.map((c) => c.toJSON()),
     });
-    await updateStatus();
+    await new Promise<void>((resolve) => {
+      pool.query("SELECT 1").then(() => resolve()).catch(() => resolve());
+    });
     console.log(`bot-ai ready as ${client.user?.tag} across ${client.guilds.cache.size} guilds`);
   });
 });

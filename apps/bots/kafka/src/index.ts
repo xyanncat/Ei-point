@@ -76,7 +76,13 @@ const client = new Client({
 
 let stopping = false;
 let identityVerified = false;
-let lastDbReady = false;
+// Free-tier pacing: maintenance runs fast only while recently active, then
+// backs off so a scale-to-zero database can sleep.
+const ACTIVE_POLL_MS = Math.max(1_000, Number(process.env.BOT_ACTIVE_POLL_SECONDS ?? 5) * 1_000);
+const IDLE_POLL_MS = Math.max(60_000, Number(process.env.BOT_IDLE_POLL_SECONDS ?? 900) * 1_000);
+let lastActivity = Date.now();
+let loopStopped = false;
+const markActivity = () => { lastActivity = Date.now(); };
 // Bounded real-work admission: a slot is held until the command's work settles.
 const commandGate = createWorkGate(20);
 const interactionClaims = createInteractionClaims();
@@ -114,6 +120,7 @@ const ALL_COMMANDS = [
 
 // --- Security: anti-raid on member join ---
 client.on(Events.GuildMemberAdd, (member) => {
+  markActivity();
   if (!identityVerified || !allowed.includes(member.guild.id)) return;
   const guildId = member.guild.id;
   const now = Date.now();
@@ -285,6 +292,7 @@ const SECURITY_NAMES = new Set(securityCommandDefinitions.map((c) => c.name));
 
 // --- Merged interaction router ---
 client.on(Events.InteractionCreate, (rawInteraction) => {
+  markActivity();
   if (!rawInteraction.isChatInputCommand()) return;
   const interaction = withEiEmbedReplies(rawInteraction, responsePolicy(botKey, rawInteraction.commandName).imageKey);
   if (!identityVerified) {
@@ -560,24 +568,20 @@ async function runMaintenance(): Promise<void> {
         await pool.query(SANCTION_UNLOCK_SQL, [lockKey]).catch(() => {});
       }
     }
-    const latency = Math.max(0, Math.round(client.ws.ping));
-    for (const service of [`bot-${botKey}`]) {
-      await pool.query(
-        `INSERT INTO ops.service_status(service, liveness, gateway, db_ready, latency_ms)
-         VALUES($1, 'ok', 'ok', true, $2)
-         ON CONFLICT(service) DO UPDATE SET liveness='ok', gateway='ok', db_ready=true, latency_ms=EXCLUDED.latency_ms, updated_at=now()`,
-        [service, latency],
-      );
-    }
-    lastDbReady = true;
   } catch {
-    lastDbReady = false;
+    // The next maintenance pass retries; readiness is probed on demand.
   } finally {
     maintenanceRunning = false;
   }
 }
 
-const maintenanceTimer = setInterval(() => void runMaintenance(), 10000);
+async function maintenanceLoop(): Promise<void> {
+  if (loopStopped) return;
+  await runMaintenance();
+  const delay = Date.now() - lastActivity < 120_000 ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+  setTimeout(() => void maintenanceLoop(), delay);
+}
+void maintenanceLoop();
 
 const health = createServer((req, res) => {
   if (req.url === "/health/live") {
@@ -586,20 +590,29 @@ const health = createServer((req, res) => {
     return;
   }
   if (req.url === "/health/ready") {
-    const ready = identityVerified && client.isReady() && lastDbReady && !stopping;
-    res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ service: "bot-kafka", status: ready ? "ready" : "degraded" }));
+    void (async () => {
+      let dbReady = false;
+      try {
+        await pool.query("SELECT 1");
+        dbReady = true;
+      } catch {
+        dbReady = false;
+      }
+      const ready = identityVerified && client.isReady() && dbReady && !stopping;
+      res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ service: "bot-kafka", status: ready ? "ready" : "degraded" }));
+    })();
     return;
   }
   res.writeHead(404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "not_found" }));
 });
-health.listen(Number(process.env.KAFKA_HEALTH_PORT ?? process.env.SECURITY_HEALTH_PORT ?? 3101), "0.0.0.0");
+health.listen(Number(process.env.PORT ?? process.env.KAFKA_HEALTH_PORT ?? process.env.SECURITY_HEALTH_PORT ?? 3101), "0.0.0.0");
 
 async function shutdown(): Promise<void> {
   if (stopping) return;
   stopping = true;
-  clearInterval(maintenanceTimer);
+  loopStopped = true;
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();
   try {

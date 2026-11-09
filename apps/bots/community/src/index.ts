@@ -63,9 +63,15 @@ const client = new Client({
 });
 let stopping = false,
   pumping: Promise<void> | null = null,
-  lastMaintenance = 0,
-  lastDbReady = false;
+  lastMaintenance = 0;
 let identityVerified = false;
+// Free-tier pacing: maintenance runs fast only while recently active, then
+// backs off so a scale-to-zero database can sleep.
+const ACTIVE_POLL_MS = Math.max(1_000, Number(process.env.BOT_ACTIVE_POLL_SECONDS ?? 5) * 1_000);
+const IDLE_POLL_MS = Math.max(60_000, Number(process.env.BOT_IDLE_POLL_SECONDS ?? 900) * 1_000);
+let lastActivity = Date.now();
+let loopStopped = false;
+const markActivity = () => { lastActivity = Date.now(); };
 // Bounded real-work admission: a slot is held until the command's work settles.
 const commandGate = createWorkGate(20);
 const interactionClaims = createInteractionClaims();
@@ -76,6 +82,7 @@ const guarded = (label: string, run: () => Promise<unknown>) => {
 };
 
 client.on(Events.InteractionCreate, (rawInteraction) => {
+  markActivity();
   if (!rawInteraction.isChatInputCommand()) return;
   const interaction = withEiEmbedReplies(rawInteraction, responsePolicy(botKey, rawInteraction.commandName).imageKey);
   if (!identityVerified) {
@@ -186,17 +193,10 @@ async function pump(): Promise<void> {
           await economy.expireTrades(guildId);
       }
     }
-    await pool.query(
-      `INSERT INTO ops.service_status(service,liveness,gateway,db_ready,latency_ms) VALUES($1,'ok','ok',true,$2)
-      ON CONFLICT(service) DO UPDATE SET liveness='ok',gateway='ok',db_ready=true,latency_ms=EXCLUDED.latency_ms,updated_at=now()`,
-      [`bot-${botKey}`, Math.max(0, Math.round(client.ws.ping))],
-    );
-    lastDbReady = true;
   })();
   try {
     await pumping;
   } catch {
-    lastDbReady = false;
     console.error("community maintenance unavailable");
   } finally {
     pumping = null;
@@ -210,23 +210,35 @@ const health = createServer((req, res) => {
     return;
   }
   if (req.url === "/health/ready") {
-    const ready =
-      identityVerified && client.isReady() && lastDbReady && !stopping;
-    res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ service: "bot-community", status: ready ? "ready" : "degraded" }));
+    void (async () => {
+      let dbReady = false;
+      try {
+        await pool.query("SELECT 1");
+        dbReady = true;
+      } catch {
+        dbReady = false;
+      }
+      const ready = identityVerified && client.isReady() && dbReady && !stopping;
+      res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ service: "bot-community", status: ready ? "ready" : "degraded" }));
+    })();
     return;
   }
   res.writeHead(404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "not_found" }));
 });
-health.listen(Number(process.env.COMMUNITY_HEALTH_PORT ?? 3103), "0.0.0.0");
-const timer = setInterval(() => {
-  void pump();
-}, 5000);
+health.listen(Number(process.env.PORT ?? process.env.COMMUNITY_HEALTH_PORT ?? 3103), "0.0.0.0");
+async function communityLoop(): Promise<void> {
+  if (loopStopped) return;
+  await pump();
+  const delay = Date.now() - lastActivity < 120_000 ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+  setTimeout(() => void communityLoop(), delay);
+}
+void communityLoop();
 async function shutdown(): Promise<void> {
   if (stopping) return;
   stopping = true;
-  clearInterval(timer);
+  loopStopped = true;
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();
   try {

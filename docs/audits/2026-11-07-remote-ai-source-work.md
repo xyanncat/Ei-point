@@ -80,6 +80,19 @@ the account owners. There is no deployed revision, image ID or health status to 
     carries the MIT licence (`LICENSE`, "Ei Point contributors"). Deferred to the next phases: Pocket TTS removal
     (P0b), the Neon/Drive data layer (P1), Render/Vercel runtime artifacts and VPS-layer retirement (P2–P3).
     **Committed as `e72046f` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
+11. **P1 — Neon data layer and Drive backups (2026-11-09).** The live database moves to Neon free Postgres; Drive is
+    the durable store only (no locking, so it cannot host the database). Every 5-second `ops.service_status`
+    heartbeat is removed from the five active bots — those writes kept a scale-to-zero database permanently awake
+    and would exhaust the 100 CU-hour allowance. `/health/live` (process only) is the Render probe; `/health/ready`
+    now performs an on-demand `SELECT 1`; every bot honours Render's `PORT`. Background pumps are adaptive (5 s only
+    for two minutes after Discord activity, then a 15-minute floor) for commerce notifications, himiko's community
+    pump, community maintenance and kafka maintenance; himiko's voice-XP loop skips the database entirely when no
+    one is in voice; the worker poll default is 15 minutes and uses a pool instead of a `LISTEN` client (Neon drops
+    idle sessions); API commerce maintenance is 15 minutes. A nightly GitHub Actions workflow dumps Neon and pushes
+    an encrypted restic snapshot to Drive (`rclone:drive:ei-point/backups`, 7 daily / 4 weekly, manual one-time
+    init). Docs: `docs/operations/neon.md`, `docs/operations/drive-backups.md`; env knobs in `.env.example`.
+    Verification: new `tests/runtime/lightweight.test.mjs` 5/5 (no heartbeat, liveness/PORT, slow worker, backup
+    workflow), ops 31/31, feature coverage 179 rows, full suite rerun below.
 
 ## Verified locally (fresh runs on this revision)
 

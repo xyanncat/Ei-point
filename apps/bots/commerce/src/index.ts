@@ -49,7 +49,12 @@ const client = new Client({
 
 let stopping = false;
 let identityVerified = false;
-let lastDbReady = false;
+// Free-tier pacing: pumps run fast only while the bot is recently active;
+// otherwise they back off so a scale-to-zero database can sleep.
+const ACTIVE_POLL_MS = Math.max(1_000, Number(process.env.BOT_ACTIVE_POLL_SECONDS ?? 5) * 1_000);
+const IDLE_POLL_MS = Math.max(60_000, Number(process.env.BOT_IDLE_POLL_SECONDS ?? 900) * 1_000);
+let lastActivity = Date.now();
+const markActivity = () => { lastActivity = Date.now(); };
 // Bounded real-work admission: a slot is held until the command's work settles.
 const commandGate = createWorkGate(20);
 const interactionClaims = createInteractionClaims();
@@ -71,6 +76,7 @@ async function loadStaffScopes(guildId: string, roleIds: string[]): Promise<stri
 
 // --- Interaction Handler ---
 client.on(Events.InteractionCreate, (rawInteraction) => {
+  markActivity();
   if (rawInteraction.isAutocomplete()) {
     if (rawInteraction.commandName === "orders" && rawInteraction.options.getFocused(true).name === "sku") {
       guarded("autocomplete", async () => {
@@ -173,23 +179,6 @@ client.on(Events.GuildCreate, (guild) => {
   if (!allowed.includes(guild.id)) guarded("leave-unapproved", () => guild.leave());
 });
 
-async function updateStatus(): Promise<void> {
-  if (stopping || !identityVerified || !client.isReady()) return;
-  try {
-    await pool.query(
-      `INSERT INTO ops.service_status(service, liveness, gateway, db_ready, latency_ms)
-       VALUES($2, 'ok', 'ok', true, $1)
-       ON CONFLICT(service) DO UPDATE SET liveness='ok', gateway='ok', db_ready=true, latency_ms=EXCLUDED.latency_ms, updated_at=now()`,
-      [Math.max(0, Math.round(client.ws.ping)),`bot-${botKey}`],
-    );
-    lastDbReady = true;
-  } catch {
-    lastDbReady = false;
-  }
-}
-
-const statusTimer = setInterval(() => void updateStatus(), 5000);
-
 // --- Durable staff notifications (A12/7C): claims awaiting review are delivered
 // to the configured staff channel from ops.outbox; failures back off and are
 // retried by the next poll, including after a restart. The event's nonce keeps a
@@ -228,10 +217,18 @@ async function deliverStaffNotifications(): Promise<void> {
   );
 }
 
-const notificationTimer = setInterval(
-  () => void deliverStaffNotifications().catch(() => console.error("commerce staff notification delivery failed")),
-  5000,
-);
+let notificationStopped = false;
+async function notificationLoop(): Promise<void> {
+  if (notificationStopped) return;
+  try {
+    await deliverStaffNotifications();
+  } catch {
+    console.error("commerce staff notification delivery failed");
+  }
+  const delay = Date.now() - lastActivity < 120_000 ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+  setTimeout(() => void notificationLoop(), delay);
+}
+void notificationLoop();
 
 // HTTP Health Check
 const health = createServer((req, res) => {
@@ -241,21 +238,29 @@ const health = createServer((req, res) => {
     return;
   }
   if (req.url === "/health/ready") {
-    const ready = identityVerified && client.isReady() && lastDbReady && !stopping;
-    res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ service: "bot-commerce", status: ready ? "ready" : "degraded" }));
+    void (async () => {
+      let dbReady = false;
+      try {
+        await pool.query("SELECT 1");
+        dbReady = true;
+      } catch {
+        dbReady = false;
+      }
+      const ready = identityVerified && client.isReady() && dbReady && !stopping;
+      res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ service: "bot-commerce", status: ready ? "ready" : "degraded" }));
+    })();
     return;
   }
   res.writeHead(404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "not_found" }));
 });
-health.listen(Number(process.env.COMMERCE_HEALTH_PORT ?? 3106), "0.0.0.0");
+health.listen(Number(process.env.PORT ?? process.env.COMMERCE_HEALTH_PORT ?? 3106), "0.0.0.0");
 
 async function shutdown(): Promise<void> {
   if (stopping) return;
   stopping = true;
-  clearInterval(statusTimer);
-  clearInterval(notificationTimer);
+  notificationStopped = true;
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();
   try {
@@ -288,7 +293,9 @@ client.once(Events.ClientReady, () => {
     await client.rest.put(Routes.applicationCommands(client.user!.id), {
       body: [...commonCommandDefinitions(), ...commerceCommandDefinitions].map((c) => c.toJSON()),
     });
-    await updateStatus();
+    await new Promise<void>((resolve) => {
+      pool.query("SELECT 1").then(() => resolve()).catch(() => resolve());
+    });
     console.log(`bot-commerce ready as ${client.user?.tag} across ${client.guilds.cache.size} guilds`);
   });
 });

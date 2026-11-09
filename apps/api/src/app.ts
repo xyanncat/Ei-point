@@ -659,7 +659,10 @@ export function createApp(options: AppOptions = {}) {
   );
   if(pool){
     let maintaining=false;
-    const timer=setInterval(()=>{if(maintaining)return;maintaining=true;void maintainCommerce(query).catch(()=>app.log.error("commerce maintenance failed")).finally(()=>{maintaining=false;});},60000);
+    // Free-tier pacing: commerce maintenance is cleanup, not a liveness signal;
+    // a 60-second poll would keep a scale-to-zero database permanently awake.
+    const commerceMaintenanceMs=Math.max(60000,Number(process.env.COMMERCE_MAINTENANCE_SECONDS??900)*1000);
+    const timer=setInterval(()=>{if(maintaining)return;maintaining=true;void maintainCommerce(query).catch(()=>app.log.error("commerce maintenance failed")).finally(()=>{maintaining=false;});},commerceMaintenanceMs);
     timer.unref();app.addHook("onClose",async()=>{clearInterval(timer);});
   }
   const administrator = async (req: {headers:{cookie?:string|undefined} & Record<string, string | string[] | undefined>}) => {

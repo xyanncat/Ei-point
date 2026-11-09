@@ -1,8 +1,11 @@
 import { SUPPORTED_LEASE_SQL, scheduleCommerceExpiry, runCommerceExpiry, recoverExhaustedJobs, publishWorkerHeartbeat } from "./jobs.js";
-// Phase 3: job recovery worker — LISTEN + periodic reconciliation (§5).
+// Phase 3: job recovery worker with periodic reconciliation (§5).
+// A pool (not a LISTEN client) is used because a scale-to-zero database
+// suspends idle compute and drops long-lived connections; notifications would
+// be lost anyway, so the poll is the source of truth.
 // SQL maintenance leases only supported kinds; unknown jobs remain visible for operator action.
 import pg from "pg";
-const { Client } = pg;
+const { Pool } = pg;
 import { nextBackoffMs } from "@ei-point/flow";
 import {
   installRejectionHandler,
@@ -24,26 +27,19 @@ if (DATABASE_URL == null) {
 const OWNER = `worker-${process.pid}`;
 const LEASE_SEC = 120;
 const BATCH = 10;
-const POLL_MS = 5000;
+// Free-tier pacing: poll rarely enough that a scale-to-zero database can sleep,
+// while still draining the job table. Override with WORKER_POLL_SECONDS.
+const POLL_MS = Math.max(60_000, Number(process.env.WORKER_POLL_SECONDS ?? 900) * 1_000);
 
-const client = new Client({
+const client = new Pool({
   connectionString: DATABASE_URL,
   application_name: OWNER,
+  max: 2,
   connectionTimeoutMillis: 5000,
   statement_timeout: 10000,
   idle_in_transaction_session_timeout: 15000,
 });
-// A dropped LISTEN connection must not become an uncaught exception: exit and let the
-// supervisor (compose restart policy / systemd) bring up a fresh connection + LISTEN.
-client.on("error", (err) => {
-  console.error("pg client error — exiting for supervisor restart", err);
-  process.exit(1);
-});
-await client.connect();
-await client.query("LISTEN ei_jobs");
-client.on("notification", () => {
-  void pump().catch((err) => console.error("pump failed", err));
-});
+client.on("error", (err) => console.error("worker pool error", err instanceof Error ? err.message : String(err)));
 
 let pumping = false;
 let stopping = false;

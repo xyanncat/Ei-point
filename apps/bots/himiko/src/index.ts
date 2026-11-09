@@ -55,7 +55,13 @@ const client = new Client({
 
 let stopping = false;
 let identityVerified = false;
-let lastDbReady = false;
+// Free-tier pacing: the community pump runs fast only while recently active,
+// then backs off so a scale-to-zero database can sleep.
+const ACTIVE_POLL_MS = Math.max(1_000, Number(process.env.BOT_ACTIVE_POLL_SECONDS ?? 5) * 1_000);
+const IDLE_POLL_MS = Math.max(60_000, Number(process.env.BOT_IDLE_POLL_SECONDS ?? 900) * 1_000);
+let lastActivity = Date.now();
+let loopStopped = false;
+const markActivity = () => { lastActivity = Date.now(); };
 // Bounded real-work admission: a slot is held until the command's work settles.
 const commandGate = createWorkGate(20);
 const interactionClaims = createInteractionClaims();
@@ -81,6 +87,7 @@ async function loadStaffScopes(guildId: string, roleIds: string[]): Promise<stri
 }
 
 client.on(Events.InteractionCreate, (rawInteraction) => {
+  markActivity();
   if (!rawInteraction.isChatInputCommand()) return;
   const interaction = withEiEmbedReplies(rawInteraction, responsePolicy(botKey, rawInteraction.commandName).imageKey);
   if (!identityVerified) {
@@ -222,6 +229,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
 });
 
 client.on(Events.MessageCreate, (message) => {
+  markActivity();
   if (
     !identityVerified ||
     !message.guildId ||
@@ -249,6 +257,7 @@ client.on(Events.MessageCreate, (message) => {
 });
 
 client.on(Events.GuildMemberAdd, (member) => {
+  markActivity();
   if (!identityVerified || !allowed.includes(member.guild.id)) return;
   guarded("welcome", async () => {
     if (!(await isControlEnabled(controlQuery, member.guild.id, botKey))) return;
@@ -286,6 +295,9 @@ const voiceXpTimer = setInterval(() => guarded("voice-xp", async () => {
   try {
     const batches: Array<{ guildId: string; intervalSeconds: number; users: string[]; offset: number; next: number }> = [];
     for (const guild of client.guilds.cache.values()) {
+      // Nobody is in voice: skip before any database query so a free-tier
+      // scale-to-zero database can sleep.
+      if (!guild.voiceStates.cache.size) continue;
       if (!allowed.includes(guild.id) || !(await isControlEnabled(controlQuery, guild.id, botKey))) continue;
       const settings = await community.settings(guild.id);
       if (!settings.voiceXpEnabled) continue;
@@ -379,21 +391,20 @@ async function updateStatus(): Promise<void> {
       lastXpCleanup = Date.now();
       await pool.query("DELETE FROM community.xp_events WHERE created_at<now()-interval '7 days'");
     }
-    await pool.query(
-      `INSERT INTO ops.service_status(service, liveness, gateway, db_ready, latency_ms)
-       VALUES($1, 'ok', 'ok', true, $2)
-       ON CONFLICT(service) DO UPDATE SET liveness='ok', gateway='ok', db_ready=true, latency_ms=EXCLUDED.latency_ms, updated_at=now()`,
-      [`bot-${botKey}`, Math.max(0, Math.round(client.ws.ping))],
-    );
-    lastDbReady = true;
   } catch {
-    lastDbReady = false;
+    // The next pump retries; readiness is probed on demand.
   } finally {
     pumping = false;
   }
 }
 
-const statusTimer = setInterval(() => void updateStatus(), 5000);
+async function communityPumpLoop(): Promise<void> {
+  if (loopStopped) return;
+  await updateStatus();
+  const delay = Date.now() - lastActivity < 120_000 ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+  setTimeout(() => void communityPumpLoop(), delay);
+}
+void communityPumpLoop();
 
 const health = createServer((req, res) => {
   if (req.url === "/health/live") {
@@ -402,20 +413,29 @@ const health = createServer((req, res) => {
     return;
   }
   if (req.url === "/health/ready") {
-    const ready = identityVerified && client.isReady() && lastDbReady && !stopping;
-    res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ service: "bot-himiko", status: ready ? "ready" : "degraded" }));
+    void (async () => {
+      let dbReady = false;
+      try {
+        await pool.query("SELECT 1");
+        dbReady = true;
+      } catch {
+        dbReady = false;
+      }
+      const ready = identityVerified && client.isReady() && dbReady && !stopping;
+      res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ service: "bot-himiko", status: ready ? "ready" : "degraded" }));
+    })();
     return;
   }
   res.writeHead(404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "not_found" }));
 });
-health.listen(Number(process.env.HIMIKO_HEALTH_PORT ?? 3107), "0.0.0.0");
+health.listen(Number(process.env.PORT ?? process.env.HIMIKO_HEALTH_PORT ?? 3107), "0.0.0.0");
 
 async function shutdown(): Promise<void> {
   if (stopping) return;
   stopping = true;
-  clearInterval(statusTimer);
+  loopStopped = true;
   clearInterval(voiceXpTimer);
   const timeout = setTimeout(() => process.exit(1), 15000);
   timeout.unref();

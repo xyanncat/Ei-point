@@ -1,0 +1,75 @@
+name: neon-drive-backup
+
+# Nightly encrypted logical backup of the live Neon database to Google Drive.
+# Free for public repositories; no Render service or instance hours consumed.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      init:
+        description: "Initialise the restic repository (one-time only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-drive-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      RESTIC_REPOSITORY: rclone:drive:ei-point/backups
+      RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
+      RCLONE_CONFIG: ${{ github.workspace }}/rclone.conf
+    steps:
+      - name: Install restic and rclone
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends restic rclone
+
+      - name: Write the rclone configuration
+        env:
+          RCLONE_CONFIG_B64: ${{ secrets.RCLONE_CONFIG_B64 }}
+        run: |
+          : "${RCLONE_CONFIG_B64:?RCLONE_CONFIG_B64 secret is required}"
+          printf '%s' "$RCLONE_CONFIG_B64" | base64 -d > "$RCLONE_CONFIG"
+          chmod 600 "$RCLONE_CONFIG"
+
+      - name: Dump the Neon database
+        run: |
+          test -n "$DATABASE_URL"
+          mkdir -p dump
+          docker run --rm \
+            -e DATABASE_URL \
+            -e PGSSLMODE=require \
+            -v "$PWD/dump:/dump" \
+            postgres:17-alpine \
+            sh -c 'pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file=/dump/ei-point.dump'
+          test -s dump/ei-point.dump
+          ls -l dump
+
+      - name: Check or initialise the repository
+        run: |
+          if restic snapshots >/dev/null 2>&1; then
+            echo "Repository present."
+            exit 0
+          fi
+          if [ "${{ inputs.init }}" = "true" ]; then
+            restic init
+          else
+            echo "Restic repository is missing. Re-run this workflow with init=true (one time)." >&2
+            exit 1
+          fi
+
+      - name: Back up and apply retention
+        run: |
+          restic backup dump --tag ei-point --tag neon-logical
+          restic forget --tag ei-point --keep-daily 7 --keep-weekly 4 --prune
+          restic check --read-data-subset=1%
