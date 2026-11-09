@@ -191,7 +191,8 @@ the account owners. There is no deployed revision, image ID or health status to 
     hides Deno (~5.1 s), retries with EJS only on failure, forces IPv4, selects 60–72 kbps Opus, streams the
     direct URL immediately instead of waiting for the cache, and uses chunked IPv4 downloads for background
     warming. Measured: 5.1 s extraction, 3.6 s direct download, 0.7 s to FFmpeg's first two seconds. yt-dlp is
-    pinned to 2026.10.26.
+    pinned to 2026.10.26. Deployed on the phone at `8a7262f`; Robin restarted with
+    `YTDLP_FAST_PATH=/usr/bin:/bin` and `/health/ready` reports `ready`.
     **Robin injected via proot Debian (2026-11-09):** Debian 13.7 / Python 3.13.5 on the phone, with
     `/opt/robin-venv` containing discord.py 2.7.1, **davey 0.2.0**, PyNaCl 1.5.0, yt-dlp 2026.8.19, certifi and
     psycopg[binary] 3.2.9 — davey's manylinux `aarch64` wheel works under Debian glibc, unlike Termux. The repo is
