@@ -16,8 +16,7 @@ RAM/disk uncapped). Member-count assumptions need owner confirmation.
 | AI chat concurrency / queue / deadline | 2 / 20 / 60 s | `packages/modules/ai` (`AI_CONCURRENT`, `AI_QUEUE_MAX`, `AI_DEADLINE_MS`) |
 | AI daily budget | 25,000 tokens/user/day (default) | `AI_DAILY_BUDGET_TOKENS` |
 | TTS synthesis concurrency / queue / deadline | 2 / 10 / 90 s | `packages/modules/tts` |
-| Translation concurrency / queue / deadline | 1 slot / 8 / 60 s | hosted provider + bot queue |
-| Text input caps | 500 chars (speak/translate/voice-chat), 300 (search query) | module validators |
+| Text input caps | 500 chars (speak/voice-chat), 300 (search query) | module validators |
 | Checkout rate limit | 30 requests/min per client bucket (1-minute window) | `commerce.checkout_rate_limits` |
 | Per-user cooldowns | 5 s (AI mentions, voice-chat reading) | bot runtime |
 | Music cache | 10 GiB bounded, disposable, excluded from backups | `AudioCache` defaults |
@@ -32,7 +31,6 @@ RAM/disk uncapped). Member-count assumptions need owner confirmation.
 | Music sessions | 2 (at cap) | 2 (cap holds; excess refused honestly) |
 | Cyrene TTS voice sessions | 2 (at cap) | 2 (cap holds) |
 | `/speak` requests | 4/min | 8/min |
-| `/translate` requests | 6/min | 12/min (queue 8 absorbs; excess gets the honest retry message) |
 | AI mentions + `/search` | 20/min fleet-wide | 40/min (per-user daily budget still caps individuals) |
 | Web checkouts | 2/min sustained | 4/min (per-IP 30/min bucket far above) |
 | Payment-proof claims | 1/min | 2/min |
@@ -53,7 +51,6 @@ RAM/disk uncapped). Member-count assumptions need owner confirmation.
 | Non-inference command completion | < 2 s p95 |
 | AI chat + `/search` completion | < 60 s (router deadline; over → honest unreachable message) |
 | `/speak` synthesis + file post | < 90 s (TTS deadline) |
-| `/translate` completion | < 60 s |
 | Checkout API (quote/resume/claim) | < 500 ms p95 server-side |
 | Music track start after `/play` | < 30 s p95 (yt-dlp resolution bound: 30 s) |
 

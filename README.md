@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 <img src="docs/assets/ei-point-pulse.gif" alt="Animated Ei Point signal traveling through the bot fleet" width="100%" />
 
@@ -42,7 +42,7 @@ Ei Point is a TypeScript and Python monorepo for a coordinated fleet of Discord 
   </tr>
   <tr>
     <td width="50%"><h3>◈ Commerce &amp; referrals</h3><p>Catalog and order flows, payment claims and settlement, verification, referral cycles, and guarded fulfillment.</p></td>
-    <td width="50%"><h3>✦ AI, voice &amp; music</h3><p>Bounded AI provider routing and persona memory, local Pocket voice cloning (or a hosted TTS provider) and hosted translation for Cyrene, and Robin playback with queue snapshots and a bounded media cache.</p></td>
+    <td width="50%"><h3>✦ AI, voice &amp; music</h3><p>Bounded AI provider routing and persona memory, local or hosted TTS for Cyrene, and Robin playback with queue snapshots and a bounded media cache.</p></td>
   </tr>
   <tr>
     <td width="50%"><h3>⌘ Website &amp; API</h3><p>A Kafka-themed public site and dashboard foundation with OAuth/session controls, commerce endpoints, and readiness routes.</p></td>
@@ -57,7 +57,7 @@ These describe the implemented product surface, not a claim that every archived 
 | Identity | Service key | Intended responsibilities | Current acceptance status |
 |---|---|---|---|
 | **Kafka** | `kafka` | Security, moderation, logging | Local implementation; full shared-dispatch lifecycle and live Discord acceptance remain open |
-| **Cyrene** | `cyrene` | AI, search, local Pocket TTS (or hosted TTS) and hosted translation | AI-provider, persona/model provisioning, target-CPU, translation-quality and voice-playback acceptance remain open |
+| **Cyrene** | `cyrene` | AI, search, local or hosted TTS | AI-provider, persona/model provisioning, target-CPU and voice-playback acceptance remain open |
 | **Robin** | `robin` | Music and playback | Target-platform playback and lifecycle acceptance remain open |
 | **Cipher** | `cipher` | Commerce and referrals | Local guarded flows; live provider/payment and full acceptance remain open |
 | **SilverWolf** | `silverwolf` | Game economy and rank readout | Local implementation; catalog/legacy parity and staging acceptance remain open |
@@ -69,7 +69,7 @@ Browse the [individual command and function catalog for all six bots](docs/bot-c
 
 The owner-approved target command set is documented command by command in the [product command and runtime spec](docs/product/bot-command-and-runtime-spec.md). This spec records requested behavior separately from code that has passed its implementation gates.
 
-Cyrene's local TTS provisioning, offline startup, reference-clip handling, and readiness checks are documented in the [Pocket TTS operations guide](docs/operations/pocket-tts.md). Model files, the voice reference, and persona memories stay in local read-only mounts; they are not committed to this repository. Translation no longer runs a local model: it uses the configured chat provider by default (Google Cloud Translation optional). Cyrene's chat provider is configured separately for direct-mention conversations.
+Cyrene's local TTS provisioning, offline startup, reference-clip handling, and readiness checks are documented in the [Pocket TTS operations guide](docs/operations/pocket-tts.md). Model files, the voice reference, and persona memories stay in local read-only mounts; they are not committed to this repository. Cyrene's chat provider is configured separately for direct-mention conversations.
 
 ## ⚙️ Architecture
 
@@ -174,7 +174,7 @@ The complete annotated list is in [`.env.example`](.env.example). Common configu
 | PostgreSQL | `POSTGRES_ADMIN_*`, `DATABASE_URL`, `MIGRATION_DATABASE_URL` | Separate bootstrap/migration credentials from the least-privilege application login |
 | Discord | `DISCORD_*_BOT_TOKEN`, `DISCORD_TEST_GUILD_ID`, `DISCORD_MAIN_GUILD_ID`, `DISCORD_CLIENT_*` | Bot identities, guild allowlist, and OAuth |
 | Web/API | `SESSION_SECRET`, `CSRF_SECRET`, `VAULT_SECRET`, `INTERNAL_SERVICE_TOKEN`, `DASHBOARD_ORIGIN`, `API_PORT` | Session protection, service trust, and local routing |
-| AI/TTS/translation | `AI_PROVIDER_PRIMARY*`, `AI_PROVIDER_FALLBACK*`, `AI_DEADLINE_MS`, `AI_DAILY_BUDGET_TOKENS`, `TTS_*`, `TRANSLATION_*`, `CYRENE_PERSONA_MEMORY_FILE` | Chat and translation provider settings; optional local Pocket TTS model paths and bounded inference; persona memory mount |
+| AI/TTS | `AI_PROVIDER_PRIMARY*`, `AI_PROVIDER_FALLBACK*`, `AI_DEADLINE_MS`, `AI_DAILY_BUDGET_TOKENS`, `TTS_*`, `CYRENE_PERSONA_MEMORY_FILE` | Chat and TTS provider settings; optional local TTS model paths and bounded inference; persona memory mount |
 | Commerce | `UPI_PAYEE_*`, `RAZORPAY_PAYMENT_PAGE`, `COMMERCE_GUILD_ID`, `PAYMENT_ORIGIN`, `COMMERCE_REFERRAL_REWARD_MINOR`, `COMMERCE_STAFF_CHANNEL_ID` | Payment presentation, guild/referral configuration, and the staff channel that receives claim notifications |
 | Backup/ingress | `DEPLOY_BACKUP_MAX_AGE_HOURS`, `RESTIC_*`, tunnel variables | Release backup-age bound and optional external backup/ingress configuration |
 
@@ -311,7 +311,7 @@ flowchart LR
 | Workspace install rejects the lockfile | Confirm Node `24.8.0`, pnpm `9.12.0`, and run `pnpm install --frozen-lockfile` from the repository root. |
 | API or workers cannot reach PostgreSQL | Confirm Compose's `postgres` service is healthy and the URL hostname matches the caller (Compose uses `postgres`; host-run processes usually need `127.0.0.1` and a published port). |
 | Bot refuses a guild or command | Check the configured test/main guild allowlist, registered identity, bot permissions, and command-specific authorization. |
-| AI/TTS/translation reports unavailable | Check the selected chat provider only for Cyrene mentions; `/speak`, `/tts` and `/translate` require their local model mounts and ready local service. |
+| AI/TTS reports unavailable | Check the selected chat provider for Cyrene mentions; `/speak` and `/tts` require a ready TTS provider. |
 | Deployment stops before migration | Check image digests, disk usage, the selected verified backup's age/hash, database readiness, and migration credentials in the runbook. |
 | Backup timer exists but recovery is unproven | Run restore drills with actual artifacts and record timings; timer installation alone is not recovery evidence. |
 

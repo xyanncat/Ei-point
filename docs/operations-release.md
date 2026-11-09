@@ -1,4 +1,4 @@
-# VPS release and recovery procedure
+﻿# VPS release and recovery procedure
 
 These procedures require Linux, Docker Compose, Bash, Node.js, Python 3, GNU timeout and flock. Backup prerequisites and timer configuration are in [the backup guide](../infra/backup/README.md). Local mocked tests do not certify this procedure on the VPS. Use a staging/test guild first; production cutover remains an operator action.
 
@@ -28,7 +28,7 @@ node scripts/release-manifest.mjs /secure/release.json /secure/release.compose.j
 
 Set `ENV_FILE` explicitly. Use separate administrative `MIGRATION_DATABASE_URL` and least-privilege `DATABASE_URL`, both pointing to `ei_point` on the same server. The application username must be `ei_point_app`; its URL-encoded password must contain at least 24 characters and no placeholder. The migration service runs schema migrations and provisions application-role credentials/grants. Administrative credentials belong only to this one-shot service and PostgreSQL bootstrap.
 
-Configure OAuth, approved registry identities/guilds, tokens, payment destinations and provider URLs/keys/models. AI primary URL/key/model are required for direct-mention chat; a fallback needs its URL/model and may use a key. Cyrene TTS requires either the pinned local Pocket weights, voice state, reference audio and persona memory described in the [Pocket TTS](operations/pocket-tts.md) guide, or a hosted provider (`TTS_PROVIDER`). Translation uses the configured chat provider by default (Google Cloud Translation optional) and needs no local model. Set the real UPI payee and payment origin before exposing checkout. Configure public TLS and ingress separately; nginx binds loopback port 8080 in this Compose setup. Set the trusted proxy IP/subnet consistently if changing the default network.
+Configure OAuth, approved registry identities/guilds, tokens, payment destinations and provider URLs/keys/models. AI primary URL/key/model are required for direct-mention chat; a fallback needs its URL/model and may use a key. Cyrene TTS requires either the pinned local Pocket weights, voice state, reference audio and persona memory described in the [Pocket TTS](operations/pocket-tts.md) guide, or a hosted provider (`TTS_PROVIDER`). Set the real UPI payee and payment origin before exposing checkout. Configure public TLS and ingress separately; nginx binds loopback port 8080 in this Compose setup. Set the trusted proxy IP/subnet consistently if changing the default network.
 
 ## First provisioning and later releases
 

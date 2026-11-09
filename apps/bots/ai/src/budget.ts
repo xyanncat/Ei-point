@@ -1,9 +1,9 @@
 // Per-provider cost units admitted through PostgreSQL (redesign infra §6).
 // Same discipline as the chat token budget in commands.ts: reserve atomically
 // under an advisory lock before spending, settle actual usage or release the
-// reservation afterward. Units are characters for speech and translation;
-// per-guild+user and global daily caps are enforced provider-independently so
-// an in-process queue is not the only limit when several entry points call.
+// reservation afterward. Units are characters for speech; per-guild+user and
+// global daily caps are enforced provider-independently so an in-process queue
+// is not the only limit when several entry points call.
 import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import {
@@ -26,10 +26,8 @@ export function resolveUnitBudget(raw: string | undefined, variable: string, fal
 
 export const TTS_UNITS_PER_USER = resolveUnitBudget(process.env.TTS_DAILY_BUDGET_CHARS, "TTS_DAILY_BUDGET_CHARS", 30_000);
 export const TTS_UNITS_GLOBAL = resolveUnitBudget(process.env.TTS_DAILY_BUDGET_CHARS_GLOBAL, "TTS_DAILY_BUDGET_CHARS_GLOBAL", 300_000);
-export const TRANSLATION_UNITS_PER_USER = resolveUnitBudget(process.env.TRANSLATION_DAILY_BUDGET_CHARS, "TRANSLATION_DAILY_BUDGET_CHARS", 25_000);
-export const TRANSLATION_UNITS_GLOBAL = resolveUnitBudget(process.env.TRANSLATION_DAILY_BUDGET_CHARS_GLOBAL, "TRANSLATION_DAILY_BUDGET_CHARS_GLOBAL", 250_000);
 
-export type BudgetKind = "tts" | "translate";
+export type BudgetKind = "tts";
 
 export interface UnitAdmissionOptions {
   guildId: string;
@@ -48,7 +46,7 @@ const BUDGET_EXCEEDED_MESSAGE = "Your remaining daily AI budget is too small for
 export async function reserveUnitBudget(pool: Pool, opts: UnitAdmissionOptions): Promise<UnitAdmission> {
   if (!Number.isInteger(opts.units) || opts.units < 0) return { ok: false, message: BUDGET_EXCEEDED_MESSAGE };
   const reservation = randomUUID();
-  const caps = opts.kind === "tts" ? [TTS_UNITS_PER_USER, TTS_UNITS_GLOBAL] : [TRANSLATION_UNITS_PER_USER, TRANSLATION_UNITS_GLOBAL];
+  const caps = [TTS_UNITS_PER_USER, TTS_UNITS_GLOBAL];
   const client = await pool.connect();
   try {
     await client.query("BEGIN");

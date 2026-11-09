@@ -1,4 +1,4 @@
-# Ei Point bot commands and functions
+﻿# Ei Point bot commands and functions
 
 This catalog lists commands currently defined by the checked-in bot code, plus the non-command functions wired into each bot. It is a source-level reference, not proof that commands are registered in Discord, work in a live guild, or match every legacy bot behavior. The source-to-target parity gate remains open; see [the feature matrix](feature-matrix.md), [legacy behavior map](audits/legacy-behavior-map.json), and the local completion build plan provided with the project assets.
 
@@ -11,7 +11,7 @@ The six current identities are Kafka, Cyrene, Robin, Cipher, SilverWolf, and Him
 | Bot | Main function | Command source |
 |---|---|---|
 | [Kafka](#kafka) | Security, moderation, audit/event logging | `apps/bots/kafka/src/index.ts`, security and moderation command modules |
-| [Cyrene](#cyrene) | Mention chat, persona and conversation state, TTS, local translation | `apps/bots/ai/src/commands.ts`, `apps/bots/ai/src/tts.ts`, `apps/bots/ai/src/translate.ts` |
+| [Cyrene](#cyrene) | Mention chat, persona and conversation state, TTS | `apps/bots/ai/src/commands.ts`, `apps/bots/ai/src/tts.ts` |
 | [Robin](#robin) | Music search, playback, voice and queue management | `apps/bots/music-py/src/main.py` |
 | [Cipher](#cipher) | Service catalog, orders, payment claims, settlement, referrals | `apps/bots/commerce/src/commands.ts` |
 | [SilverWolf](#silverwolf) | Rank readout, cards, games, inventory, market and trades | `apps/bots/community/src/commands.ts` |
@@ -73,7 +73,6 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 | `/tts` | Join the caller's voice channel and read new text-chat messages aloud; bounded queue and idle-human departure are implemented. |
 | `/leave` | End Cyrene's active voice session. |
 | `/search <query>` | Asks Cyrene's AI model to answer the question (no external/web search source; owner decision 2026-10-16). Shares the mention conversation memory, daily token budget and provider router; unavailable/budget states are answered honestly. |
-| `/translate <text> <target_language> [source_language]` | Translate up to 500 characters through the hosted translation provider (the configured chat endpoint by default). Source language is optional and auto-detected when omitted. |
 
 ### Other functions
 
@@ -81,7 +80,6 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 - Keep guild/user conversation threads, recent messages, summaries, persona preferences, and usage records in PostgreSQL.
 - Read new messages from the active voice channel's text chat, enforce Ei-Flow authorization, rate and queue limits, and coordinate voice admission with Robin through database leases.
 - Synthesize through the private, offline local Pocket service. Provisioning model weights and target-VPS CPU/audible acceptance remain open.
-- Translate through the configured hosted provider (chat endpoint by default; Google Cloud Translation optional) with one inference slot, eight waiting requests and a 60-second request deadline. Translation text is not stored in Cyrene's conversation history; language-quality acceptance for the configured provider remains open.
 
 ## Robin
 

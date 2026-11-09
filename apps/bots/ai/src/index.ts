@@ -28,12 +28,10 @@ import {
 import { synthesizeSpeech, ttsCommandDefinitions, respondToTtsCommand, ttsProviderName } from "./tts.js";
 import { releaseUnitReservation, reserveUnitBudget, settleUnitUsage } from "./budget.js";
 import { extractVoiceChatText, splitSpeechChunks, TTS_CHUNK_CHARS, TTS_MAX_CHARS } from "@ei-point/module-tts";
-import { respondToTranslationCommand, translationCommandDefinition } from "./translate.js";
 import { prepareCyrenePersonaPrompt } from "./persona.js";
 
-const ALL_AI_COMMANDS = [...commonCommandDefinitions(), ...aiCommandDefinitions, ...ttsCommandDefinitions, translationCommandDefinition];
+const ALL_AI_COMMANDS = [...commonCommandDefinitions(), ...aiCommandDefinitions, ...ttsCommandDefinitions];
 const TTS_NAMES = new Set(ttsCommandDefinitions.map((c) => c.name));
-const TRANSLATION_NAME = translationCommandDefinition.name;
 
 // Cyrene voice sessions: guildId -> voice connection (lazy @discordjs/voice).
 const voiceSessions = new Map<string, { destroy: () => void }>();
@@ -518,7 +516,7 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
         return;
       }
 
-      if (await respondToCommonCommand(interaction, "Cyrene", "Mention Cyrene in a text channel to chat. Use `/speak`, `/tts`, `/leave`, `/search`, or `/translate` for voice and translation features.")) return;
+      if (await respondToCommonCommand(interaction, "Cyrene", "Mention Cyrene in a text channel to chat. Use `/speak`, `/tts`, `/leave`, or `/search` for voice and search features.")) return;
 
       await interaction.deferReply();
       if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, interaction.guildId, botKey, interaction.commandName, [...interaction.member.roles.cache.keys()]))) {
@@ -529,19 +527,6 @@ client.on(Events.InteractionCreate, (rawInteraction) => {
       const options: Record<string, string | number | boolean> = {};
       for (const opt of interaction.options.data) {
         if (opt.value !== undefined) options[opt.name] = opt.value;
-      }
-
-      if (interaction.commandName === TRANSLATION_NAME) {
-        const result = await respondToTranslationCommand(
-          {
-            text: String(options.text ?? ""),
-            targetLanguage: String(options.target_language ?? ""),
-            ...(typeof options.source_language === "string" ? { sourceLanguage: options.source_language } : {}),
-          },
-          { pool, guildId: interaction.guildId, userId: interaction.user.id },
-        );
-        await interaction.editReply({ content: fitDiscord(result), allowedMentions: { parse: [] } });
-        return;
       }
 
       if (TTS_NAMES.has(interaction.commandName)) {

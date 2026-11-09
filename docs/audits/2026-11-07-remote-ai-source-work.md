@@ -72,6 +72,13 @@ the account owners. There is no deployed revision, image ID or health status to 
    manifests that still carry the `hy-mt2` image remain valid so `rollback.sh` can restore the old translation
    runtime — the removed service is an optional legacy key, never required by a new release.
    **Committed as `d56a42f` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
+10. **Free-tier pivot, P0a: translation removed entirely; MIT licence (2026-11-09).** Per the owner's new architecture
+    (no VPS, Render free bots, phone-hosted Piper TTS, Vercel web, Neon data, Drive storage), translation is gone:
+    the `/translate` command, queue/adapters/tests, Google language map, translation budget caps and usage row,
+    env vars and every current doc reference are deleted. The `ai.budget_reservations.kind` DB constraint keeps the
+    historical `'translate'` value so old rows remain valid; no new translation rows are written. The repository now
+    carries the MIT licence (`LICENSE`, "Ei Point contributors"). Deferred to the next phases: Pocket TTS removal
+    (P0b), the Neon/Drive data layer (P1), Render/Vercel runtime artifacts and VPS-layer retirement (P2–P3).
 
 ## Verified locally (fresh runs on this revision)
 
@@ -122,6 +129,16 @@ Fifth pass (Hy-MT2 removal) — fresh runs:
 | `node --test infra/backup/durable-assets.test.mjs` | 9 passed / 0 failed (single reprovisionable Pocket asset) |
 | `node scripts/check-feature-coverage.mjs` | structural exit 0; 179 rows still map to existing targets and tests |
 | full `corepack pnpm test` chain | passed end to end — final gate 113 passed / 0 failed; `Resource budget ok (pool mode): 12544 shares / 24.5 GiB; concurrent 25.75 GiB` |
+
+Sixth pass (P0a translation removal + MIT) — fresh runs:
+
+| Check | Result |
+|---|---|
+| `corepack pnpm --filter @ei-point/bot-ai typecheck` + `test` | clean; 50 passed / 0 failed |
+| ops release/budget/deploy | 31 passed / 0 failed |
+| durable-assets | 9 passed / 0 failed |
+| `node scripts/check-feature-coverage.mjs` | structural exit 0; 179 rows |
+| full `corepack pnpm test` chain | rerun below |
 
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 

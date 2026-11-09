@@ -1,4 +1,4 @@
-// Provider selection for Cyrene TTS and translation (redesign infrastructure §6).
+﻿// Provider selection for Cyrene TTS (redesign infrastructure §6).
 // No network is touched: fetch is replaced with a stub that records calls, and
 // the local adapter must be selectable purely by configuration.
 import { describe, it } from "node:test";
@@ -14,10 +14,6 @@ import {
   ttsTotalDeadlineMs,
   MAX_TTS_AUDIO_BYTES,
 } from "./tts.js";
-import {
-  GOOGLE_LANGUAGE_CODES,
-  makeTranslationWorker,
-} from "./translate.js";
 import { createFailureGate, fetchWithBoundedRetry, readBoundedBody } from "./http.js";
 
 function wavResponse(bytes = new Uint8Array([1, 2, 3])) {
@@ -284,94 +280,6 @@ describe("OpenRouter speech provider", () => {
       "hexgrad/kokoro-82m",
     ]);
     assert.deepEqual(openRouterTtsModels({ TTS_PROVIDER_MODELS: "a/b , c/d " }), ["a/b", "c/d"]);
-  });
-});
-
-describe("translation provider selection", () => {
-  it("defaults to the chat worker without a provider variable", () => {
-    // Constructing must not throw or attempt a fetch; no call is made here.
-    assert.doesNotThrow(() => makeTranslationWorker({}));
-    assert.doesNotThrow(() => makeTranslationWorker({ TRANSLATION_PROVIDER: "" }));
-    assert.doesNotThrow(() => makeTranslationWorker({ TRANSLATION_PROVIDER: "local" }));
-  });
-
-  it("translates through the configured OpenAI-compatible chat provider", async () => {
-    const calls: Array<{ url: string; body: Record<string, unknown>; auth: string | undefined }> = [];
-    const fetchFn = (async (url: string, init: RequestInit) => {
-      calls.push({
-        url: String(url),
-        body: JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>,
-        auth: (init.headers as Record<string, string> | undefined)?.Authorization,
-      });
-      return jsonResponse({ choices: [{ message: { content: "Bonjour" } }] });
-    }) as typeof fetch;
-    const worker = makeTranslationWorker(
-      {
-        AI_PROVIDER_PRIMARY: "https://api.groq.com/openai/v1/chat/completions",
-        AI_PROVIDER_PRIMARY_KEY: "gsk-test",
-        AI_PROVIDER_PRIMARY_MODEL: "openai/gpt-oss-20b",
-      },
-      fetchFn,
-    );
-    const text = await worker({ text: "Hello", targetLanguage: "French" }, neverAborted());
-    assert.equal(text, "Bonjour");
-    assert.equal(calls[0]!.url, "https://api.groq.com/openai/v1/chat/completions");
-    assert.equal(calls[0]!.body.model, "openai/gpt-oss-20b");
-    assert.equal(calls[0]!.auth, "Bearer gsk-test");
-    assert.equal("temperature" in calls[0]!.body, false);
-    assert.match(String((calls[0]!.body.messages as Array<{ content: string }>)[1]!.content), /from untrusted|untrusted content/i);
-  });
-
-  it("fails closed when the chat provider is not configured", async () => {
-    let called = false;
-    const worker = makeTranslationWorker({}, (async () => {
-      called = true;
-      return jsonResponse({});
-    }) as typeof fetch);
-    await assert.rejects(worker({ text: "x", targetLanguage: "French" }, neverAborted()), /translation-provider-unconfigured/);
-    assert.equal(called, false);
-  });
-
-  it("Google translation maps supported language names to BCP-47 codes", () => {
-    for (const [name, code] of Object.entries(GOOGLE_LANGUAGE_CODES)) {
-      assert.match(code, /^[a-z]{2}(-[A-Z]{2})?$/, `${name} should map to a code`);
-    }
-    assert.equal(GOOGLE_LANGUAGE_CODES["Arabic"], "ar");
-    assert.equal(GOOGLE_LANGUAGE_CODES["Traditional Chinese"], "zh-TW");
-    assert.equal(GOOGLE_LANGUAGE_CODES["Chinese"], "zh-CN");
-    assert.equal(GOOGLE_LANGUAGE_CODES["Hebrew"], "iw");
-  });
-
-  it("Google translation calls the v2 endpoint and unescapes entities", async () => {
-    const fetchFn = (async () =>
-      jsonResponse({ data: { translations: [{ translatedText: "Bonjour &amp; bienvenue &#39;ami&#39;" }] } })) as typeof fetch;
-    const worker = makeTranslationWorker(
-      { TRANSLATION_PROVIDER: "google", GOOGLE_TRANSLATE_API_KEY: "k" },
-      fetchFn,
-    );
-    const text = await worker({ text: "Hello", targetLanguage: "French" }, neverAborted());
-    assert.equal(text, "Bonjour & bienvenue 'ami'");
-  });
-
-  it("Google without a key fails closed", async () => {
-    const worker = makeTranslationWorker({ TRANSLATION_PROVIDER: "google" }, (async () => jsonResponse({})) as typeof fetch);
-    await assert.rejects(worker({ text: "x", targetLanguage: "French" }, neverAborted()), /translation-provider-unconfigured/);
-  });
-
-  it("429 maps to a quota code instead of a generic failure", async () => {
-    const worker = makeTranslationWorker(
-      { TRANSLATION_PROVIDER: "google", GOOGLE_TRANSLATE_API_KEY: "k" },
-      (async () => new Response("{}", { status: 429 })) as typeof fetch,
-    );
-    await assert.rejects(
-      worker({ text: "x", targetLanguage: "French" }, neverAborted()),
-      (error: unknown) => error instanceof Error && (error as Error & { code?: string }).code === "QUOTA",
-    );
-  });
-
-  it("unknown translation provider fails closed", async () => {
-    const worker = makeTranslationWorker({ TRANSLATION_PROVIDER: "smoke-signals" }, (async () => jsonResponse({})) as typeof fetch);
-    await assert.rejects(worker({ text: "x", targetLanguage: "French" }, neverAborted()), /translation-provider-unknown/);
   });
 });
 

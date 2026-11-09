@@ -2,12 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { responsePolicy } from "@ei-point/flow";
 import { ttsCommandDefinitions } from "./tts.js";
-import { translationCommandDefinition } from "./translate.js";
 
-const EXPECTED = ["leave", "search", "speak", "translate", "tts"];
+const EXPECTED = ["leave", "search", "speak", "tts"];
 
 test("every registered Cyrene command replies publicly", () => {
-  const names = [...ttsCommandDefinitions, translationCommandDefinition]
+  const names = [...ttsCommandDefinitions]
     .map((command) => command.name)
     .sort();
   assert.deepEqual(

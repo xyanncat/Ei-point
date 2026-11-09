@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { SlashCommandBuilder } from "discord.js";
 import type { Pool } from "pg";
-import { TTS_UNITS_PER_USER, TRANSLATION_UNITS_PER_USER } from "./budget.js";
+import { TTS_UNITS_PER_USER } from "./budget.js";
 import {
   buildPromptWindow,
   summarizeConversation,
@@ -258,10 +258,7 @@ export async function respondToAiCommand(
     let extras = "";
     try {
       const voice = await pool.query<{ used: string }>(USAGE_UNITS_TODAY_SQL, [guildId, userId, "tts:%"]);
-      const translation = await pool.query<{ used: string }>(USAGE_UNITS_TODAY_SQL, [guildId, userId, "translate:%"]);
-      extras =
-        `\n• Voice Characters: **${Number(voice.rows[0]?.used ?? 0).toLocaleString()}** / ${TTS_UNITS_PER_USER.toLocaleString()}` +
-        `\n• Translation Characters: **${Number(translation.rows[0]?.used ?? 0).toLocaleString()}** / ${TRANSLATION_UNITS_PER_USER.toLocaleString()}`;
+      extras = `\n• Voice Characters: **${Number(voice.rows[0]?.used ?? 0).toLocaleString()}** / ${TTS_UNITS_PER_USER.toLocaleString()}`;
     } catch {
       // The token line still answers even if the unit sums are unavailable.
     }

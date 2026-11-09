@@ -89,7 +89,7 @@ describe("cost-unit admission decisions", () => {
   it("refuses when the global cap is reached even with personal headroom", async () => {
     const fake = makePool(budgetFakes({ user: 10, globalUsed: TTS_UNITS_GLOBAL }));
     const admission = await reserveUnitBudget(fake.pool, {
-      guildId: "g", userId: "u", kind: "translate", units: 1, providerPattern: "translate:%",
+      guildId: "g", userId: "u", kind: "tts", units: 1, providerPattern: "tts:%",
     });
     assert.equal(admission.ok, false);
   });

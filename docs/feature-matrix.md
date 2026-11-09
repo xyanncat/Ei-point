@@ -1,4 +1,4 @@
-# Ei Point — Feature Matrix (Phase 1 — legacy-behavior ledger closed)
+﻿# Ei Point — Feature Matrix (Phase 1 — legacy-behavior ledger closed)
 
 > Source: `EI_POINT_VPS_BUILD_PLAN.md` §2 + §10 Phase 1.
 > Status: **Ledger closed (section 1A, 2026-10-16); the 54 curated rows remain requirements, not evidence.** The rows below are curated requirements grouped from the plan; they do not by themselves certify runtime parity.
@@ -9,7 +9,7 @@
 | Bot | Modules | Required Discord permissions (least-privilege) | Guild access | Secret refs |
 |---|---|---|---|---|
 | kafka (Security+Moderation) | security, moderation, logging | ViewAuditLog, ManageGuild (lockdown only), ModerateMembers, ManageMessages, BanMembers, KickMembers | approved guilds only | DISCORD_KAFKA_BOT_TOKEN |
-| cyrene (AI+TTS+translate) | ai, search, tts, translate | SendMessages, EmbedLinks, AttachFiles, Connect, Speak (TTS only) | approved guilds only | DISCORD_CYRENE_BOT_TOKEN + AI_PROVIDER_* for mention chat + local Pocket TTS (optional) and persona/reference mounts |
+| cyrene (AI+TTS) | ai, search, tts | SendMessages, EmbedLinks, AttachFiles, Connect, Speak (TTS only) | approved guilds only | DISCORD_CYRENE_BOT_TOKEN + AI_PROVIDER_* for mention chat + local Pocket TTS (optional) and persona/reference mounts |
 | robin (Music) | music | Connect, Speak, UseVAD, SendMessages, EmbedLinks | approved guilds only | DISCORD_ROBIN_BOT_TOKEN |
 | cipher (Commerce) | commerce | SendMessages, EmbedLinks, AttachFiles | approved guilds only | DISCORD_CIPHER_BOT_TOKEN + UPI/USDT config |
 | silverwolf (Games) | games | SendMessages, EmbedLinks, AddReactions | approved guilds only | DISCORD_SILVERWOLF_BOT_TOKEN |
