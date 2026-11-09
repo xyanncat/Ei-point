@@ -13,8 +13,8 @@
     "existing_core_under_full_contention": 0.367,
     "existing_headroom_x": 0.66,
     "required_shares": {
-      "hosted_tts": 1088,
-      "local_tts": 1600
+      "with_cyrene_tts": 1600,
+      "without_cyrene_tts": 1088
     }
   },
   "render_free": {
@@ -1226,7 +1226,6 @@
       "required": true
     },
     "limits": {
-      "late_frame_ms": 20,
       "memory_headroom": 0.25,
       "safety_factor": 2.0,
       "target_cpu_utilization": 0.5,
@@ -1237,8 +1236,8 @@
     "pool": {
       "cpu_ceiling": 9,
       "share_rounding": 64,
-      "shares_with_hosted_tts": 8448,
-      "shares_with_local_tts": 12544
+      "shares_with_cyrene_tts": 12544,
+      "shares_without_cyrene_tts": 8448
     },
     "render_free": {
       "cpu": 0.1,

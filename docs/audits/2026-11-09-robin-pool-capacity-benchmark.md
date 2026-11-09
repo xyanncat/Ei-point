@@ -1,9 +1,11 @@
-# Robin source render capacity and pool sizing — 2026-11-09
+# Robin music playback capacity and pool sizing — 2026-11-09
 
-**Scope:** Robin (`apps/bots/music-py`) run from source. Measured the real
-FFmpeg decode → volume → Opus encode path, the source import footprint and the
-bounded yt-dlp resolution/download subprocesses. No Discord gateway, UDP send,
-DAVE encryption, audible playback, target phone or Render instance was used.
+**Scope:** Robin the music bot (`apps/bots/music-py`) run from source. Measured
+its real music playback path — FFmpeg decode → volume → Opus encode — plus the
+source import footprint and the bounded yt-dlp resolution/download subprocesses.
+No Discord gateway, UDP send, DAVE encryption, audible playback, target phone or
+Render instance was used. Robin has no TTS path; the TTS references below are
+only about whether Cyrene's separate TTS service shares the old CPU pool.
 
 **Status:** benchmark complete on a shared Windows development host. The result
 is a **sizing range and a conservative recommendation**, not a target-host
@@ -19,11 +21,16 @@ and the `ai.voice_leases` fleet limit of 2):
 |---|---:|---:|---:|
 | CPU per stream | 0.108–0.149 core | 0.273–0.278 core | — |
 | CPU for 2 streams | 0.22–0.30 core | 0.546–0.556 core | **1.11 core** |
-| Retired 9-CPU pool, local TTS (12 544 shares) | — | — | **1 600 shares** |
-| Retired 9-CPU pool, hosted TTS (8 448 shares) | — | — | **1 088 shares** |
+| Retired 9-CPU pool, with Cyrene TTS in the pool (12 544 shares) | — | — | **1 600 shares** |
+| Retired 9-CPU pool, without Cyrene TTS (8 448 shares) | — | — | **1 088 shares** |
 | Memory (idle + 2 FFmpeg + yt-dlp transient + 25 %) | — | **224.6 MB** | **512 MB** (existing 2 GiB is ample) |
 | DB connections | — | **1** (not a pool) | 1 |
 | Render free instance (0.1 CPU / 512 MB) | — | **not sufficient** | phone or a paid host with ≥1.2 CPU |
+
+The two pool rows differ only because the old 9-CPU share total included
+Cyrene's optional `tts` service (12 544 shares) or omitted it (8 448 shares
+with hosted AI). Both rows size **Robin's music playback**; neither is a TTS
+workload.
 
 The old `bot-music` allocation of **512 shares / 2 GiB** gave about **0.367
 core under full pool contention**. That is 66 % of the measured two-stream
@@ -125,8 +132,8 @@ aggregate cap, weighted CFS shares):
 ```
 required cores = 2 sessions × 0.2779 core/stream × 2.0 safety = 1.112 core
 
-local TTS pool:  1.112 / 9 × 12 544 = 1 549.5 → 1 600 shares (64-share rounding)
-hosted TTS pool: 1.112 / 9 ×  8 448 = 1 043.2 → 1 088 shares
+local model pool (with Cyrene TTS):  1.112 / 9 × 12 544 = 1 549.5 → 1 600 shares (64-share rounding)
+hosted AI pool (without Cyrene TTS): 1.112 / 9 ×  8 448 = 1 043.2 → 1 088 shares
 
 existing 512 shares = 512 / 12 544 × 9 = 0.367 core
   vs measured 2-stream load 0.556 core → 0.66×
@@ -168,9 +175,9 @@ The operational pool is **2 sessions**:
   the count reaches 2 in `ai.voice_leases`;
 - Cyrene shares the same lease table.
 
-The benchmark shows the source render path can keep real time beyond 2 streams
-on this host, but the pool capacity should be sized to the **2-session policy**,
-not to the 6-stream experiment. Raising the cap is a separate change that needs
+The benchmark shows Robin's music playback path can keep real time beyond 2
+streams on this host, but the pool capacity should be sized to the **2-session
+policy**, not to the 6-stream experiment. Raising the cap is a separate change that needs
 real Discord UDP/DAVE and audible acceptance.
 
 ## Limitations and open gates
@@ -225,7 +232,9 @@ included.
 - Source-only benchmark. **Nothing was deployed, restarted or reconfigured.**
 - Benchmark source revision: `cba9a40c096a358c239e26f4d14167877d845b9a`;
   `main.py` SHA-256 recorded above.
-- Report and harness commit: `bcc2d9bb2213895f9b72e0c0307d5af29df6a1ee`
-  (pushed to `main` and `feat/completion-plan`).
+- Initial report and harness commit: `bcc2d9bb2213895f9b72e0c0307d5af29df6a1ee`
+  (pushed to `main` and `feat/completion-plan`); the pool labels were clarified
+  in the follow-up commit because the old pool names mentioned Cyrene's TTS
+  service, not Robin.
 - No production Discord token, database, payment provider or active session was
   used. The harness refuses credential-bearing environments and loopback only.

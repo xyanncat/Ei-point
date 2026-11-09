@@ -14,8 +14,8 @@
   },
   "pool": {
     "cpu_ceiling": 9,
-    "shares_with_local_tts": 12544,
-    "shares_with_hosted_tts": 8448,
+    "shares_with_cyrene_tts": 12544,
+    "shares_without_cyrene_tts": 8448,
     "share_rounding": 64
   },
   "existing_allocation": {

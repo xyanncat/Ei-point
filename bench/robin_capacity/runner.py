@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Robin (apps/bots/music-py) source audio-render capacity benchmark.
+"""Robin (apps/bots/music-py) music playback capacity benchmark.
 
 This harness measures Robin's real decode/volume/Opus path without a Discord
 connection: ``discord.FFmpegPCMAudio`` -> ``PCMVolumeTransformer`` ->
@@ -588,7 +588,10 @@ def analyse(summary: dict, scenario: dict) -> dict:
     cpu_ceiling = float(pool.get("cpu_ceiling", 9))
     rounding = int(pool.get("share_rounding", 64))
     required_shares = {}
-    for name, total in (("local_tts", pool.get("shares_with_local_tts")), ("hosted_tts", pool.get("shares_with_hosted_tts"))):
+    for name, total in (
+        ("with_cyrene_tts", pool.get("shares_with_cyrene_tts")),
+        ("without_cyrene_tts", pool.get("shares_without_cyrene_tts")),
+    ):
         if total and required_cores:
             shares = required_cores / cpu_ceiling * float(total)
             required_shares[name] = int(math.ceil(shares / rounding) * rounding)
@@ -618,8 +621,8 @@ def analyse(summary: dict, scenario: dict) -> dict:
     existing = scenario.get("existing_allocation", {})
     existing_core = None
     existing_headroom = None
-    if existing.get("shares") and pool.get("shares_with_local_tts"):
-        existing_core = round(float(existing["shares"]) / float(pool["shares_with_local_tts"]) * cpu_ceiling, 3)
+    if existing.get("shares") and pool.get("shares_with_cyrene_tts"):
+        existing_core = round(float(existing["shares"]) / float(pool["shares_with_cyrene_tts"]) * cpu_ceiling, 3)
         if per_stream:
             existing_headroom = round(existing_core / (per_stream * sessions), 2)
 
