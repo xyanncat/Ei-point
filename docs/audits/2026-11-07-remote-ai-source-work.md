@@ -79,6 +79,7 @@ the account owners. There is no deployed revision, image ID or health status to 
     historical `'translate'` value so old rows remain valid; no new translation rows are written. The repository now
     carries the MIT licence (`LICENSE`, "Ei Point contributors"). Deferred to the next phases: Pocket TTS removal
     (P0b), the Neon/Drive data layer (P1), Render/Vercel runtime artifacts and VPS-layer retirement (P2–P3).
+    **Committed as `e72046f` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
 
 ## Verified locally (fresh runs on this revision)
 
@@ -138,7 +139,7 @@ Sixth pass (P0a translation removal + MIT) — fresh runs:
 | ops release/budget/deploy | 31 passed / 0 failed |
 | durable-assets | 9 passed / 0 failed |
 | `node scripts/check-feature-coverage.mjs` | structural exit 0; 179 rows |
-| full `corepack pnpm test` chain | rerun below |
+| full `corepack pnpm test` chain | passed end to end — final gate 113 passed / 0 failed; `Resource budget ok (pool mode): 12544 shares / 24.5 GiB` |
 
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 
