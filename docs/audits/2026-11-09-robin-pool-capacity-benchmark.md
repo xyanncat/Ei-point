@@ -225,6 +225,7 @@ included.
 - Source-only benchmark. **Nothing was deployed, restarted or reconfigured.**
 - Benchmark source revision: `cba9a40c096a358c239e26f4d14167877d845b9a`;
   `main.py` SHA-256 recorded above.
-- The report commit is the source of record for the harness and this analysis.
+- Report and harness commit: `bcc2d9bb2213895f9b72e0c0307d5af29df6a1ee`
+  (pushed to `main` and `feat/completion-plan`).
 - No production Discord token, database, payment provider or active session was
   used. The harness refuses credential-bearing environments and loopback only.
