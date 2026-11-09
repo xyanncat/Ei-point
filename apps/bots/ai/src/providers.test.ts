@@ -31,11 +31,11 @@ describe("TTS provider selection", () => {
       calls.push({ url: String(url), body: JSON.parse(String(init.body ?? "{}")) });
       return wavResponse();
     }) as typeof fetch;
-    const synthesize = makeTtsProvider({ TTS_URL: "http://127.0.0.1:3120/v1/audio/speech" }, fetchFn);
+    const synthesize = makeTtsProvider({ TTS_URL: "http://127.0.0.1:6006/tts" }, fetchFn);
     const audio = await synthesize("hello", "default", neverAborted());
     assert.equal(audio.mime, "audio/wav");
     assert.deepEqual([...audio.bytes], [1, 2, 3]);
-    assert.equal(calls[0]!.url, "http://127.0.0.1:3120/v1/audio/speech");
+    assert.equal(calls[0]!.url, "http://127.0.0.1:6006/tts");
     const body = calls[0]!.body as { text: string; voice: string; format: string };
     assert.equal(body.text, "hello");
     assert.equal(body.format, "wav");
@@ -50,7 +50,7 @@ describe("TTS provider selection", () => {
     }) as typeof fetch;
     const synthesize = makeTtsProvider({}, fetchFn);
     await synthesize("hello", "default", neverAborted());
-    assert.equal(calls[0]!.url, "http://127.0.0.1:3120/v1/audio/speech");
+    assert.equal(calls[0]!.url, "http://127.0.0.1:6006/tts");
     assert.deepEqual(calls[0]!.body, { text: "hello", voice: "default", format: "wav" });
   });
 

@@ -1,4 +1,4 @@
-// Free-tier invariants (Render 750 h / Neon 100 CU-hours). These are structural
+﻿// Free-tier invariants (Render 750 h / Neon 100 CU-hours). These are structural
 // guards: a reintroduced 5-second database heartbeat silently keeps a
 // scale-to-zero database awake and exhausts the free allowance mid-month.
 import { test } from "node:test";
@@ -68,7 +68,7 @@ test("Render templates and the API PORT are ready for the free tier", () => {
 test("the phone env template wires TTS to the device-local Piper bridge", () => {
   const env = read("infra/phone/cyrene.env.example");
   assert.match(env, /TTS_PROVIDER=local/u);
-  assert.match(env, /TTS_URL=http:\/\/127\.0\.0\.1:3120\/v1\/audio\/speech/u);
+  assert.match(env, /TTS_URL=http:\/\/127\.0\.0\.1:6006\/tts/u);
   assert.match(env, /DATABASE_URL=/u);
   // The bot reads ..._PATH; the old ..._FILE name silently falls back to .models.
   assert.match(env, /CYRENE_PERSONA_MEMORY_PATH=/u);

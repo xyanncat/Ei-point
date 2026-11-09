@@ -1,4 +1,4 @@
-# Phone hosting — Cyrene + Robin
+﻿# Phone hosting — Cyrene + Robin
 
 Cyrene (`bot-ai`) and Robin (`music-py`) run on one Android phone. Cyrene also
 hosts the only local model: a fine-tuned **Piper** voice. Everything else is
@@ -69,7 +69,7 @@ stays on loopback:
 
 ```sh
 TTS_PROVIDER=local
-TTS_URL=http://127.0.0.1:3120/v1/audio/speech
+TTS_URL=http://127.0.0.1:6006/tts
 ```
 
 Verified deployment (2026-11-09): Redmi 10 Prime, Android 13, arm64, Termux
@@ -83,8 +83,8 @@ must export `HOME`, `PREFIX`, `PATH` and `LD_LIBRARY_PATH` before
 
 The Render API is not part of this path — it never proxies speech. If the
 bridge ever moves to a **different** device, point `TTS_URL` at that device's
-LAN address (for example `http://192.168.1.50:3120/v1/audio/speech`), open TCP
-3120 only on the local network, and leave `TTS_PROVIDER=local` unchanged.
+LAN address (for example `http://192.168.1.50:6006/tts`), open TCP
+6006 only on the local network, and leave `TTS_PROVIDER=local` unchanged.
 Bot health stays independent of the bridge: `/health/live` remains green if the
 bridge dies, and `/speak` answers with an honest unavailable message.
 

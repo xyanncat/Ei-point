@@ -75,7 +75,7 @@ export function ttsTotalDeadlineMs(env: NodeJS.ProcessEnv = process.env): number
 }
 
 function makeLocalTtsProvider(env: NodeJS.ProcessEnv, fetchFn: typeof fetch): TtsSynthesizeFn {
-  const apiUrl = env.TTS_URL ?? "http://127.0.0.1:3120/v1/audio/speech";
+  const apiUrl = env.TTS_URL ?? "http://127.0.0.1:6006/tts";
   return async (text, voice, signal) => {
     const res = await fetchFn(apiUrl, {
       method: "POST",

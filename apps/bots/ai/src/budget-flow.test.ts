@@ -3,10 +3,10 @@
 // model endpoints, which refuse connections in a test environment, so the
 // release-on-failure paths here run deterministically fast. The full SQLite…
 // rather: the real-pool admission/settle SQL is covered in tests/ai/database.test.mjs.
-import { describe, it } from "node:test";
+import { before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Pool, PoolClient } from "pg";
-import { respondToTtsCommand, type TtsCommandContext } from "./tts.js";
+import type { TtsCommandContext } from "./tts.js";
 
 interface Recorded { sql: string; params?: unknown[] | undefined }
 
@@ -46,10 +46,19 @@ function ttsContext(overrides: Partial<TtsCommandContext>): TtsCommandContext {
 }
 
 describe("/speak budget admission", () => {
+  // The deployed queue is built at module import from TTS_URL. Point it at a
+  // closed port first so the failure path is deterministic on any machine.
+  let speak: typeof import("./tts.js").respondToTtsCommand;
+  before(async () => {
+    process.env.TTS_URL = "http://127.0.0.1:1/v1/audio/speech";
+    process.env.TTS_PROVIDER = "local";
+    ({ respondToTtsCommand: speak } = await import("./tts.js"));
+  });
+
   it("refuses valid text when the daily character budget is spent", async () => {
     const replies: string[] = [];
     const fake = makeBudgetFake("999999999");
-    const handled = await respondToTtsCommand(
+    const handled = await speak(
       "speak",
       ttsContext({ text: "hello there", reply: async (t) => { replies.push(t); } }),
       fake.pool,
@@ -62,7 +71,7 @@ describe("/speak budget admission", () => {
   it("reserves first and releases the hold when synthesis fails", async () => {
     const replies: string[] = [];
     const fake = makeBudgetFake("0");
-    const handled = await respondToTtsCommand(
+    const handled = await speak(
       "speak",
       ttsContext({ text: "hello there", reply: async (t) => { replies.push(t); } }),
       fake.pool,

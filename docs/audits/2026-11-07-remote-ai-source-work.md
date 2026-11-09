@@ -144,6 +144,14 @@ the account owners. There is no deployed revision, image ID or health status to 
     whitelisted `com.termux` from battery optimization. Smoke run loads every module and stops exactly at the missing
     `BOT_TOKEN`/`GUILD_ALLOWLIST` check. **No secrets were written to the device**; the bot awaits the operator's
     Discord token, Neon URL, Groq key, guild IDs, and the Piper bridge on `127.0.0.1:3120`.
+    **Live TTS verified (2026-11-09):** the device hosts a sherpa-onnx engine (`cyrene_engine/cyrene_server.py`,
+    `cyrene.onnx`) on `127.0.0.1:6006` with `GET /health` and `POST /tts {text,speed}` → `audio/wav`. Calling the
+    bot's compiled adapter with `TTS_URL=http://127.0.0.1:6006/tts` produced a **4.04 s, 22 050 Hz mono WAV**
+    (178,220 bytes); a copy is at `/sdcard/Download/cyrene_tts/tts-live-test.wav`. The phone env, repo default,
+    template, docs and tests now use 6006, and the budget test pins a closed port so the failure path is
+    deterministic. Robin: the direct Termux install is **blocked** — `discord.py[voice]` pulls `davey`, whose
+    build needs the unsupported `aarch64-linux-android` Rust target; proot-Debian (glibc) or a Render service is
+    the remaining path.
 
 ## Verified locally (fresh runs on this revision)
 
