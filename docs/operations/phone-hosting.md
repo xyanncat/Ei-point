@@ -110,6 +110,39 @@ The source-side baseline and the sizing method are in
 Run `bench/robin_capacity/runner.py` on the phone before freezing the pool or
 instance allocation; the development-host result is not a phone result.
 
+## Robin in proot Debian (required for Discord voice)
+
+Discord voice enforces DAVE; `discord.py[voice]` depends on `davey`, which has
+no Android wheel and cannot build for `aarch64-linux-android`. Robin therefore
+runs inside **proot Debian** on the same phone:
+
+```sh
+pkg install -y proot-distro
+proot-distro install debian          # one time
+proot-distro login debian -- bash -lc '
+  apt-get update && apt-get install -y python3 python3-venv ffmpeg ca-certificates
+  python3 -m venv /opt/robin-venv
+  /opt/robin-venv/bin/pip install "discord.py[voice]==2.7.1" \
+    "yt-dlp==2026.8.19" "certifi==2026.10.18" "psycopg[binary]==3.2.9"
+'
+```
+
+Run the repository from Termux home by binding it into Debian:
+
+```sh
+proot-distro login debian \
+  --bind "$HOME/ei-point:/root/ei-point" \
+  -- bash -lc 'set -a; . /root/robin.env; set +a; cd /root/ei-point/apps/bots/music-py; exec /opt/robin-venv/bin/python src/main.py'
+```
+
+- Env template: [`infra/phone/robin.env.example`](../infra/phone/robin.env.example)
+  copied to `/root/robin.env` inside Debian.
+- Cache lives at `/root/music-cache`; health is `127.0.0.1:3105`.
+- A boot script can wrap the same command; keep it below the Cyrene boot
+  service so TTS starts first.
+- Cyrene + TTS + Robin share one phone: watch thermals, CPU and battery. If
+  Robin stutters, use the benchmark sizing above rather than guessing.
+
 ## Backups and logs
 
 The phone is not a backup target. Neon is dumped nightly to Drive by GitHub

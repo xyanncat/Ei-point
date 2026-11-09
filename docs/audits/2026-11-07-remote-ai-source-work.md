@@ -152,6 +152,11 @@ the account owners. There is no deployed revision, image ID or health status to 
     deterministic. Robin: the direct Termux install is **blocked** — `discord.py[voice]` pulls `davey`, whose
     build needs the unsupported `aarch64-linux-android` Rust target; proot-Debian (glibc) or a Render service is
     the remaining path.
+    **Robin injected via proot Debian (2026-11-09):** Debian 13.7 / Python 3.13.5 on the phone, with
+    `/opt/robin-venv` containing discord.py 2.7.1, **davey 0.2.0**, PyNaCl 1.5.0, yt-dlp 2026.8.19, certifi and
+    psycopg[binary] 3.2.9 — davey's manylinux `aarch64` wheel works under Debian glibc, unlike Termux. The repo is
+    bound at `/root/ei-point`, the env template is `infra/phone/robin.env.example` (copied to `/root/robin.env`),
+    and `~/.termux/boot/start-robin.sh` starts it after boot. Smoke start awaits `BOT_TOKEN` and the Neon URL.
 
 ## Verified locally (fresh runs on this revision)
 

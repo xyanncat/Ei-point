@@ -74,3 +74,10 @@ test("the phone env template wires TTS to the device-local Piper bridge", () => 
   assert.match(env, /CYRENE_PERSONA_MEMORY_PATH=/u);
   assert.doesNotMatch(env, /CYRENE_PERSONA_MEMORY_FILE/u);
 });
+
+test("the Robin template targets proot Debian", () => {
+  const env = read("infra/phone/robin.env.example");
+  assert.match(env, /BOT_KEY=robin/u);
+  assert.match(env, /CACHE_DIR=\/root\/music-cache/u);
+  assert.match(env, /MUSIC_HEALTH_PORT=3105/u);
+});
