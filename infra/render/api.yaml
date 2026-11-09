@@ -1,0 +1,80 @@
+# Render Blueprint — API (+ job worker in the same free service)
+# The workers run inside this container (infra/render/start-api.sh) because one
+# free workspace allows one always-on service. See docs/operations/render-vercel.md.
+services:
+  - type: web
+    name: ei-point-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerContext: .
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerCommand: sh /app/start-api.sh
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: MIGRATION_DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: CSRF_SECRET
+        sync: false
+      - key: VAULT_SECRET
+        sync: false
+      - key: INTERNAL_SERVICE_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: OAUTH_REDIRECT_URL
+        sync: false
+      - key: DASHBOARD_ORIGIN
+        sync: false
+      - key: DASHBOARD_ADMIN_IDS
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUSTED_PROXY_CIDRS
+        sync: false
+      - key: EI_POINT_OWNER_ID
+        sync: false
+      - key: DISCORD_KAFKA_BOT_TOKEN
+        sync: false
+      - key: DISCORD_HIMIKO_BOT_TOKEN
+        sync: false
+      - key: DISCORD_SILVERWOLF_BOT_TOKEN
+        sync: false
+      - key: DISCORD_CIPHER_BOT_TOKEN
+        sync: false
+      - key: DISCORD_CYRENE_BOT_TOKEN
+        sync: false
+      - key: DISCORD_ROBIN_BOT_TOKEN
+        sync: false
+      - key: COMMERCE_GUILD_ID
+        sync: false
+      - key: COMMERCE_STAFF_CHANNEL_ID
+        sync: false
+      - key: COMMERCE_REFERRAL_REWARD_MINOR
+        sync: false
+      - key: PAYMENT_ORIGIN
+        sync: false
+      - key: UPI_PAYEE_NAME
+        sync: false
+      - key: UPI_PAYEE_VPA
+        sync: false
+      - key: RAZORPAY_PAYMENT_PAGE
+        sync: false
+      - key: USDT_TRC20_ADDRESS
+        sync: false
+      - key: USDT_REFERENCE_FEE
+        sync: false
+      - key: INR_PER_USDT
+        sync: false
+      - key: COMMERCE_MAINTENANCE_SECONDS
+        value: "900"
+      - key: WORKER_POLL_SECONDS
+        value: "900"
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384

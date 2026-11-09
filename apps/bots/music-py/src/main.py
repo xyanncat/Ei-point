@@ -65,7 +65,7 @@ RAW_ALLOWLIST = (
     or ",".join(filter(None, [os.environ.get("DISCORD_TEST_GUILD_ID"), os.environ.get("DISCORD_MAIN_GUILD_ID")]))
 )
 ALLOWED_GUILDS = set(x.strip() for x in RAW_ALLOWLIST.split(",") if x.strip())
-HEALTH_PORT = int(os.environ.get("MUSIC_HEALTH_PORT") or 3105)
+HEALTH_PORT = int(os.environ.get("PORT") or os.environ.get("MUSIC_HEALTH_PORT") or 3105)
 MAX_VOICE_SESSIONS = 2
 # Owner requirement (2026-10-17): playback is link-driven. A playlist link
 # enqueues at most PLAYLIST_MAX_TRACKS tracks (validated at startup, 1..100).

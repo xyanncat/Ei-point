@@ -1,0 +1,29 @@
+# Render Blueprint — kafka (security & moderation identity)
+# One always-on free service per workspace. Create this Blueprint in the
+# account dedicated to the Kafka bot. See docs/operations/render-vercel.md.
+services:
+  - type: web
+    name: ei-point-kafka
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerContext: .
+    dockerfilePath: ./apps/bots/kafka/Dockerfile
+    healthCheckPath: /health/live
+    envVars:
+      - key: BOT_KEY
+        value: kafka
+      - key: BOT_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GUILD_ALLOWLIST
+        sync: false
+      - key: EI_POINT_OWNER_ID
+        sync: false
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
+      - key: BOT_ACTIVE_POLL_SECONDS
+        value: "5"
+      - key: BOT_IDLE_POLL_SECONDS
+        value: "900"

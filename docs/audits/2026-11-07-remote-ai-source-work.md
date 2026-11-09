@@ -95,6 +95,15 @@ the account owners. There is no deployed revision, image ID or health status to 
     workflow), ops 31/31, feature coverage 179 rows, full suite 118/118 with the resource budget unchanged
     (`12 544 shares / 24.5 GiB`).
     **Committed as `4c5156c` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
+12. **P2 — Render/Vercel runtime (2026-11-09).** The API now honours Render's `PORT`; the API image also builds and
+    ships the worker and a combined `infra/render/start-api.sh`, because one free workspace allows exactly one
+    always-on service (API + worker share it; `dockerCommand` in the blueprint). Render Blueprints for the four
+    Render bots (`bot-kafka`, `bot-himiko`, `bot-community`, `bot-commerce`) and the API use `plan: free`, the
+    process-only `/health/live` (`/healthz` for the API), 384 MB Node heap, and the adaptive pacing variables.
+    `music-py` honours `PORT` for a Render/phone benchmark. A manual `migrate-database` workflow runs migrations
+    against `MIGRATION_DATABASE_URL` (Render free has no shell). New docs: `docs/operations/render-vercel.md` and
+    `docs/operations/phone-hosting.md` (Termux, wake lock, Piper bridge contract, Robin benchmark). Verification:
+    lightweight invariants 6/6, Render YAML parses, typecheck clean; full suite below.
 
 ## Verified locally (fresh runs on this revision)
 
@@ -165,6 +174,15 @@ Seventh pass (P1 Neon/Drive) — fresh runs:
 | `node --test tests/operations/*.test.mjs` | 31 passed / 0 failed |
 | `node scripts/check-feature-coverage.mjs` | structural exit 0; 179 rows |
 | full `corepack pnpm test` chain | passed end to end — final gate 118 passed / 0 failed; `Resource budget ok (pool mode): 12544 shares / 24.5 GiB` |
+
+Eighth pass (P2 Render/Vercel) — fresh runs:
+
+| Check | Result |
+|---|---|
+| `node --test tests/runtime/lightweight.test.mjs` | 6 passed / 0 failed (adds Render template + API PORT invariants) |
+| `python -c "yaml.safe_load(...)"` over `infra/render/*.yaml` | all templates parse |
+| `corepack pnpm -r typecheck` | clean |
+| full `corepack pnpm test` chain | rerun below |
 
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 

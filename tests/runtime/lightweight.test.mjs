@@ -52,3 +52,15 @@ test("nightly Drive backups exist, are encrypted, and never auto-initialise", ()
   assert.match(workflow, /RCLONE_CONFIG_B64/u);
   assert.match(workflow, /secret/u);
 });
+
+test("Render templates and the API PORT are ready for the free tier", () => {
+  assert.match(read("apps/api/src/index.ts"), /process\.env\.PORT/u);
+  for (const file of ["api", "bot-kafka", "bot-himiko", "bot-community", "bot-commerce"]) {
+    const template = read(`infra/render/${file}.yaml`);
+    assert.match(template, /plan: free/u, file);
+    assert.match(template, /healthCheckPath: \//u, file);
+  }
+  assert.match(read("infra/render/api.yaml"), /dockerCommand: sh \/app\/start-api\.sh/u);
+  assert.match(read("infra/render/start-api.sh"), /workers\/dist\/index\.js/u);
+  assert.match(read(".github/workflows/migrate-database.yml"), /run-migrations\.mjs/u);
+});

@@ -1,0 +1,44 @@
+# Render Blueprint — commerce (Cipher: orders, payments, referrals)
+# One always-on free service per workspace. See docs/operations/render-vercel.md.
+services:
+  - type: web
+    name: ei-point-commerce
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerContext: .
+    dockerfilePath: ./apps/bots/commerce/Dockerfile
+    healthCheckPath: /health/live
+    envVars:
+      - key: BOT_KEY
+        value: cipher
+      - key: BOT_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GUILD_ALLOWLIST
+        sync: false
+      - key: EI_POINT_OWNER_ID
+        sync: false
+      - key: COMMERCE_STAFF_CHANNEL_ID
+        sync: false
+      - key: COMMERCE_REFERRAL_REWARD_MINOR
+        sync: false
+      - key: PAYMENT_ORIGIN
+        sync: false
+      - key: UPI_PAYEE_NAME
+        sync: false
+      - key: UPI_PAYEE_VPA
+        sync: false
+      - key: RAZORPAY_PAYMENT_PAGE
+        sync: false
+      - key: USDT_TRC20_ADDRESS
+        sync: false
+      - key: INR_PER_USDT
+        sync: false
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
+      - key: BOT_ACTIVE_POLL_SECONDS
+        value: "5"
+      - key: BOT_IDLE_POLL_SECONDS
+        value: "900"
