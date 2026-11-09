@@ -26,6 +26,32 @@ would corrupt. Drive is the right place for dumps, media masters and exports.
    DATABASE_URL="$MIGRATION_DATABASE_URL" node infra/postgres/run-migrations.mjs
    ```
 
+## Register the runtime identities
+
+A fresh migration seeds placeholder application IDs (`pending-…`). Each bot
+refuses to start until `config.bots.application_id` matches the token's real
+application ID (the first segment of a Discord bot token, base64-decoded), and
+the guild must be approved. After creating the bot applications:
+
+```sql
+UPDATE config.bots
+SET application_id = '<cyrene-app-id>', guild_ids = ARRAY['<guild-id>'], updated_at = now()
+WHERE bot_key = 'cyrene';
+
+UPDATE config.bots
+SET application_id = '<robin-app-id>', guild_ids = ARRAY['<guild-id>'], updated_at = now()
+WHERE bot_key = 'robin';
+
+INSERT INTO access.guilds (guild_id, name, owner_id, approved)
+VALUES ('<guild-id>', '<guild-name>', '<owner-id>', true)
+ON CONFLICT (guild_id) DO UPDATE
+SET name = EXCLUDED.name, owner_id = EXCLUDED.owner_id, approved = true, updated_at = now();
+```
+
+`GUILD_ALLOWLIST` (one or two IDs for Cyrene and Robin) is the process-level
+allowlist; `config.bots.guild_ids` plus the approved `access.guilds` row is the
+database-side authorization used by dashboard controls and the music runtime.
+
 ## The CU-hour rule (why the code polls slowly)
 
 Compute is billed at **0.25 CU** while awake. A database kept awake 24/7 uses

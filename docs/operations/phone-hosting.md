@@ -47,20 +47,22 @@ BOT_KEY=robin BOT_TOKEN='…' GUILD_ALLOWLIST='id1,id2' \
 Keep the phone charging, on Wi-Fi, and out of aggressive battery optimisation.
 A phone that throttles will drop voice frames before it drops the gateway.
 
-## Piper bridge contract
+## Phone TTS (sherpa-onnx) contract
 
 The bot's `local` TTS provider posts:
 
 ```http
-POST /v1/audio/speech
+POST /tts
 Content-Type: application/json
 
 { "text": "…", "voice": "default", "format": "wav" }
 ```
 
-and expects raw **WAV** bytes with `Content-Type: audio/wav`. A small HTTP
-wrapper around the fine-tuned Piper model is enough; it is maintained outside
-this repository.
+The reference sherpa-onnx server on the phone reads `text` and an optional
+`speed`, ignores the extra fields, and returns raw **WAV** bytes with
+`Content-Type: audio/wav`. The wrapper (`cyrene_server.py`) is maintained
+outside this repository; voice selection is server-side, so leave `voice` at
+the default unless the server gains named speakers.
 
 ### Wiring
 

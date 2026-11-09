@@ -157,6 +157,12 @@ the account owners. There is no deployed revision, image ID or health status to 
     deployment has a single guild), and the full migration set was applied to Neon (`neondb`, 21 migrations, owner
     role). Env files are written on the phone only (mode 600); no credential is recorded here or in Git. Next:
     rebuild the bot with the relaxed validation, start both, verify gateways and `/speak`.
+    **Identity registration (2026-11-09):** Discord confirmed `Ei | Cyrene` (`1544546018807513131`) and
+    `Ei | Robin` (`1557880368684597358`) in *Eternity | ROYAL'S PARADISE | Dev* (owner
+    `1479589523426902208`). Neon's `config.bots` still held the migration's `pending-…` application IDs, so both
+    bots refused to start; the registry rows now carry the real IDs with the guild in `guild_ids`, and
+    `access.guilds` is approved. Robin's process-level allowlist was relaxed to one or two guilds on the same
+    principle as Cyrene.
     **Robin injected via proot Debian (2026-11-09):** Debian 13.7 / Python 3.13.5 on the phone, with
     `/opt/robin-venv` containing discord.py 2.7.1, **davey 0.2.0**, PyNaCl 1.5.0, yt-dlp 2026.8.19, certifi and
     psycopg[binary] 3.2.9 — davey's manylinux `aarch64` wheel works under Debian glibc, unlike Termux. The repo is
