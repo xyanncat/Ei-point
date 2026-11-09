@@ -92,7 +92,9 @@ the account owners. There is no deployed revision, image ID or health status to 
     an encrypted restic snapshot to Drive (`rclone:drive:ei-point/backups`, 7 daily / 4 weekly, manual one-time
     init). Docs: `docs/operations/neon.md`, `docs/operations/drive-backups.md`; env knobs in `.env.example`.
     Verification: new `tests/runtime/lightweight.test.mjs` 5/5 (no heartbeat, liveness/PORT, slow worker, backup
-    workflow), ops 31/31, feature coverage 179 rows, full suite rerun below.
+    workflow), ops 31/31, feature coverage 179 rows, full suite 118/118 with the resource budget unchanged
+    (`12 544 shares / 24.5 GiB`).
+    **Committed as `4c5156c` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
 
 ## Verified locally (fresh runs on this revision)
 
@@ -153,6 +155,16 @@ Sixth pass (P0a translation removal + MIT) — fresh runs:
 | durable-assets | 9 passed / 0 failed |
 | `node scripts/check-feature-coverage.mjs` | structural exit 0; 179 rows |
 | full `corepack pnpm test` chain | passed end to end — final gate 113 passed / 0 failed; `Resource budget ok (pool mode): 12544 shares / 24.5 GiB` |
+
+Seventh pass (P1 Neon/Drive) — fresh runs:
+
+| Check | Result |
+|---|---|
+| `corepack pnpm -r typecheck` | all packages and apps clean |
+| `node --test tests/runtime/lightweight.test.mjs` | 5 passed / 0 failed (no heartbeat, `/health/live` + `PORT`, slow worker pool, slow commerce maintenance, backup workflow) |
+| `node --test tests/operations/*.test.mjs` | 31 passed / 0 failed |
+| `node scripts/check-feature-coverage.mjs` | structural exit 0; 179 rows |
+| full `corepack pnpm test` chain | passed end to end — final gate 118 passed / 0 failed; `Resource budget ok (pool mode): 12544 shares / 24.5 GiB` |
 
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 
