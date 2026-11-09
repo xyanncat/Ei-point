@@ -1,9 +1,8 @@
-# Robin source audio-render capacity benchmark
+# Robin standalone music playback capacity benchmark
 
 Measures how much CPU and memory Robin the music bot (`apps/bots/music-py`)
 needs when it is run **from source** and streams music into Discord voice. It
-answers the sizing question for the retired weighted-CPU pool and for Render's
-free instance.
+answers the standalone sizing question and the Render free-instance question.
 
 ## What is measured
 
@@ -71,10 +70,6 @@ Load stages refuse to start when `BOT_TOKEN`, `DISCORD_ROBIN_BOT_TOKEN`,
   the recorded run).
 - `verdict.required_memory_mb` — idle import + FFmpeg per session + yt-dlp
   transient + memory headroom; `recommended_memory_mb` applies the 512 MB floor.
-- `legacy_pool.required_shares` — **optional** conversion to the retired 9-CPU
-  weighted-share pool: 12 544 shares with Cyrene's TTS service in the pool, or
-  8 448 without it. This is not a Robin/TTS dependency; the share denominator
-  changes, Robin's CPU requirement does not.
 - `render_free.max_streams_at_50_percent` — how many streams Render free's
   0.1 CPU can sustain with 50 % headroom.
 - `smooth_capacity` — largest tested concurrency with real-time throughput

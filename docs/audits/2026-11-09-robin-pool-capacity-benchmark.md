@@ -1,11 +1,11 @@
-# Robin music playback capacity and pool sizing — 2026-11-09
+# Robin standalone music playback capacity — 2026-11-09
 
-**Scope:** Robin the music bot (`apps/bots/music-py`) run from source. Measured
-its real music playback path — FFmpeg decode → volume → Opus encode — plus the
-source import footprint and the bounded yt-dlp resolution/download subprocesses.
-No Discord gateway, UDP send, DAVE encryption, audible playback, target phone or
-Render instance was used. Robin has no TTS path; the TTS references below are
-only about whether Cyrene's separate TTS service shares the old CPU pool.
+**Scope:** Robin the music bot (`apps/bots/music-py`) as a standalone process,
+run from source. Measured its real music playback path — FFmpeg decode → volume
+→ Opus encode — plus the source import footprint and the bounded yt-dlp
+resolution/download subprocesses. No shared VPS CPU pool, other bot workload,
+Discord gateway, UDP send, DAVE encryption, audible playback, target phone or
+Render instance was used.
 
 **Status:** benchmark complete on a shared Windows development host. The result
 is a **sizing range and a conservative recommendation**, not a target-host
@@ -15,7 +15,8 @@ active music session was touched.
 ## Answer first
 
 Robin's standalone requirement for the configured two simultaneous music
-sessions (`MAX_VOICE_SESSIONS = 2` and the `ai.voice_leases` fleet limit of 2):
+sessions (`MAX_VOICE_SESSIONS = 2` and the `ai.voice_leases` admission limit of
+2):
 
 | Requirement | Measured | Provision |
 |---|---:|---:|
@@ -27,22 +28,8 @@ sessions (`MAX_VOICE_SESSIONS = 2` and the `ai.voice_leases` fleet limit of 2):
 | Render free instance (0.1 CPU / 512 MB) | **not sufficient** | phone or a paid host with ≥1.2 CPU |
 
 That is the whole answer. Robin needs **1.2 dedicated CPU and 512 MB** for the
-two-session policy. There is no Cyrene/TTS dependency in that number.
-
-### Legacy 9-CPU pool conversion (optional)
-
-The old VPS weighted-share model is retired and is **not** part of Robin's
-requirement. If it were restored, shares are relative weights, so the share
-count needed for 1.11 core depends on the pool denominator:
-
-- 12 544-share pool (Cyrene's TTS service present): **1 600 shares**.
-- 8 448-share pool (Cyrene's TTS service absent): **1 088 shares**.
-
-The only difference is what else is in the pool; the numerator is Robin's
-1.11-core requirement either way. The old `bot-music` allocation of 512 shares
-gave about **0.367 core under full contention** — 66 % of the measured
-two-stream load (0.556 core), so it was under-sized. Do not read the Cyrene
-figures as a Robin dependency.
+two-session policy. No other bot, TTS service or shared CPU pool is part of
+this sizing.
 
 ## What was measured
 
@@ -142,24 +129,6 @@ closer to the 0.15-core burst figure, 0.6 core is the floor; the 1.2-core
 figure is deliberately conservative because the benchmark host was shared and
 slow-clocked.
 
-### If the retired share pool returns (optional)
-
-Using the retired resource-pool contract in
-`scripts/check-resource-budget.mjs` at its pre-retirement revision (9-CPU
-aggregate cap, weighted CFS shares):
-
-```
-1.112 / 9 × 12 544 = 1 549.5 → 1 600 shares (Cyrene TTS in the pool)
-1.112 / 9 ×  8 448 = 1 043.2 → 1 088 shares (Cyrene TTS absent)
-
-existing 512 shares = 512 / 12 544 × 9 = 0.367 core
-  vs measured 2-stream load 0.556 core → 0.66×
-  vs 1.112-core provision       → 0.33×
-```
-
-Again, the two share counts differ only because the pool denominator changes;
-Robin's 1.112-core requirement is independent of Cyrene.
-
 ## Render free is not sufficient
 
 Render free provides **0.1 CPU / 512 MB**.
@@ -177,23 +146,21 @@ Render free provides **0.1 CPU / 512 MB**.
 Robin does **not** use a connection pool. `init_db()` opens exactly one
 `psycopg.connect(...)` connection and serialises access with `db_lock`
 (`apps/bots/music-py/src/main.py`). Its Neon connection requirement is
-therefore **1**, not the `max: 5` used by the Node bots. A second Robin process
+therefore **1**; it does not open a connection pool. A second Robin process
 would need one more connection; the current architecture runs one.
 
-## Voice-session pool answer
+## Music-session cap
 
-The operational pool is **2 sessions**:
+The configured operational cap is **2 sessions**:
 
 - `MAX_VOICE_SESSIONS = 2` in `main.py`;
 - `reserve_voice_sync()` refuses when another owner already holds a lease and
-  the count reaches 2 in `ai.voice_leases`;
-- Cyrene shares the same `ai.voice_leases` table, so the 2-session cap is a
-  fleet-wide admission limit, not a Robin CPU or TTS dependency.
+  the count reaches 2 in `ai.voice_leases`.
 
 The benchmark shows Robin's music playback path can keep real time beyond 2
-streams on this host, but the pool capacity should be sized to the **2-session
-policy**, not to the 6-stream experiment. Raising the cap is a separate change that needs
-real Discord UDP/DAVE and audible acceptance.
+streams on this host, but the CPU/memory sizing should cover the **2-session
+policy**, not the 6-stream experiment. Raising the cap is a separate change that
+needs real Discord UDP/DAVE and audible acceptance.
 
 ## Limitations and open gates
 
@@ -248,8 +215,7 @@ included.
 - Benchmark source revision: `cba9a40c096a358c239e26f4d14167877d845b9a`;
   `main.py` SHA-256 recorded above.
 - Initial report and harness commit: `bcc2d9bb2213895f9b72e0c0307d5af29df6a1ee`
-  (pushed to `main` and `feat/completion-plan`); the pool labels were clarified
-  in the follow-up commit because the old pool names mentioned Cyrene's TTS
-  service, not Robin.
+  (pushed to `main` and `feat/completion-plan`). The retired VPS share model
+  was removed in a later commit; this report now sizes a standalone Robin only.
 - No production Discord token, database, payment provider or active session was
   used. The harness refuses credential-bearing environments and loopback only.

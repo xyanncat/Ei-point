@@ -542,12 +542,11 @@ def stage_all(args: argparse.Namespace, out: Path) -> None:
     summary.update(analyse(summary, scenario))
     write_json(out / "summary.json", summary)
     write_csv(out / "summary.csv", stream_runs)
-    print(json.dumps({key: summary[key] for key in ("verdict", "legacy_pool", "render_free", "smooth_capacity")}, indent=2))
+    print(json.dumps({key: summary[key] for key in ("verdict", "render_free", "smooth_capacity")}, indent=2))
 
 
 def analyse(summary: dict, scenario: dict) -> dict:
     limits = scenario.get("limits", {})
-    pool = scenario.get("pool", {})
     render = scenario.get("render_free", {})
     sessions = int(limits.get("voice_sessions", 2))
     safety = float(limits.get("safety_factor", 2.0))
@@ -585,16 +584,6 @@ def analyse(summary: dict, scenario: dict) -> dict:
     target = sustained or target_runs
     per_stream = max(run["core_per_stream"] for run in target) if target else None
     required_cores = round(per_stream * sessions * safety, 3) if per_stream else None
-    cpu_ceiling = float(pool.get("cpu_ceiling", 9))
-    rounding = int(pool.get("share_rounding", 64))
-    required_shares = {}
-    for name, total in (
-        ("with_cyrene_tts", pool.get("shares_with_cyrene_tts")),
-        ("without_cyrene_tts", pool.get("shares_without_cyrene_tts")),
-    ):
-        if total and required_cores:
-            shares = required_cores / cpu_ceiling * float(total)
-            required_shares[name] = int(math.ceil(shares / rounding) * rounding)
 
     idle_rss = summary["runs"]["idle"].get("rss_after_mb", 0)
     extract_rss = max(
@@ -618,14 +607,6 @@ def analyse(summary: dict, scenario: dict) -> dict:
     stall_runs = sum(row["runs_with_a_100ms_stall"] for row in rows)
     stall_frames = sum(row["late_100ms_frames"] for row in rows)
 
-    existing = scenario.get("existing_allocation", {})
-    existing_core = None
-    existing_headroom = None
-    if existing.get("shares") and pool.get("shares_with_cyrene_tts"):
-        existing_core = round(float(existing["shares"]) / float(pool["shares_with_cyrene_tts"]) * cpu_ceiling, 3)
-        if per_stream:
-            existing_headroom = round(existing_core / (per_stream * sessions), 2)
-
     verdict = {
         "measured_per_stream_core": per_stream,
         "sessions": sessions,
@@ -639,24 +620,15 @@ def analyse(summary: dict, scenario: dict) -> dict:
         "host_stall_runs": stall_runs,
         "host_stall_frames_over_100ms": stall_frames,
         "note": (
-            "Robin's requirement is independent of Cyrene/TTS. Per-stream core is measured "
-            "steady-state CPU at the configured session count. Smooth = real-time ratio >= 0.99 "
-            "and median per-run p99 lateness <= 50 ms. Isolated >100 ms stalls are reported "
-            "separately; they are host scheduling evidence, not proof of a Robin defect, when "
-            "CPU utilization was low."
+            "Standalone Robin music playback sizing. Per-stream core is measured steady-state "
+            "CPU at the configured session count. Smooth = real-time ratio >= 0.99 and median "
+            "per-run p99 lateness <= 50 ms. Isolated >100 ms stalls are reported separately; "
+            "they are host scheduling evidence, not proof of a Robin defect, when CPU "
+            "utilization was low."
         ),
     }
     return {
         "verdict": verdict,
-        "legacy_pool": {
-            "retired": True,
-            "note": "Optional conversion only; the share denominator includes or excludes Cyrene's separate TTS service. Robin's requirement is the hard CPU/memory figure above.",
-            "cpu_ceiling": cpu_ceiling,
-            "required_shares": required_shares,
-            "existing": existing,
-            "existing_core_under_full_contention": existing_core,
-            "existing_headroom_x": existing_headroom,
-        },
         "render_free": {
             "cpu": free_cpu,
             "memory_mb": free_memory,
@@ -712,7 +684,7 @@ def analyse_existing(out: Path, scenario_path: Path) -> None:
     summary.update(analyse(summary, scenario))
     write_json(out / "summary.json", summary)
     write_csv(out / "summary.csv", runs["streams"])
-    print(json.dumps({key: summary[key] for key in ("verdict", "legacy_pool", "render_free", "smooth_capacity")}, indent=2))
+    print(json.dumps({key: summary[key] for key in ("verdict", "render_free", "smooth_capacity")}, indent=2))
 
 
 def self_test(args: argparse.Namespace) -> None:

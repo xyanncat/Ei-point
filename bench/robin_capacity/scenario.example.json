@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Robin (music-py) source audio-render capacity. All rates and limits are declared assumptions, not user traffic.",
+  "description": "Standalone Robin (music-py) music playback capacity. No shared VPS CPU pool or other bot workload is part of this scenario. All rates and limits are declared assumptions, not user traffic.",
   "media": "apps/dashboard/public/media/loop.mp3",
   "duration_seconds": 30,
   "concurrency": [1, 2, 4, 6],
@@ -11,17 +11,6 @@
     "safety_factor": 2.0,
     "underrun_ms": 100,
     "memory_headroom": 0.25
-  },
-  "pool": {
-    "cpu_ceiling": 9,
-    "shares_with_cyrene_tts": 12544,
-    "shares_without_cyrene_tts": 8448,
-    "share_rounding": 64
-  },
-  "existing_allocation": {
-    "shares": 512,
-    "memory_gib": 2,
-    "source": "scripts/check-resource-budget.mjs at the pre-retirement revision (bot-music)"
   },
   "render_free": {
     "cpu": 0.1,

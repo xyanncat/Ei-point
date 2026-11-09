@@ -3,22 +3,6 @@
     "reason": "music-py uses one psycopg connection guarded by db_lock (not a pool); see apps/bots/music-py/src/main.py:init_db.",
     "robin_connections": 1
   },
-  "legacy_pool": {
-    "cpu_ceiling": 9.0,
-    "existing": {
-      "memory_gib": 2,
-      "shares": 512,
-      "source": "scripts/check-resource-budget.mjs at the pre-retirement revision (bot-music)"
-    },
-    "existing_core_under_full_contention": 0.367,
-    "existing_headroom_x": 0.66,
-    "note": "Optional conversion only; the share denominator includes or excludes Cyrene's separate TTS service. Robin's requirement is the hard CPU/memory figure above.",
-    "required_shares": {
-      "with_cyrene_tts": 1600,
-      "without_cyrene_tts": 1088
-    },
-    "retired": true
-  },
   "render_free": {
     "cpu": 0.1,
     "max_streams_at_100_percent": 0,
@@ -1216,13 +1200,8 @@
       4,
       6
     ],
-    "description": "Robin (music-py) source audio-render capacity. All rates and limits are declared assumptions, not user traffic.",
+    "description": "Standalone Robin (music-py) music playback capacity. No shared VPS CPU pool or other bot workload is part of this scenario. All rates and limits are declared assumptions, not user traffic.",
     "duration_seconds": 30,
-    "existing_allocation": {
-      "memory_gib": 2,
-      "shares": 512,
-      "source": "scripts/check-resource-budget.mjs at the pre-retirement revision (bot-music)"
-    },
     "isolation": {
       "notes": "Loopback-only harness. No Discord token, production database, remote host or payment provider. Load stages refuse token/DATABASE_URL environments.",
       "required": true
@@ -1235,12 +1214,6 @@
       "voice_sessions": 2
     },
     "media": "apps/dashboard/public/media/loop.mp3",
-    "pool": {
-      "cpu_ceiling": 9,
-      "share_rounding": 64,
-      "shares_with_cyrene_tts": 12544,
-      "shares_without_cyrene_tts": 8448
-    },
     "render_free": {
       "cpu": 0.1,
       "memory_mb": 512
@@ -1253,7 +1226,7 @@
     "host_stall_frames_over_100ms": 207,
     "host_stall_runs": 3,
     "measured_per_stream_core": 0.2779,
-    "note": "Robin's requirement is independent of Cyrene/TTS. Per-stream core is measured steady-state CPU at the configured session count. Smooth = real-time ratio >= 0.99 and median per-run p99 lateness <= 50 ms. Isolated >100 ms stalls are reported separately; they are host scheduling evidence, not proof of a Robin defect, when CPU utilization was low.",
+    "note": "Standalone Robin music playback sizing. Per-stream core is measured steady-state CPU at the configured session count. Smooth = real-time ratio >= 0.99 and median per-run p99 lateness <= 50 ms. Isolated >100 ms stalls are reported separately; they are host scheduling evidence, not proof of a Robin defect, when CPU utilization was low.",
     "recommended_cpu": 1.2,
     "recommended_memory_mb": 512,
     "required_cores_with_safety": 1.112,
