@@ -72,6 +72,15 @@ TTS_PROVIDER=local
 TTS_URL=http://127.0.0.1:3120/v1/audio/speech
 ```
 
+Verified deployment (2026-11-09): Redmi 10 Prime, Android 13, arm64, Termux
+0.118.3, Node 26.12.1, ffmpeg 9.0.2. The bot was built on-device with `tsc`
+(`pnpm install --filter @ei-point/bot-ai... --ignore-scripts`), the persona was
+copied with a verified SHA-256, and the smoke run stops at the expected missing
+`BOT_TOKEN`/`GUILD_ALLOWLIST` check. Termux has no `/usr/bin/env`, so invoke
+pnpm as `node "$PREFIX/lib/node_modules/pnpm/bin/pnpm.cjs"`. The boot script
+must export `HOME`, `PREFIX`, `PATH` and `LD_LIBRARY_PATH` before
+`termux-wake-lock` because Termux:Boot starts with a minimal environment.
+
 The Render API is not part of this path — it never proxies speech. If the
 bridge ever moves to a **different** device, point `TTS_URL` at that device's
 LAN address (for example `http://192.168.1.50:3120/v1/audio/speech`), open TCP

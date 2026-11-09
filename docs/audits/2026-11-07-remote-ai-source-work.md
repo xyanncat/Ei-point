@@ -136,6 +136,14 @@ the account owners. There is no deployed revision, image ID or health status to 
     The phone template now points at the Termux home
     (`/data/data/com.termux/files/home/cyrene/Cyrene_Chat_Roleplay_Memory.md`), the other files use `_PATH`, and the
     structural test forbids the stale `_FILE` name.
+17. **Phone deployment executed and verified (2026-11-09).** Redmi 10 Prime (Android 13, arm64, 6 GB RAM, Termux
+    0.118.3) over authorized ADB. Installed ffmpeg 9.0.2, bootstrapped pnpm 9.12 through Termux's Node (Android has
+    no `/usr/bin/env`), cloned the repo, and built the bot graph on-device with `tsc` (95 packages, build order
+    contracts → flow → modules → bot). Copied the private persona to `~/cyrene/` with a matching SHA-256
+    (`ac17ed4d…`), wrote a Termux:Boot service with explicit `HOME`/`PREFIX`/`PATH`/`LD_LIBRARY_PATH`, and
+    whitelisted `com.termux` from battery optimization. Smoke run loads every module and stops exactly at the missing
+    `BOT_TOKEN`/`GUILD_ALLOWLIST` check. **No secrets were written to the device**; the bot awaits the operator's
+    Discord token, Neon URL, Groq key, guild IDs, and the Piper bridge on `127.0.0.1:3120`.
 
 ## Verified locally (fresh runs on this revision)
 
