@@ -174,6 +174,12 @@ the account owners. There is no deployed revision, image ID or health status to 
     `/chat/completions`, so Cyrene's chat path will answer with a failure until a fresh key is installed. The
     gateway, slash commands, database and local TTS are unaffected. Replace `AI_PROVIDER_PRIMARY_KEY` in
     `~/cyrene.env` (mode 600) and restart only the AI bot after obtaining a new key.
+    **Per-identity embed artwork (2026-11-09):** the shared `ei-point-pulse.gif` default was removed from the
+    TypeScript UI module and Robin's Python helper, and the file itself (plus its README banner) was deleted.
+    Every identity now resolves its own `project assets/bots/<Bot>/embed.png` by default, with
+    `EI_POINT_EMBED_IMAGE_<IDENTITY>` as a single-bot override; unknown identities render without a gallery
+    instead of borrowing another image. Cyrene's message and voice replies pass the identity key explicitly.
+    Tests: 11 bot-ui, 42 bot-ai, 3 Robin embed-contract.
     **Robin injected via proot Debian (2026-11-09):** Debian 13.7 / Python 3.13.5 on the phone, with
     `/opt/robin-venv` containing discord.py 2.7.1, **davey 0.2.0**, PyNaCl 1.5.0, yt-dlp 2026.8.19, certifi and
     psycopg[binary] 3.2.9 — davey's manylinux `aarch64` wheel works under Debian glibc, unlike Termux. The repo is

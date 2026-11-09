@@ -1,7 +1,5 @@
 ﻿<div align="center">
 
-<img src="docs/assets/ei-point-pulse.gif" alt="Animated Ei Point signal traveling through the bot fleet" width="100%" />
-
 <h1>EI POINT</h1>
 
 <p><strong>A modular Discord platform for communities, creators, and operators.</strong><br />

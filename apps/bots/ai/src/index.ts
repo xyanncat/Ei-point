@@ -365,7 +365,7 @@ client.on(Events.MessageCreate, async (message) => {
   const session = message.guildId ? cyreneVoiceSessions.get(message.guildId) : undefined;
   if (!session || message.channelId !== session.channelId || message.author.bot || !message.guild) return;
   if (message.content.length > TTS_MAX_CHARS) {
-    void message.reply(toEiEmbedPayload(`I skipped that message because voice chat messages must be ${TTS_MAX_CHARS} characters or shorter.`, "Cyrene")).catch(() => {});
+    void message.reply(toEiEmbedPayload(`I skipped that message because voice chat messages must be ${TTS_MAX_CHARS} characters or shorter.`, "Cyrene", "cyrene")).catch(() => {});
     return;
   }
   const extracted = extractVoiceChatText(message.content);
@@ -375,7 +375,7 @@ client.on(Events.MessageCreate, async (message) => {
   const now = Date.now();
   const lastSpokenAt = voiceChatCooldown.get(cooldownKey) ?? 0;
   if (now - lastSpokenAt < 5_000 || voiceChatPending.has(cooldownKey)) {
-    void message.reply(toEiEmbedPayload("Please wait a few seconds before sending another message for voice playback.", "Cyrene")).catch(() => {});
+    void message.reply(toEiEmbedPayload("Please wait a few seconds before sending another message for voice playback.", "Cyrene", "cyrene")).catch(() => {});
     return;
   }
   voiceChatPending.add(cooldownKey);
@@ -388,12 +388,12 @@ client.on(Events.MessageCreate, async (message) => {
       message.member ? [...message.member.roles.cache.keys()] : [],
     );
     if (!enabled) {
-      void message.reply(toEiEmbedPayload("Voice chat reading is disabled or restricted by this server's Ei-Flow controls.", "Cyrene")).catch(() => {});
+      void message.reply(toEiEmbedPayload("Voice chat reading is disabled or restricted by this server's Ei-Flow controls.", "Cyrene", "cyrene")).catch(() => {});
       return;
     }
     if (cyreneVoiceSessions.get(message.guildId!) !== session) return;
     if (session.queue.length >= 10) {
-      void message.reply(toEiEmbedPayload("My voice queue is full. Please wait for a few messages to finish.", "Cyrene")).catch(() => {});
+      void message.reply(toEiEmbedPayload("My voice queue is full. Please wait for a few messages to finish.", "Cyrene", "cyrene")).catch(() => {});
       return;
     }
     // Reserve the whole message's character budget at admission so a long
@@ -406,7 +406,7 @@ client.on(Events.MessageCreate, async (message) => {
       providerPattern: "tts:%",
     });
     if (!admitted.ok) {
-      void message.reply(toEiEmbedPayload(admitted.message, "Cyrene")).catch(() => {});
+      void message.reply(toEiEmbedPayload(admitted.message, "Cyrene", "cyrene")).catch(() => {});
       return;
     }
     session.queue.push({ text: spoken, userId: message.author.id, reservation: admitted.reservation });
@@ -455,7 +455,7 @@ client.on(Events.MessageCreate, (message) => {
     if (!(await isControlEnabled(async (sql, params) => (await pool.query(sql, params)).rows, message.guildId!, botKey, "ask", message.member ? [...message.member.roles.cache.keys()] : []))) return;
     const last = userMentionCooldown.get(message.author.id) ?? 0;
     if (Date.now() - last < 5000) {
-      await message.reply(toEiEmbedPayload("Please wait a few seconds before asking another question.", "Cyrene"));
+      await message.reply(toEiEmbedPayload("Please wait a few seconds before asking another question.", "Cyrene", "cyrene"));
       return;
     }
     userMentionCooldown.set(message.author.id, Date.now());
@@ -468,7 +468,7 @@ client.on(Events.MessageCreate, (message) => {
 
     const rawContent = message.content.replace(new RegExp(`<@!?${client.user!.id}>`, "g"), "").trim();
     if (!rawContent) {
-      await message.reply(toEiEmbedPayload("Ah, there you are! Hehe, were you looking for me? You can ask me anything by mentioning me here.", "Cyrene"));
+      await message.reply(toEiEmbedPayload("Ah, there you are! Hehe, were you looking for me? You can ask me anything by mentioning me here.", "Cyrene", "cyrene"));
       return;
     }
 
@@ -485,7 +485,7 @@ client.on(Events.MessageCreate, (message) => {
       cyrenePersona,
     );
 
-    await message.reply({ ...toEiEmbedPayload(fitDiscord(reply), "Cyrene"), allowedMentions: { parse: [], repliedUser: true } });
+    await message.reply({ ...toEiEmbedPayload(fitDiscord(reply), "Cyrene", "cyrene"), allowedMentions: { parse: [], repliedUser: true } });
   });
 });
 

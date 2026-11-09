@@ -72,7 +72,9 @@ class RobinEmbedContractTest(unittest.TestCase):
 
     def test_marked_embed_helper_uses_the_configured_image(self):
         self.assertIn("respond = embed_reply_helper(respond)", self.text)
-        self.assertIn("EI_POINT_EMBED_IMAGE_URL", self.text)
+        self.assertIn("EI_POINT_EMBED_IMAGE_", self.text)
+        self.assertIn("IDENTITY_IMAGES", self.text)
+        self.assertIn("/Robin/embed.png", self.text)
         functions = {
             node.name
             for node in self.tree.body

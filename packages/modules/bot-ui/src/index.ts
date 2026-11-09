@@ -13,8 +13,19 @@ import {
   type MessageMentionOptions,
 } from "discord.js";
 
-const DEFAULT_IMAGE =
-  "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif";
+const REPO_RAW_BASE =
+  "https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots";
+
+/** Per-identity artwork from `project assets/bots/<Bot>/embed.png`. This is the
+ *  default; `EI_POINT_EMBED_IMAGE_<IDENTITY>` overrides a single bot if needed. */
+export const IDENTITY_IMAGES = {
+  kafka: `${REPO_RAW_BASE}/Kafka/embed.png`,
+  cyrene: `${REPO_RAW_BASE}/Cyrene/embed.png`,
+  robin: `${REPO_RAW_BASE}/Robin/embed.png`,
+  cipher: `${REPO_RAW_BASE}/Cipher/embed.png`,
+  silverwolf: `${REPO_RAW_BASE}/Silver%20Wolf/embed.png`,
+  himiko: `${REPO_RAW_BASE}/Himiko/embed.png`,
+} as const;
 
 /** Per-identity character themes (owner request 2026-10-18), grounded in each
  *  bot's own artwork in `project assets/bots/<Bot>/embed.png`. Colours are retained
@@ -48,14 +59,21 @@ export interface EmbedReplyOptions {
   imageKey?: string;
 }
 
-/** Resolves the configured reply image: per-identity override, shared URL, brand default. */
-export function resolveEmbedImage(imageKey?: string): string {
-  const key = imageKey?.trim();
-  if (key) {
-    const override = process.env[`EI_POINT_EMBED_IMAGE_${key.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`]?.trim();
+/** Resolve the reply artwork: per-identity override, built-in identity artwork,
+ *  then an explicit shared fallback (unknown identities only). */
+export function resolveEmbedImage(imageKey?: string): string | undefined {
+  const raw = imageKey?.trim();
+  const key = raw?.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (raw) {
+    const envKey = raw.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+    const override = process.env[`EI_POINT_EMBED_IMAGE_${envKey}`]?.trim();
     if (override) return override;
   }
-  return process.env.EI_POINT_EMBED_IMAGE_URL?.trim() || DEFAULT_IMAGE;
+  if (key) {
+    const builtin = (IDENTITY_IMAGES as Record<string, string>)[key];
+    if (builtin) return builtin;
+  }
+  return process.env.EI_POINT_EMBED_IMAGE_URL?.trim() || undefined;
 }
 
 /** Intermediate legacy builder; its data is converted to Components V2 before sending.
@@ -66,9 +84,9 @@ export function createEiEmbed(options: EmbedReplyOptions): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setTitle(theme ? `${theme.emoji} ${options.title.slice(0, 250)}` : options.title.slice(0, 256))
     .setDescription(options.description.slice(0, 4096))
-    .setImage(imageUrl)
     .setFooter({ text: theme ? `${theme.emoji} ${theme.name} · Ei Point · powered by Ei-Flow` : "Ei Point · powered by Ei-Flow" })
     .setTimestamp();
+  if (imageUrl) embed.setImage(imageUrl);
   if (options.fields?.length) {
     embed.addFields(options.fields.slice(0, 25).map((field) => ({
       name: field.name.slice(0, 256),
@@ -231,8 +249,14 @@ export function toEiComponentPayload(input: string | Payload, imageKey?: string)
   if (!children.length) text("No additional details.");
   const combinedText = children.map((child) => (child.type === 10 ? (child as { content: string }).content : "")).join("\n\n");
   children.splice(0, children.length, { type: 10, content: combinedText });
-  if (!images.length) images.push(resolveEmbedImage(imageKey));
-  children.push({ type: 12, items: [...new Set(images)].slice(0, 10).map((url) => ({ media: { url } })) });
+  if (!images.length) {
+    const resolved = resolveEmbedImage(imageKey);
+    if (resolved) images.push(resolved);
+  }
+  const gallery = [...new Set(images.filter(Boolean))].slice(0, 10);
+  if (gallery.length) {
+    children.push({ type: 12, items: gallery.map((url) => ({ media: { url } })) });
+  }
   for (const file of Array.isArray(value.files) ? value.files : []) {
     const data = json(file);
     const name = typeof data.name === "string" ? data.name : typeof file === "string" ? file.split(/[\\/]/).pop() : undefined;

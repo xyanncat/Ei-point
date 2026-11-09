@@ -738,12 +738,28 @@ guild_panels: dict[str, discord.Message] = {}
 ROBIN_EMBLEM = "🕊️"
 
 
-def panel_image_url() -> str:
-    return (
-        os.getenv("EI_POINT_EMBED_IMAGE_ROBIN")
-        or os.getenv("EI_POINT_EMBED_IMAGE_URL")
-        or "https://raw.githubusercontent.com/xyanncat/Ei-point/main/docs/assets/ei-point-pulse.gif"
-    ).strip()
+# Per-identity artwork from `project assets/bots/<Bot>/embed.png`. This is the
+# default; EI_POINT_EMBED_IMAGE_<IDENTITY> overrides a single bot if needed.
+IDENTITY_IMAGES = {
+    "kafka": "https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Kafka/embed.png",
+    "cyrene": "https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Cyrene/embed.png",
+    "robin": "https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Robin/embed.png",
+    "cipher": "https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Cipher/embed.png",
+    "silverwolf": "https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Silver%20Wolf/embed.png",
+    "himiko": "https://raw.githubusercontent.com/xyanncat/Ei-point/main/project%20assets/bots/Himiko/embed.png",
+}
+
+
+def panel_image_url() -> str | None:
+    key = "".join(ch for ch in BOT_KEY.strip().lower() if ch.isalnum())
+    override = os.getenv(f"EI_POINT_EMBED_IMAGE_{key.upper()}")
+    if override:
+        return override.strip()
+    builtin = IDENTITY_IMAGES.get(key)
+    if builtin:
+        return builtin
+    shared = os.getenv("EI_POINT_EMBED_IMAGE_URL")
+    return shared.strip() if shared else None
 
 
 def panel_text(guild_id: str) -> str:

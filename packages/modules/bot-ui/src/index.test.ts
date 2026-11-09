@@ -7,6 +7,7 @@ import {
   createVoiceMediaCard,
   identityTheme,
   isCommonCommand,
+  resolveEmbedImage,
   respondToCommonCommand,
   toEiComponentPayload,
   toEiEmbedPayload,
@@ -35,6 +36,43 @@ test("voice media card embeds playable media without a file tile or accent colou
   assert.ok(gallery, "media gallery must be present");
   assert.equal(gallery.items[0].media.url, "attachment://cyrene.mp4");
   assert.ok(gallery.items[0].description);
+});
+
+test("each identity uses its own artwork without a shared default", () => {
+  const previousShared = process.env.EI_POINT_EMBED_IMAGE_URL;
+  const previousCyrene = process.env.EI_POINT_EMBED_IMAGE_CYRENE;
+  const previousCipher = process.env.EI_POINT_EMBED_IMAGE_CIPHER;
+  delete process.env.EI_POINT_EMBED_IMAGE_URL;
+  delete process.env.EI_POINT_EMBED_IMAGE_CYRENE;
+  delete process.env.EI_POINT_EMBED_IMAGE_CIPHER;
+  try {
+    assert.match(resolveEmbedImage("cyrene") ?? "", /\/Cyrene\/embed\.png$/);
+    assert.match(resolveEmbedImage("robin") ?? "", /\/Robin\/embed\.png$/);
+    assert.match(resolveEmbedImage("silverwolf") ?? "", /\/Silver%20Wolf\/embed\.png$/);
+    assert.equal(resolveEmbedImage("unknown"), undefined);
+    const embed = createEiEmbed({ title: "Test", description: "Body", imageKey: "cyrene" }).toJSON();
+    assert.match(embed.image?.url ?? "", /\/Cyrene\/embed\.png$/);
+    assert.ok(JSON.stringify(toEiComponentPayload({ content: "Hello" }, "cipher")).includes("/Cipher/embed.png"));
+  } finally {
+    if (previousShared === undefined) delete process.env.EI_POINT_EMBED_IMAGE_URL;
+    else process.env.EI_POINT_EMBED_IMAGE_URL = previousShared;
+    if (previousCyrene === undefined) delete process.env.EI_POINT_EMBED_IMAGE_CYRENE;
+    else process.env.EI_POINT_EMBED_IMAGE_CYRENE = previousCyrene;
+    if (previousCipher === undefined) delete process.env.EI_POINT_EMBED_IMAGE_CIPHER;
+    else process.env.EI_POINT_EMBED_IMAGE_CIPHER = previousCipher;
+  }
+});
+
+test("unknown identity with no artwork omits the media gallery", () => {
+  const previous = process.env.EI_POINT_EMBED_IMAGE_URL;
+  delete process.env.EI_POINT_EMBED_IMAGE_URL;
+  try {
+    const payload = toEiComponentPayload({ content: "Hello" }, "unknown");
+    assert.equal(JSON.stringify(payload).includes('"type":12'), false);
+  } finally {
+    if (previous === undefined) delete process.env.EI_POINT_EMBED_IMAGE_URL;
+    else process.env.EI_POINT_EMBED_IMAGE_URL = previous;
+  }
 });
 
 test("common commands carry the calling bot's identity art and footer", async () => {
