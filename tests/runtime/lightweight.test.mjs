@@ -64,3 +64,10 @@ test("Render templates and the API PORT are ready for the free tier", () => {
   assert.match(read("infra/render/start-api.sh"), /workers\/dist\/index\.js/u);
   assert.match(read(".github/workflows/migrate-database.yml"), /run-migrations\.mjs/u);
 });
+
+test("the phone env template wires TTS to the device-local Piper bridge", () => {
+  const env = read("infra/phone/cyrene.env.example");
+  assert.match(env, /TTS_PROVIDER=local/u);
+  assert.match(env, /TTS_URL=http:\/\/127\.0\.0\.1:3120\/v1\/audio\/speech/u);
+  assert.match(env, /DATABASE_URL=/u);
+});

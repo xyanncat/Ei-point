@@ -31,15 +31,27 @@ describe("TTS provider selection", () => {
       calls.push({ url: String(url), body: JSON.parse(String(init.body ?? "{}")) });
       return wavResponse();
     }) as typeof fetch;
-    const synthesize = makeTtsProvider({ TTS_URL: "http://tts:3120/v1/audio/speech" }, fetchFn);
+    const synthesize = makeTtsProvider({ TTS_URL: "http://127.0.0.1:3120/v1/audio/speech" }, fetchFn);
     const audio = await synthesize("hello", "default", neverAborted());
     assert.equal(audio.mime, "audio/wav");
     assert.deepEqual([...audio.bytes], [1, 2, 3]);
-    assert.equal(calls[0]!.url, "http://tts:3120/v1/audio/speech");
+    assert.equal(calls[0]!.url, "http://127.0.0.1:3120/v1/audio/speech");
     const body = calls[0]!.body as { text: string; voice: string; format: string };
     assert.equal(body.text, "hello");
     assert.equal(body.format, "wav");
     assert.equal(ttsProviderName({}), "local-tts");
+  });
+
+  it("defaults to the phone-hosted Piper bridge on loopback", async () => {
+    const calls: Array<{ url: string; body: unknown }> = [];
+    const fetchFn = (async (url: string, init: RequestInit) => {
+      calls.push({ url: String(url), body: JSON.parse(String(init.body ?? "{}")) });
+      return wavResponse();
+    }) as typeof fetch;
+    const synthesize = makeTtsProvider({}, fetchFn);
+    await synthesize("hello", "default", neverAborted());
+    assert.equal(calls[0]!.url, "http://127.0.0.1:3120/v1/audio/speech");
+    assert.deepEqual(calls[0]!.body, { text: "hello", voice: "default", format: "wav" });
   });
 
   it("rejects non-WAV content from the local adapter", async () => {

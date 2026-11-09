@@ -31,17 +31,14 @@ pnpm --filter @ei-point/bot-ai build
 ```
 
 Run both identities under `tmux` (or termux-services) so a dropped SSH/session
-does not stop them:
+does not stop them. Put the values from
+[`infra/phone/cyrene.env.example`](../infra/phone/cyrene.env.example) in an
+untracked `cyrene.env` on the device:
 
 ```sh
-export DATABASE_URL='postgresql://…neon.tech/ei_point?sslmode=require'
-export AI_PROVIDER_PRIMARY='https://api.groq.com/openai/v1/chat/completions'
-export AI_PROVIDER_PRIMARY_MODEL='openai/gpt-oss-20b'
-export AI_PROVIDER_PRIMARY_KEY='…'
-# Cyrene
-BOT_KEY=cyrene BOT_TOKEN='…' GUILD_ALLOWLIST='id1,id2' EI_POINT_OWNER_ID='…' \
-  TTS_PROVIDER=local TTS_URL='http://127.0.0.1:3120/v1/audio/speech' \
-  node apps/bots/ai/dist/index.js
+set -a; . ./cyrene.env; set +a
+# Cyrene (bot-ai) — TTS is the Piper bridge on this same device.
+node apps/bots/ai/dist/index.js
 # Robin
 BOT_KEY=robin BOT_TOKEN='…' GUILD_ALLOWLIST='id1,id2' \
   MUSIC_HEALTH_PORT=3105 python apps/bots/music-py/src/main.py
@@ -63,7 +60,26 @@ Content-Type: application/json
 
 and expects raw **WAV** bytes with `Content-Type: audio/wav`. A small HTTP
 wrapper around the fine-tuned Piper model is enough; it is maintained outside
-this repository. Constraints:
+this repository.
+
+### Wiring
+
+The bot and the bridge run on the **same self-hosted device**, so `TTS_URL`
+stays on loopback:
+
+```sh
+TTS_PROVIDER=local
+TTS_URL=http://127.0.0.1:3120/v1/audio/speech
+```
+
+The Render API is not part of this path — it never proxies speech. If the
+bridge ever moves to a **different** device, point `TTS_URL` at that device's
+LAN address (for example `http://192.168.1.50:3120/v1/audio/speech`), open TCP
+3120 only on the local network, and leave `TTS_PROVIDER=local` unchanged.
+Bot health stays independent of the bridge: `/health/live` remains green if the
+bridge dies, and `/speak` answers with an honest unavailable message.
+
+Constraints:
 
 - 500 characters per request (`/speak` cap), 8 MiB audio bound.
 - One synthesis at a time is fine; the bot already has a bounded queue.
