@@ -163,6 +163,13 @@ the account owners. There is no deployed revision, image ID or health status to 
     bots refused to start; the registry rows now carry the real IDs with the guild in `guild_ids`, and
     `access.guilds` is approved. Robin's process-level allowlist was relaxed to one or two guilds on the same
     principle as Cyrene.
+    **Live (2026-11-09):** both gateways are connected on the phone — Cyrene logged in as `Ei | Cyrene#8519`
+    (`/health/ready` = `ready`) and Robin as `Ei | Robin#1002` with PostgreSQL connected, 7 global slash
+    commands synced and `/health/ready` = `ready`; the sherpa TTS `/health` still reports 22 050 Hz. Neon's
+    pooler rejected Robin's `options=-c statement_timeout=…` startup parameter, so the timeout is now applied
+    with `SET` after connect (and tolerated if the endpoint refuses it). Robin's 15 s `ops.service_status`
+    heartbeat — the last periodic database write — was removed, leaving on-demand readiness only so Neon can
+    scale to zero between activity bursts.
     **Robin injected via proot Debian (2026-11-09):** Debian 13.7 / Python 3.13.5 on the phone, with
     `/opt/robin-venv` containing discord.py 2.7.1, **davey 0.2.0**, PyNaCl 1.5.0, yt-dlp 2026.8.19, certifi and
     psycopg[binary] 3.2.9 — davey's manylinux `aarch64` wheel works under Debian glibc, unlike Termux. The repo is

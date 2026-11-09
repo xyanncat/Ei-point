@@ -5,7 +5,7 @@ queue advancement loop, seeking, autoplay, DJ/Master permissions,
 search track picker UI, live music panel, bounded concurrency (2 resolutions, 2 voice sessions),
 session-scoped queue lifecycle (owner decision 2026-10-18: leaving voice clears the queue),
 daemon HTTP health server on port 3105,
-and status heartbeat into ops.service_status.
+and on-demand readiness (no periodic database heartbeat).
 """
 from __future__ import annotations
 
@@ -139,30 +139,6 @@ def init_db():
         except Exception as exc:
             db_ready = False
             log.warning("PostgreSQL connection failed (%s); persistence will retry.", exc)
-
-
-def update_service_status_sync(ping_ms: float):
-    global db_conn, db_ready
-    with db_lock:
-        if not db_conn or not db_ready:
-            return
-        try:
-            with db_conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO ops.service_status (service, liveness, gateway, db_ready, latency_ms, updated_at)
-                    VALUES (%s, 'ok', 'ok', true, %s, now())
-                    ON CONFLICT (service) DO UPDATE SET
-                      liveness = 'ok',
-                      gateway = 'ok',
-                      db_ready = true,
-                      latency_ms = EXCLUDED.latency_ms,
-                      updated_at = now()
-                    """,
-                    (f'bot-{BOT_KEY}', max(0, round(ping_ms))),
-                )
-        except Exception as exc:
-            log.debug("Failed to record service status: %s", exc)
 
 
 async def check_dj_permission(interaction: discord.Interaction) -> bool:
@@ -1669,9 +1645,6 @@ async def periodic_tasks():
                     authorized = False
                 if not authorized:
                     await voice_client.disconnect(force=True)
-            # Update service status
-            ping = bot.latency * 1000 if bot.latency else 0.0
-            await asyncio.to_thread(update_service_status_sync, ping)
         except Exception as exc:
             log.error("Periodic task error: %s", exc)
 
