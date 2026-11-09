@@ -170,6 +170,10 @@ the account owners. There is no deployed revision, image ID or health status to 
     with `SET` after connect (and tolerated if the endpoint refuses it). Robin's 15 s `ops.service_status`
     heartbeat — the last periodic database write — was removed, leaving on-demand readiness only so Neon can
     scale to zero between activity bursts.
+    **Known issue (2026-11-09):** the supplied Groq key returns HTTP **401** on both `/openai/v1/models` and
+    `/chat/completions`, so Cyrene's chat path will answer with a failure until a fresh key is installed. The
+    gateway, slash commands, database and local TTS are unaffected. Replace `AI_PROVIDER_PRIMARY_KEY` in
+    `~/cyrene.env` (mode 600) and restart only the AI bot after obtaining a new key.
     **Robin injected via proot Debian (2026-11-09):** Debian 13.7 / Python 3.13.5 on the phone, with
     `/opt/robin-venv` containing discord.py 2.7.1, **davey 0.2.0**, PyNaCl 1.5.0, yt-dlp 2026.8.19, certifi and
     psycopg[binary] 3.2.9 — davey's manylinux `aarch64` wheel works under Debian glibc, unlike Termux. The repo is
