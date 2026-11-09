@@ -114,7 +114,8 @@ the account owners. There is no deployed revision, image ID or health status to 
     the `{text,voice,format}` → WAV contract for the phone's Piper bridge. CI still builds every Render image (no
     Compose), and the legacy feature map was remapped (29 rows) so all **179 rows** still resolve. Root test chain
     drops the backup/resource-budget steps. Verification: feature coverage structural 179, kept operations tests
-    21/21, bot-ai 50/50, `-r typecheck` clean; full suite below.
+    21/21, bot-ai 50/50, `-r typecheck` clean; full suite **58/58** (final gate) with zero failures.
+    **Committed as `53522fa` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
 
 ## Verified locally (fresh runs on this revision)
 
@@ -194,6 +195,16 @@ Eighth pass (P2 Render/Vercel) — fresh runs:
 | `python -c "yaml.safe_load(...)"` over `infra/render/*.yaml` | all templates parse |
 | `corepack pnpm -r typecheck` | clean |
 | full `corepack pnpm test` chain | passed end to end — final gate 119 passed / 0 failed; `Resource budget ok (pool mode)` |
+
+Ninth pass (P3 VPS retirement) — fresh runs:
+
+| Check | Result |
+|---|---|
+| `node scripts/check-feature-coverage.mjs` | structural exit 0; 179 rows after remapping |
+| `node --test tests/operations/*.test.mjs tests/runtime/*.test.mjs` | 38 passed / 0 failed |
+| `corepack pnpm --filter @ei-point/bot-ai test` | 50 passed / 0 failed |
+| `corepack pnpm -r typecheck` | exit 0 |
+| full `corepack pnpm test` chain | passed end to end — final gate 58 passed / 0 failed |
 
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 
