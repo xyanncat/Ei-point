@@ -200,7 +200,9 @@ the account owners. There is no deployed revision, image ID or health status to 
     failure, including a full channel (only `🔊 Cat` has a user limit, 2) and timeouts; the global gate also
     denied every command silently when a long-idle Neon connection failed. Added full-channel/stage checks,
     specific Forbidden/timeout/error messages, a runtime-gate reconnect-and-retry, and a periodic guard that
-    keeps an active music session through transient database errors.
+    keeps an active music session through transient database errors. A short 440 Hz tone was played end-to-end
+    into the empty `test` voice channel (`is_playing=True`), confirming Opus/DAVE transmission, not just the
+    handshake.
     **Robin injected via proot Debian (2026-11-09):** Debian 13.7 / Python 3.13.5 on the phone, with
     `/opt/robin-venv` containing discord.py 2.7.1, **davey 0.2.0**, PyNaCl 1.5.0, yt-dlp 2026.8.19, certifi and
     psycopg[binary] 3.2.9 — davey's manylinux `aarch64` wheel works under Debian glibc, unlike Termux. The repo is
