@@ -104,6 +104,7 @@ the account owners. There is no deployed revision, image ID or health status to 
     against `MIGRATION_DATABASE_URL` (Render free has no shell). New docs: `docs/operations/render-vercel.md` and
     `docs/operations/phone-hosting.md` (Termux, wake lock, Piper bridge contract, Robin benchmark). Verification:
     lightweight invariants 6/6, Render YAML parses, typecheck clean; full suite below.
+    **Committed as `4d90fa3` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
 
 ## Verified locally (fresh runs on this revision)
 
@@ -182,7 +183,7 @@ Eighth pass (P2 Render/Vercel) — fresh runs:
 | `node --test tests/runtime/lightweight.test.mjs` | 6 passed / 0 failed (adds Render template + API PORT invariants) |
 | `python -c "yaml.safe_load(...)"` over `infra/render/*.yaml` | all templates parse |
 | `corepack pnpm -r typecheck` | clean |
-| full `corepack pnpm test` chain | rerun below |
+| full `corepack pnpm test` chain | passed end to end — final gate 119 passed / 0 failed; `Resource budget ok (pool mode)` |
 
 ## Explicitly deferred (operator gates, per plan phases 0/3/4/6)
 
