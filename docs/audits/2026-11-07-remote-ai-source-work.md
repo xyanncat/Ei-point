@@ -105,6 +105,16 @@ the account owners. There is no deployed revision, image ID or health status to 
     `docs/operations/phone-hosting.md` (Termux, wake lock, Piper bridge contract, Robin benchmark). Verification:
     lightweight invariants 6/6, Render YAML parses, typecheck clean; full suite below.
     **Committed as `4d90fa3` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
+13. **P3 — VPS layer retired; Pocket runtime removed (2026-11-09).** Deleted: `infra/docker` (Compose + prod overlay),
+    `infra/nginx`, `infra/systemd`, the entire host backup layer (`infra/backup`: pgBackRest, restic host scripts,
+    durable-assets inventory, drills), the capacity benchmark, fifteen VPS-only scripts (deploy, rollback, release
+    manifest/roster, health-fleet, resource budget, backup verification, ops report, watchdog helpers, model
+    provisioning/diagnostics), five VPS-only tests, and six obsolete runbooks. The Pocket TTS service directory and
+    every `POCKET_TTS_*` / reference-clip variable are gone; the local TTS adapter now reports `local-tts` and keeps
+    the `{text,voice,format}` → WAV contract for the phone's Piper bridge. CI still builds every Render image (no
+    Compose), and the legacy feature map was remapped (29 rows) so all **179 rows** still resolve. Root test chain
+    drops the backup/resource-budget steps. Verification: feature coverage structural 179, kept operations tests
+    21/21, bot-ai 50/50, `-r typecheck` clean; full suite below.
 
 ## Verified locally (fresh runs on this revision)
 

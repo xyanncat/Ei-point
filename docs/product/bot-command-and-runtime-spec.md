@@ -1,4 +1,4 @@
-# Bot command and runtime specification
+﻿# Bot command and runtime specification
 
 This is the requested product behavior supplied by the project owner on 2026-10-15. It supersedes the older command catalog as the target specification. Items below describe requirements, not completed implementation; implementation and acceptance status must be updated from code and live evidence.
 
@@ -37,12 +37,12 @@ The chat assistant has no `/ask`, `/persona`, `/reset`, `/usage`, `/model`, or `
 
 ### Local model candidates
 
-- Text-to-speech: Pocket TTS (English, 100M), conditioned on the supplied reference audio and its matching transcript. The provided calibration line is: “Ah, there you are! Hehe, were you looking for me? Oh, don't look so surprised. I'm simply happy you're here. You know, even the smallest moments can become precious memories. So, shall we make another one together?”
+- Text-to-speech: Piper, fine-tuned on the supplied reference audio (the model is maintained outside this repository). The provided calibration line is: “Ah, there you are! Hehe, were you looking for me? Oh, don't look so surprised. I'm simply happy you're here. You know, even the smallest moments can become precious memories. So, shall we make another one together?”
 - Translation: hosted provider (the configured OpenAI-compatible chat endpoint by default; Google Cloud Translation optional). No local translation model process.
-- Load local TTS model weights from a pinned local model directory/volume; never download model weights during a command or silently switch to a metered provider. Expose readiness, load time, inference time, memory, CPU, and queue metrics. Pocket TTS remains the only optional local model service; translation uses the hosted provider.
+- Load local TTS model weights from a pinned local model directory/volume; never download model weights during a command or silently switch to a metered provider. Expose readiness, load time, inference time, memory, CPU, and queue metrics. The Piper bridge is the only optional local model; translation uses the hosted provider.
 - Model inference is subject to bounded concurrency, queue depth, request timeout, and overload responses even when there is no external provider API rate limit.
 - TTS text cap is 500 characters. Split or reject longer messages from `/tts` using a documented policy; do not let an unbounded backlog form.
-- Keep Pocket voice-cloning reference audio, transcript, model/license notices, and deployment provenance together. Do not represent generated audio as official game dialogue or a specific actor's original recording.
+- Keep Piper reference audio, transcript, model/license notices, and deployment provenance together. Do not represent generated audio as official game dialogue or a specific actor's original recording.
 
 ## Robin — music only
 

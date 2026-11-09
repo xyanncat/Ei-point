@@ -63,13 +63,13 @@ These describe the implemented product surface, not a claim that every archived 
 | **SilverWolf** | `silverwolf` | Game economy and rank readout | Local implementation; catalog/legacy parity and staging acceptance remain open |
 | **Himiko** | `himiko` | Welcome, community leveling, embeds and announcements | Local implementation; Discord intent configuration and live delivery acceptance remain open |
 
-The bot count is configurable through the release roster. A manifest cannot create a bot: each identity also needs application code, Compose service, token/secret wiring, health checks, registry configuration, and verified permissions. See [bot identities](docs/bot-identities.md) and [release operations](docs/operations-release.md).
+The bot fleet is defined by which Render services you deploy: each identity needs application code, a token/secret, a Render workspace, health wiring, registry configuration, and verified permissions. See [bot identities](docs/bot-identities.md) and [Render/Vercel deployment](docs/operations/render-vercel.md).
 
 Browse the [individual command and function catalog for all six bots](docs/bot-command-catalog.md). It follows checked-in command definitions and distinguishes implemented source behavior from the still-open legacy parity and live acceptance gates.
 
 The owner-approved target command set is documented command by command in the [product command and runtime spec](docs/product/bot-command-and-runtime-spec.md). This spec records requested behavior separately from code that has passed its implementation gates.
 
-Cyrene's local TTS provisioning, offline startup, reference-clip handling, and readiness checks are documented in the [Pocket TTS operations guide](docs/operations/pocket-tts.md). Model files, the voice reference, and persona memories stay in local read-only mounts; they are not committed to this repository. Cyrene's chat provider is configured separately for direct-mention conversations.
+Cyrene's local voice runs as a Piper bridge on the phone (see the [phone hosting guide](docs/operations/phone-hosting.md)); the bot talks to it through the local TTS contract. Reference audio, persona memories and model files stay private and are not committed. Cyrene's chat provider is configured separately for direct-mention conversations.
 
 ## ⚙️ Architecture
 
@@ -87,22 +87,22 @@ flowchart TB
     API[Fastify API]
     Fleet[Bot fleet]
     Cyrene[Cyrene AI bot]
-    Pocket[Offline Pocket TTS]
+    TTS[Piper TTS bridge]
     Workers[Workers & outbox]
   end
   subgraph Core["03 · SHARED PLATFORM"]
     direction LR
     Flow[Ei-Flow lifecycle]
     Domain[Domain modules]
-    DB[(PostgreSQL)]
-    Ops[Release · health · recovery]
+    DB[(Neon PostgreSQL)]
+    Ops[Render · Vercel · Drive]
   end
   Members --> Discord
   Members --> Site
   Site --> API
   Discord --> Fleet
   Fleet --> Cyrene
-  Cyrene --> Pocket
+  Cyrene --> TTS
   Fleet --> Flow
   Flow --> Domain
   API --> DB
@@ -119,7 +119,7 @@ flowchart TB
   classDef service fill:#21273a,stroke:#bc6559,color:#fff1e8,stroke-width:2px
   classDef durable fill:#212b36,stroke:#d3ac6c,color:#fff8e8,stroke-width:2px
   class Members,Discord,Site actor
-  class API,Fleet,Pocket,Workers,Flow,Domain,Ops service
+  class API,Fleet,TTS,Workers,Flow,Domain,Ops service
   class DB durable
 ```
 
@@ -151,10 +151,10 @@ On Windows PowerShell, replace the final line with `Copy-Item .env.example .env`
 
 Edit `.env` before starting services. Replace every placeholder secret; configure database, OAuth, guild allowlists, and the selected provider/bot tokens. Keep `.env` private and out of commits. The checked-in values are examples, not deployable credentials.
 
-Start the local PostgreSQL and edge services:
+Start a local PostgreSQL (or point `DATABASE_URL` at the Neon pooled URL) and apply migrations:
 
 ```bash
-docker compose --env-file .env -f infra/docker/compose.yml up -d --build postgres nginx
+pnpm migrate
 ```
 
 Run workspace development processes from the repository root:
@@ -163,7 +163,7 @@ Run workspace development processes from the repository root:
 pnpm dev
 ```
 
-Some services require credentials and database configuration; an unset provider or bot token can keep its corresponding live flow unavailable. Follow [operations](docs/operations.md) and [the release procedure](docs/operations-release.md) for first provisioning, migrations, and deployment. This local start is not production provisioning.
+Some services require credentials and database configuration; an unset provider or bot token can keep its corresponding live flow unavailable. Follow [Render/Vercel deployment](docs/operations/render-vercel.md), [Neon](docs/operations/neon.md) and [Drive backups](docs/operations/drive-backups.md) for provisioning. This local start is not production provisioning.
 
 ### Environment reference
 
@@ -171,12 +171,12 @@ The complete annotated list is in [`.env.example`](.env.example). Common configu
 
 | Group | Variables | Purpose |
 |---|---|---|
-| PostgreSQL | `POSTGRES_ADMIN_*`, `DATABASE_URL`, `MIGRATION_DATABASE_URL` | Separate bootstrap/migration credentials from the least-privilege application login |
+| PostgreSQL | `DATABASE_URL`, `MIGRATION_DATABASE_URL` | Neon pooled application URL and the direct migration URL |
 | Discord | `DISCORD_*_BOT_TOKEN`, `DISCORD_TEST_GUILD_ID`, `DISCORD_MAIN_GUILD_ID`, `DISCORD_CLIENT_*` | Bot identities, guild allowlist, and OAuth |
 | Web/API | `SESSION_SECRET`, `CSRF_SECRET`, `VAULT_SECRET`, `INTERNAL_SERVICE_TOKEN`, `DASHBOARD_ORIGIN`, `API_PORT` | Session protection, service trust, and local routing |
 | AI/TTS | `AI_PROVIDER_PRIMARY*`, `AI_PROVIDER_FALLBACK*`, `AI_DEADLINE_MS`, `AI_DAILY_BUDGET_TOKENS`, `TTS_*`, `CYRENE_PERSONA_MEMORY_FILE` | Chat and TTS provider settings; optional local TTS model paths and bounded inference; persona memory mount |
 | Commerce | `UPI_PAYEE_*`, `RAZORPAY_PAYMENT_PAGE`, `COMMERCE_GUILD_ID`, `PAYMENT_ORIGIN`, `COMMERCE_REFERRAL_REWARD_MINOR`, `COMMERCE_STAFF_CHANNEL_ID` | Payment presentation, guild/referral configuration, and the staff channel that receives claim notifications |
-| Backup/ingress | `DEPLOY_BACKUP_MAX_AGE_HOURS`, `RESTIC_*`, tunnel variables | Release backup-age bound and optional external backup/ingress configuration |
+| Backup/ingress | GitHub Actions secrets (`NEON_DATABASE_URL`, `RESTIC_PASSWORD`, `RCLONE_CONFIG_B64`), tunnel variables | Nightly encrypted dump to Drive; optional external ingress |
 
 Production secrets belong in a protected host-side environment file. Do not put credentials in issues, logs, screenshots, or release manifests.
 
@@ -260,9 +260,10 @@ Production starts prebuilt images; the deploy script checks a recent verified ba
 Useful references:
 
 - [Operations overview](docs/operations.md)
-- [Release, deploy, rollback, and recovery procedure](docs/operations-release.md)
-- [Backup tooling and configuration](infra/backup/README.md)
-- [Recovery drills](docs/recovery-drills.md)
+- [Render/Vercel deployment](docs/operations/render-vercel.md)
+- [Neon database](docs/operations/neon.md)
+- [Drive backups and restore](docs/operations/drive-backups.md)
+- [Phone hosting (Cyrene + Robin)](docs/operations/phone-hosting.md)
 - [Security boundaries](docs/security.md)
 - [Feature matrix and source mapping](docs/feature-matrix.md)
 

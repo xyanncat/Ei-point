@@ -1,4 +1,4 @@
-﻿# Ei Point — Feature Matrix (Phase 1 — legacy-behavior ledger closed)
+# Ei Point — Feature Matrix (Phase 1 — legacy-behavior ledger closed)
 
 > Source: `EI_POINT_VPS_BUILD_PLAN.md` §2 + §10 Phase 1.
 > Status: **Ledger closed (section 1A, 2026-10-16); the 54 curated rows remain requirements, not evidence.** The rows below are curated requirements grouped from the plan; they do not by themselves certify runtime parity.
@@ -80,11 +80,11 @@ Rule: adding/removing a bot = one registry row + deploy. No hard-coded bot lists
 
 | # | Finding | Maps to acceptance test (§11) |
 |---|---|---|
-| 1 | Postgres never backed up | §9 pgBackRest + weekly restore drill, RPO ≤ 5 min |
-| 2–4 | Empty/local-only/no backups | restic + off-host S3, 7-daily/4-weekly, 14-day DB window |
-| 5 | No AVX/AES-NI | test images on target VPS; no CPU-only local inference; no mongo:7 |
-| 6 | DNS flakiness | cached resolver + explicit Docker DNS from day one (see `infra/docker/`) |
-| 7 | 2× power-offs | durable tx, boot recovery, watchdog, external uptime check |
+| 1 | Postgres never backed up | Neon 6-hour restore window + nightly encrypted dump to Drive; weekly restore drill |
+| 2-4 | Empty/local-only/no backups | restic on Drive, 7-daily/4-weekly, encrypted |
+| 5 | No AVX/AES-NI | no CPU inference on the app host; Piper runs on the phone |
+| 6 | DNS flakiness | provider DNS on Render/Vercel; no Docker DNS assumptions |
+| 7 | 2× power-offs | durable transactions, Render restarts, GitHub backup job |
 | 8–9 | SSH root+password, no ufw/f2b | key-only SSH gate before hardening (see `docs/operations.md`) |
 | 12 | Blackholed 1.1.1.1 | never use 1.1.1.1; explicit DNS list in compose |
 

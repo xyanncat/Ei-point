@@ -1,4 +1,4 @@
-# Phase 6: community and economy
+﻿# Phase 6: community and economy
 
 Scope from the build plan: welcomes, XP, cards, packs, inventories, market, trades, concurrent operations and transaction rollback. These features are implemented in the community bot and PostgreSQL services. This document is a local implementation handoff; it does not certify a VPS launch or complete feature parity with the missing archived bots.
 
@@ -8,7 +8,7 @@ Scope from the build plan: welcomes, XP, cards, packs, inventories, market, trad
 2. Back up the database before applying migrations. Set `DATABASE_URL` for the migration operator and run `pnpm migrate`. Migration `004_community_economy.sql` extends the existing tables; the bot refuses to start without it. Use a restricted application database role for the bot, with access to its community/games tables, approved guilds, outbox and service status.
 3. Approve only the intended test/main guilds in `access.guilds`. Set `DISCORD_TEST_GUILD_ID` and `DISCORD_MAIN_GUILD_ID` to their Discord IDs in the Compose environment (compose builds `GUILD_ALLOWLIST` from exactly these two). For direct local startup export the same two IDs with `BOT_TOKEN` and `DATABASE_URL`.
 4. Enable the **Server Members Intent** in the Discord developer portal. Grant View Channels, Send Messages and application command access in the intended channels. Message Content Intent is not required for XP. Keep tokens outside source control.
-5. On a Linux build/staging machine, build the community image using `docker compose --env-file .env -f infra/docker/compose.yml build bot-community` and validate it against staging. Publish that image and set its immutable reference in `infra/docker/compose.prod.yml` before starting it on the VPS with both Compose files and `up -d --no-build bot-community`. The overlay still has release placeholders; resolve them before use. Keep builds off the live VPS hot path. For local development use `pnpm --filter @ei-point/bot-community dev`. Commands register only in approved, allowlisted guilds present at startup; restart after adding another approved guild.
+5. Build the community image with `docker build -f apps/bots/community/Dockerfile .` (or let Render build it), deploy it as its own free Render service (see [Render/Vercel deployment](operations/render-vercel.md)) and validate it against staging. For local development use `pnpm --filter @ei-point/bot-community dev`. Commands register only in approved, allowlisted guilds present at startup; restart after adding another approved guild.
 
 Do not copy development fixtures into production. The existing catalog asset folder is empty, so production starts without invented cards or packs. Catalog definitions are shared; ownership, balances, XP, listings and trades are isolated by guild.
 

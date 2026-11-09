@@ -48,7 +48,7 @@ jobs:
         run: pnpm build
       - name: Lint
         run: pnpm lint
-      - name: Root suites + phase gates + resource budget
+      - name: Root suites + phase gates
         run: pnpm test
       - name: Typecheck
         run: pnpm typecheck
@@ -56,9 +56,6 @@ jobs:
         run: pnpm exec playwright install --with-deps msedge && pnpm test:browser
       - name: Python music suites
         run: python -m unittest discover -s apps/bots/music-py/tests -p "test_*.py"
-      - name: Python Pocket TTS service suites
-        run: python -m unittest discover -s tests -p "test_*.py"
-        working-directory: apps/services/pocket-tts
       - name: Cyrene fine-tuning dataset suites
         run: python -m unittest discover -s scripts/cyrene-finetune -p "test_*.py"
       - name: Publish verification evidence
@@ -72,16 +69,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-  # §2B: build the locked immutable service images on Linux. The Dockerfiles
-  # are self-contained (corepack + pnpm install run inside each build), so a
-  # plain checkout suffices. Container/OS scanning is not configured yet and
-  # is recorded as BLOCKED by scripts/verify-project.mjs.
+  # Build the images Render deploys. Compose is gone; each Dockerfile is
+  # self-contained (corepack + pnpm install run inside the build).
   images:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - name: Build the locked service images
-        run: docker compose -f infra/docker/compose.yml build --pull
-      - name: Validate the rendered Compose configuration
-        run: docker compose -f infra/docker/compose.yml config --quiet
+      - name: Build the Render images
+        run: |
+          docker build -f apps/api/Dockerfile -t ei-point-api:ci .
+          docker build -f apps/bots/kafka/Dockerfile -t ei-point-kafka:ci .
+          docker build -f apps/bots/himiko/Dockerfile -t ei-point-himiko:ci .
+          docker build -f apps/bots/community/Dockerfile -t ei-point-community:ci .
+          docker build -f apps/bots/commerce/Dockerfile -t ei-point-commerce:ci .
+          docker build -f apps/bots/ai/Dockerfile -t ei-point-ai:ci .
+          docker build -f apps/bots/music-py/Dockerfile -t ei-point-music:ci .

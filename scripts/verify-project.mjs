@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 // Reproducible verification entrypoint (§2B / §10A). Aggregates the required
 // gates with SEPARATE results. A gate whose mandatory tool is unavailable is
 // BLOCKED, never passed. Exit codes: 0 satisfied, 1 a mandatory gate failed,
@@ -33,7 +33,7 @@ export function gatePlan(pinned) {
     // mandatory so a regression in the map blocks the release verdict.
     { id: "feature-coverage-release", label: "legacy feature coverage (release mode)", command: "node", args: ["scripts/check-feature-coverage.mjs", "--mode", "release"], mandatory: true },
     { id: "openapi-sync", label: "dashboard API contract sync", command: "node", args: ["scripts/check-openapi-sync.mjs"], mandatory: true },
-    { id: "root-suites", label: "root suites + phase gates + resource budget", command: "pnpm", args: ["test"], mandatory: true, timeoutMs: 1_500_000 },
+    { id: "root-suites", label: "root suites + phase gates", command: "pnpm", args: ["test"], mandatory: true, timeoutMs: 1_500_000 },
     { id: "typecheck", label: "workspace typecheck", command: "pnpm", args: ["typecheck"], mandatory: true, timeoutMs: 1_500_000 },
     { id: "browser", label: "browser acceptance", command: "pnpm", args: ["test:browser"], mandatory: true, timeoutMs: 1_800_000 },
     { id: "npm-audit", label: "npm production advisories (recorded, triaged)", command: "pnpm", args: ["audit", "--prod", "--json"], mandatory: false },

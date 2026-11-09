@@ -43,7 +43,7 @@ describe("TTS provider selection", () => {
     const body = calls[0]!.body as { text: string; voice: string; format: string };
     assert.equal(body.text, "hello");
     assert.equal(body.format, "wav");
-    assert.equal(ttsProviderName({}), "pocket-local");
+    assert.equal(ttsProviderName({}), "local-tts");
   });
 
   it("rejects non-WAV content from the local adapter", async () => {

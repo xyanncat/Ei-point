@@ -1,55 +1,44 @@
-# Ei Point — Operations (Phase 2 stub → expanded in Phase 9)
+# Operations (free tier)
 
-## Resource budget (§7) — enforced in compose + systemd slice
+There is no VPS, Compose stack, nginx or systemd unit any more. Production is:
 
-Slice `ei-point.slice`: `CPUQuota=900% MemorySwapMax=2G` (RAM uncapped — Ei Point is the only project on this host; owner decision 2026-10-16).
-Per-service CPU/RAM caps live in `infra/docker/compose.yml` (`deploy.resources.limits` + `mem_limit`).
-Allocation: runtime 7.45 CPU / 32.5 GiB; concurrent maximum 7.95 CPU / 33.75 GiB; project ceiling 9 CPU of 10, memory uncapped; swap is emergency headroom only.
+| Concern | Documentation |
+|---|---|
+| Deployment (Render bots, API, Vercel) | [render-vercel](operations/render-vercel.md) |
+| Database (Neon live, 100 CU-hours, sleep rules) | [neon](operations/neon.md) |
+| Backups and restore (encrypted restic on Drive) | [drive-backups](operations/drive-backups.md) |
+| Cyrene + Robin on the phone (Termux, Piper bridge) | [phone-hosting](operations/phone-hosting.md) |
+| Current phase gates | [phase-gates](phase-gates.md) |
 
-## Verification entrypoint (§2B / §10A)
+## Health
 
-`node scripts/verify-project.mjs` (or `pnpm verify`) is the reproducible verification entrypoint. It runs every gate with a **separate** result and exits `0` only when all mandatory gates pass: `1` if a mandatory gate failed, `2` if a mandatory gate is **blocked** (for example `python` absent). A gate with no local runner (container/OS image scan) is reported `blocked` and executed by CI, never counted as passed. Use `--only <ids>` for a partial run (labelled "not a release verdict"), `--skip <id>` to omit, and `--json` for the machine-readable report used in the §10A evidence bundle.
+- **Bots**: `/health/live` is process-only and is what Render checks;
+  `/health/ready` performs an on-demand database query.
+- **API**: `/healthz` is process-only; `/readyz` checks the database.
+- Render restarts a crashed service; the bots are long-running gateway clients,
+  so no uptime pinger is needed (WebSocket traffic keeps the service awake).
 
-`.github/workflows/verify.yml` runs the same gate list on pinned Node (`.nvmrc` → `setup-node`) with a frozen lockfile: pinned-runtime check, dependency scans, feature coverage, `pnpm test`, typecheck, browser acceptance and the Python music suites. Run it locally with `pnpm verify` (or a subset via `--only`).
+## Free-tier limits to watch
 
-Migrations are forward-only and serialized by a database advisory lock. `infra/postgres/run-migrations.mjs` exports `runMigrations(url, { dir, upTo })`; `tests/operations/migrations.test.mjs` proves a fresh database, an upgrade from a prior snapshot, a rolled-back failure that is not recorded and retried cleanly, and concurrent runners that never double-apply.
+- **Render**: 512 MB / 0.1 CPU per service, 750 instance-hours per workspace
+  per month, one always-on service per workspace.
+- **Neon**: 100 CU-hours/project/month, scale-to-zero after ~5 minutes. The code
+  sleeps by design (see `docs/operations/neon.md`); do not add fast polling.
+- **Vercel**: 100 GB bandwidth/month, 60 s function timeout.
+- **GitHub Actions**: free for public repositories; used for backups and
+  migrations.
+- **Drive**: roughly 4 TB usable; ciphertext only for restic backups.
 
-`scripts/check-openapi-sync.mjs` (the verifier's `openapi-sync` gate) regenerates `packages/contracts/src/dashboard-api.ts` from `apps/api/src/openapi.json` and fails on content drift, ignoring line-ending-only differences. `scripts/evidence-bundle.mjs` runs the verifier with `--json` and retains the §10A evidence bundle under `docs/audits/releases/<release-id>/` (revision, dirty state, toolchain versions, per-gate commands, timestamps, exits/counts and sanitized log hashes); a blocked mandatory gate is recorded as BLOCKED and blocks release.
+## Incidents
 
-## Storage envelope (§7) — dedicated host, uncapped (owner decision 2026-10-16)
-
-The table below remains the working allocation target for planning, not a hard cap:
-
-| Purpose | Cap | Volume |
-|---|---|---|
-| Postgres + WAL | 100 GB | `pgdata` |
-| Artwork/uploads | 80 GB | `artwork` |
-| Music cache | 10 GB | `music-cache` (disposable, excluded from backups) |
-| Logs/metrics | 20 GB | `logs` (rotated, not snapshotted) |
-| Backup staging | 100 GB | `backup-staging` |
-| Images/releases | 50 GB | host docker store |
-| Growth/tmp | 40 GB | `tmp` |
-
-Alerts at 70% / 80% host disk; at 90% stop optional downloads/uploads (watchdog).
-Never auto-delete financial data or WAL.
-
-## Networking (§8)
-
-- Ingress: outbound Tailscale Funnel or Cloudflare Tunnel → local nginx:8080. No DB/diagnostics ports public.
-- Networks: `edge` (nginx+tunnel), `app` (bots/api/workers/web), `data` (postgres only).
-- DNS: explicit `dns:` list in every service (cached resolver first, e.g. host resolver + 8.8.8.8 + 9.9.9.9 — NEVER 1.1.1.1 per finding #12). Verify with `infrastructure DNS check` in acceptance.
-- Containers: non-root, read-only root where possible, dropped caps, bounded writable volumes.
-
-## Health model (§8)
-
-Liveness ≠ gateway ≠ DB readiness ≠ provider availability. Compose healthchecks + host watchdog (`infra/systemd/`) with startup grace, consecutive-failure threshold, bounded restarts, alerts. Watchdog restarts only approved project services; never mounts docker socket into web app.
-
-## Operator surface (§9C)
-
-`DATABASE_URL=... node scripts/ops-report.mjs [--backup-root DIR] [--json]` surfaces what authorized operators need in one report, failing (exit 1) on any breach: durable **queue lag** (oldest pending/leased job, dead jobs), **delivery failures** (unpublished outbox events past their age threshold), **service heartbeats** (stale or degraded `ops.service_status` rows) and **backup freshness/restore age** (latest snapshot verified with `verifyBackup`, including integrity). Model-service health stays with the host watchdog and `health-fleet.sh` — model containers have no database route by design. Startup order, bounded restarts, disk holds and release rollback are covered by `scripts/deploy.sh`/`rollback.sh` with hermetic tests in `tests/operations/`.
-
-## Deploy / rollback (§12)
-
-1. Test-guild credentials + isolated data first. Never run legacy + replacement fleets unrestricted simultaneously.
-2. Cutover: archive+verify legacy → fresh verified backup → stop legacy handlers → start pinned digests → verify commands/permissions/routes/flows → monitor latency/errors/CPU/RAM/disk/queues/gateway.
-3. Rollback = previous image digests + backward-compatible migrations. DB restore is explicit recovery only, never auto-rollback.
+1. **Bot offline** — Render logs; verify the token, gateway intents and guild
+   allowlist; redeploy if the service crashed.
+2. **API slow on first request** — expected cold start after idle; subsequent
+   requests are fast.
+3. **Database suspended mid-month** — the project exceeded 100 CU-hours; check
+   for a reintroduced fast poll, then upgrade or wait for the next billing
+   period. Data is not deleted.
+4. **Backup failed** — inspect the `neon-drive-backup` run; verify the three
+   secrets and that the rclone token still works. A failed backup never
+   initialises a repository automatically.
+5. **Media 404s** — check `NEXT_PUBLIC_MEDIA_BASE_URL` and the Drive/GCS origin.

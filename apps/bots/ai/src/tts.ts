@@ -1,8 +1,8 @@
-// Cyrene TTS wiring: /speak, /tts, /leave, and /search.
+﻿// Cyrene TTS wiring: /speak, /tts, /leave, and /search.
 //
 // Provider selection (redesign infrastructure §6). The queue, caps, caching
 // key and error contract are unchanged; only "who synthesizes" moves.
-//   TTS_PROVIDER unset/empty/local -> POST TTS_URL {text,voice,format} -> WAV (host default)
+//   TTS_PROVIDER unset/empty/local -> POST TTS_URL {text,voice,format} -> WAV (Piper bridge on the phone)
 //   TTS_PROVIDER=google            -> Google Cloud Text-to-Speech -> MP3
 //   TTS_PROVIDER=openai            -> OpenAI-compatible /v1/audio/speech -> audio bytes
 //   TTS_PROVIDER=openrouter        -> OpenRouter /api/v1/audio/speech (model rotation) -> MP3
@@ -86,7 +86,7 @@ function makeLocalTtsProvider(env: NodeJS.ProcessEnv, fetchFn: typeof fetch): Tt
       signal,
     });
     if (res.status === 429) {
-      const error = new Error("pocket-tts-queue-full");
+      const error = new Error("local-tts-queue-full");
       Object.assign(error, { code: "TTS_QUEUE_FULL" });
       throw error;
     }
@@ -436,7 +436,7 @@ export function makeTtsProvider(env: NodeJS.ProcessEnv = process.env, fetchFn: t
 /** Provider name used in cache keys and status; never in user-facing copy. */
 export function ttsProviderName(env: NodeJS.ProcessEnv = process.env): string {
   const provider = (env.TTS_PROVIDER ?? "local").trim().toLowerCase();
-  if (provider === "" || provider === "local") return "pocket-local";
+  if (provider === "" || provider === "local") return "local-tts";
   if (provider === "google") return "google-tts";
   if (provider === "openai") return "openai-tts";
   if (provider === "openrouter") return "openrouter-speech";
@@ -549,7 +549,7 @@ export async function respondToTtsCommand(
           ? "TTS service is at capacity. Try again shortly."
           : res.reason === "input-rejected"
             ? "That text was refused for safety."
-            : ttsProviderName() === "pocket-local"
+            : ttsProviderName() === "local-tts"
               ? "Cyrene's local TTS service is not ready. Try again after service health recovers."
               : "Cyrene's voice service is temporarily unavailable. Please try again shortly.",
       );
@@ -578,7 +578,7 @@ export function ttsStatus() {
     inFlight: ttsQueue.inFlight(),
     queued: ttsQueue.queued(),
     provider: ttsProviderName(),
-    local: ttsProviderName() === "pocket-local",
+    local: ttsProviderName() === "local-tts",
   };
 }
 

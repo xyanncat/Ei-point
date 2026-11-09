@@ -1,4 +1,4 @@
-// Unit admission for per-provider cost units (redesign infra §6). The SQL is
+﻿// Unit admission for per-provider cost units (redesign infra §6). The SQL is
 // exercised end-to-end in tests/ai/database.test.mjs; here the decisions and
 // the statement shapes are checked with a fake pool.
 import { describe, it } from "node:test";
@@ -97,10 +97,10 @@ describe("cost-unit admission decisions", () => {
   it("settle records the units, drops the reservation, and releases the client", async () => {
     const fake = makePool([]);
     await settleUnitUsage(fake.pool, {
-      reservation: "r-1", guildId: "g", userId: "u", provider: "tts:pocket-local", units: 321,
+      reservation: "r-1", guildId: "g", userId: "u", provider: "tts:local-tts", units: 321,
     });
     const insert = fake.calls.find((c) => c.sql.includes("INSERT INTO ai.usage_ledger"));
-    assert.deepEqual(insert?.params, ["g", "u", "tts:pocket-local", 321]);
+    assert.deepEqual(insert?.params, ["g", "u", "tts:local-tts", 321]);
     assert.ok(fake.calls.some((c) => c.sql.includes("DELETE FROM ai.budget_reservations WHERE reservation_id=$1")));
     assert.equal(fake.released.count, 1);
   });

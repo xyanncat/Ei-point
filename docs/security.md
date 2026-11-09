@@ -1,4 +1,4 @@
-# Security — self-audit mode (Aikido removed 2026-10-10)
+﻿# Security — self-audit mode (Aikido removed 2026-10-10)
 
 Aikido (CI scanner, GitHub App, MCP server) was evaluated and fully removed:
 its local SAST/IaC engines could not execute reliably on this workstation, its
@@ -17,7 +17,7 @@ No Aikido configuration, secret, workflow, or MCP registration remains
 5. Push only on 0 critical / 0 major findings.
 
 Full-stack checks that need the VPS (live DB routes, `next build`, image boot,
-restore drills) are tracked as VPS gates in `docs/phase-gates.md`, never assumed.
+restore drills) are tracked in `docs/phase-gates.md`, never assumed.
 
 ## Dependency audit residual (2026-10-13, `pnpm audit`)
 

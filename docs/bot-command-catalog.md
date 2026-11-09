@@ -79,7 +79,7 @@ Kafka is the consolidated security, moderation, and logging bot. Slash command d
 - Route AI mentions through a configured OpenAI-compatible primary provider and optional fallback; local compatible endpoints may omit API keys.
 - Keep guild/user conversation threads, recent messages, summaries, persona preferences, and usage records in PostgreSQL.
 - Read new messages from the active voice channel's text chat, enforce Ei-Flow authorization, rate and queue limits, and coordinate voice admission with Robin through database leases.
-- Synthesize through the private, offline local Pocket service. Provisioning model weights and target-VPS CPU/audible acceptance remain open.
+- Synthesize through the phone-hosted Piper bridge (\TTS_PROVIDER=local\, WAV contract) or a configured hosted TTS provider. Voice acceptance is a listening test on the phone.
 
 ## Robin
 

@@ -77,9 +77,10 @@ test("the CI workflow exists and runs every mandatory gate with a frozen lockfil
   assert.match(yaml, /pnpm install --frozen-lockfile/);
   for (const command of ["pnpm test", "pnpm typecheck", "pnpm lint", "pnpm build", "test:browser", "check-feature-coverage.mjs", "check-openapi-sync.mjs", "unittest discover"])
     assert.ok(yaml.includes(command), `workflow must run: ${command}`);
-  // §2B: locked immutable images must build in Linux CI.
-  assert.match(yaml, /docker compose -f infra\/docker\/compose\.yml build --pull/);
-  assert.match(yaml, /docker compose -f infra\/docker\/compose\.yml config --quiet/);
+  // Render images must build in Linux CI (Compose was retired).
+  assert.match(yaml, /docker build -f apps\/api\/Dockerfile/);
+  assert.match(yaml, /docker build -f apps\/bots\/kafka\/Dockerfile/);
+  assert.doesNotMatch(yaml, /docker compose/);
 });
 
 test("the evidence bundle classifies dirty state from observed paths that exist", async () => {

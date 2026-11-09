@@ -14,6 +14,5 @@ COPY --from=build --chown=node:node /release /app
 COPY --from=build --chown=node:node /release-workers /app/workers
 COPY --chown=node:node infra/render/start-api.sh /app/start-api.sh
 COPY --from=build --chown=node:node /app/infra/postgres /app/infra/postgres
-COPY --from=build --chown=node:node /app/scripts/check-heartbeats.mjs /app/scripts/check-heartbeats.mjs
 USER node
 CMD ["node", "dist/index.js"]
