@@ -116,6 +116,12 @@ the account owners. There is no deployed revision, image ID or health status to 
     drops the backup/resource-budget steps. Verification: feature coverage structural 179, kept operations tests
     21/21, bot-ai 50/50, `-r typecheck` clean; full suite **58/58** (final gate) with zero failures.
     **Committed as `53522fa` and pushed to `origin/main` + `origin/feat/completion-plan` (verified via `git ls-remote`).**
+14. **OpenRouter TTS removed (2026-11-09, owner decision).** The OpenRouter speech adapter, model rotation, voice/
+    instructions/reference-cloning options and their tests and env vars are deleted. TTS now runs on the local
+    Piper bridge (default, `TTS_PROVIDER=local` → `{text,voice,format}` WAV on the phone) or the Google /
+    OpenAI-compatible adapters. Chat remains on Groq; translation is already removed. A deployment that still sets
+    `TTS_PROVIDER=openrouter` fails closed with `TTS_UNCONFIGURED` rather than silently using another provider.
+    Verification: bot-ai typecheck clean and 41/41 tests (the 9 OpenRouter tests removed); full suite below.
 
 ## Verified locally (fresh runs on this revision)
 

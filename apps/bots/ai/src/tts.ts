@@ -5,12 +5,10 @@
 //   TTS_PROVIDER unset/empty/local -> POST TTS_URL {text,voice,format} -> WAV (Piper bridge on the phone)
 //   TTS_PROVIDER=google            -> Google Cloud Text-to-Speech -> MP3
 //   TTS_PROVIDER=openai            -> OpenAI-compatible /v1/audio/speech -> audio bytes
-//   TTS_PROVIDER=openrouter        -> OpenRouter /api/v1/audio/speech (model rotation) -> MP3
 // Remote providers never fall back to a local model silently; a failure is a
 // typed failure and the user gets a text answer, not a surprise process start.
 
 import { SlashCommandBuilder } from "discord.js";
-import { readFile } from "node:fs/promises";
 import type { Pool } from "pg";
 import {
   createTtsQueue,
@@ -269,165 +267,12 @@ function makeOpenAiTtsProvider(env: NodeJS.ProcessEnv, fetchFn: typeof fetch): T
   };
 }
 
-// --- OpenRouter speech ------------------------------------------------------
-// One OpenAI-compatible endpoint (/api/v1/audio/speech) serves every model:
-// `model` selects it, the response is a raw audio byte stream. Free tiers are
-// rate limited per model, so the adapter rotates: a 429 puts that model in a
-// short cooldown and the next model takes the request. A rejection that is not
-// a rate limit (bad voice, bad request) is an operator error and is NOT
-// rotated — it stays loud instead of silently changing voices.
-export const OPENROUTER_DEFAULT_MODELS = [
-  "fish-audio/s2.1-pro-free:free",
-  "heygen/heygen-voice-1-turbo:free",
-  "hexgrad/kokoro-82m",
-];
-const OPENROUTER_QUOTA_COOLDOWN_MS = 60_000;
-const OPENROUTER_OUTAGE_COOLDOWN_MS = 5_000;
-const MAX_REFERENCE_AUDIO_BYTES = 8 * 1024 * 1024;
-
-/** Rotation order: configured list first, then the free-tier defaults. */
-export function openRouterTtsModels(env: NodeJS.ProcessEnv = process.env): string[] {
-  const raw = env.TTS_PROVIDER_MODELS?.trim();
-  const configured = raw
-    ? raw.split(",").map((entry) => entry.trim()).filter(Boolean)
-    : [];
-  return configured.length > 0 ? configured : [...OPENROUTER_DEFAULT_MODELS];
-}
-
-function referenceAudioMime(file: string): string {
-  const ext = file.toLowerCase().split(".").pop() ?? "";
-  if (ext === "wav") return "audio/wav";
-  if (ext === "ogg" || ext === "opus") return "audio/ogg";
-  if (ext === "m4a" || ext === "mp4") return "audio/mp4";
-  if (ext === "aac") return "audio/aac";
-  return "audio/mpeg";
-}
-
-/**
- * Voice cloning is opt-in: without TTS_PROVIDER_REFERENCE_AUDIO_PATH nothing
- * private leaves the host. When it is set, a broken reference fails closed
- * rather than silently speaking in another voice.
- */
-async function loadReferenceAudio(env: NodeJS.ProcessEnv): Promise<{ data: string; text?: string } | null> {
-  const file = env.TTS_PROVIDER_REFERENCE_AUDIO_PATH?.trim();
-  if (!file) return null;
-  let bytes: Buffer;
-  try {
-    bytes = await readFile(file);
-  } catch {
-    throw new Error("tts-reference-unavailable");
-  }
-  if (bytes.byteLength === 0 || bytes.byteLength > MAX_REFERENCE_AUDIO_BYTES) {
-    throw new Error("tts-reference-invalid");
-  }
-  const data = `data:${referenceAudioMime(file)};base64,${bytes.toString("base64")}`;
-  const text = env.TTS_PROVIDER_REFERENCE_TEXT?.trim();
-  return text ? { data, text } : { data };
-}
-
-function makeOpenRouterTtsProvider(env: NodeJS.ProcessEnv, fetchFn: typeof fetch): TtsSynthesizeFn {
-  const apiUrl = env.TTS_PROVIDER_URL?.trim() || "https://openrouter.ai/api/v1/audio/speech";
-  const apiKey = env.TTS_PROVIDER_KEY?.trim() || env.OPENROUTER_API_KEY?.trim() || "";
-  const models = openRouterTtsModels(env);
-  // Fish Audio has no stock voices; a voice is sent only when configured.
-  const voice = env.TTS_PROVIDER_VOICE?.trim() || "";
-  const instructions = env.TTS_PROVIDER_INSTRUCTIONS?.trim() || "";
-  const siteName = env.OPENROUTER_SITE_NAME?.trim() || "";
-  const gate = createFailureGate();
-  const cooldown = new Map<string, number>();
-  if (!apiKey) {
-    return async () => {
-      throw Object.assign(new Error("tts-provider-unconfigured"), { code: "TTS_UNCONFIGURED" });
-    };
-  }
-  return async (text, _voice, signal) => {
-    if (!gate.allow()) throw new Error("tts-provider-circuit-open");
-    const reference = await loadReferenceAudio(env);
-    let lastError: Error | null = null;
-    for (const model of models) {
-      if ((cooldown.get(model) ?? 0) > Date.now()) {
-        lastError = Object.assign(new Error("tts-quota-exhausted"), { code: "TTS_QUOTA" });
-        continue;
-      }
-      let res: Response;
-      try {
-        res = await fetchFn(apiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "audio/mpeg, audio/wav, audio/ogg",
-            Authorization: `Bearer ${apiKey}`,
-            ...(siteName ? { "X-Title": siteName } : {}),
-          },
-          body: JSON.stringify({
-            model,
-            input: text,
-            response_format: "mp3",
-            ...(voice ? { voice } : {}),
-            ...(instructions ? { instructions } : {}),
-            ...(reference
-              ? {
-                  input_references: [
-                    { type: "input_audio", input_audio: { data: reference.data } },
-                    ...(reference.text ? [{ type: "text", text: reference.text }] : []),
-                  ],
-                }
-              : {}),
-          }),
-          signal,
-        });
-      } catch (error) {
-        if (signal.aborted) throw error;
-        cooldown.set(model, Date.now() + OPENROUTER_OUTAGE_COOLDOWN_MS);
-        lastError = error instanceof Error ? error : new Error("tts-provider-unreachable");
-        continue;
-      }
-      if (res.status === 429) {
-        cooldown.set(model, Date.now() + OPENROUTER_QUOTA_COOLDOWN_MS);
-        lastError = Object.assign(new Error("tts-quota-exhausted"), { code: "TTS_QUOTA" });
-        continue;
-      }
-      if (res.status >= 500) {
-        cooldown.set(model, Date.now() + OPENROUTER_OUTAGE_COOLDOWN_MS);
-        lastError = new Error(`tts-${res.status}`);
-        continue;
-      }
-      if (!res.ok) {
-        // Not a rate limit: a rejected request is an operator error, so it is
-        // reported instead of being retried against another voice.
-        throw new Error(`tts-provider-rejected-${res.status}`);
-      }
-      const contentLength = Number(res.headers.get("content-length"));
-      if (Number.isFinite(contentLength) && contentLength > MAX_TTS_AUDIO_BYTES) {
-        await res.body?.cancel().catch(() => {});
-        throw new Error("tts-audio-too-large");
-      }
-      if (!res.body) throw new Error("tts-empty-audio");
-      let bytes: Uint8Array;
-      try {
-        bytes = await readBoundedBody(res.body, MAX_TTS_AUDIO_BYTES, "tts-audio-too-large");
-      } catch (error) {
-        throw error;
-      }
-      if (bytes.byteLength === 0) throw new Error("tts-empty-audio");
-      gate.ok();
-      const mime = res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
-      const resolved = PROVIDER_MIME_TYPES.has(mime) && mime !== "application/octet-stream" ? mime : "audio/mpeg";
-      return { mime: resolved as "audio/mpeg" | "audio/ogg" | "audio/wav", bytes };
-    }
-    // Every model was rate limited or unavailable.
-    gate.fail();
-    throw lastError ?? Object.assign(new Error("tts-quota-exhausted"), { code: "TTS_QUOTA" });
-  };
-}
-
 /** Resolve the configured provider; local unless explicitly moved (fail closed). */
 export function makeTtsProvider(env: NodeJS.ProcessEnv = process.env, fetchFn: typeof fetch = fetch): TtsSynthesizeFn {
   const provider = (env.TTS_PROVIDER ?? "local").trim().toLowerCase();
   if (provider === "" || provider === "local") return makeLocalTtsProvider(env, fetchFn);
   if (provider === "google") return makeGoogleTtsProvider(env, fetchFn);
   if (provider === "openai") return makeOpenAiTtsProvider(env, fetchFn);
-  if (provider === "openrouter") return makeOpenRouterTtsProvider(env, fetchFn);
   return async () => {
     throw Object.assign(new Error("tts-provider-unknown"), { code: "TTS_UNCONFIGURED" });
   };
@@ -439,7 +284,6 @@ export function ttsProviderName(env: NodeJS.ProcessEnv = process.env): string {
   if (provider === "" || provider === "local") return "local-tts";
   if (provider === "google") return "google-tts";
   if (provider === "openai") return "openai-tts";
-  if (provider === "openrouter") return "openrouter-speech";
   return "unconfigured";
 }
 
