@@ -1,0 +1,13 @@
+{
+  "cpu_seconds": 1.328,
+  "destination": "C:\\Users\\DELL\\AppData\\Local\\Temp\\robin-bench-cache\\download-test.audio",
+  "detail": {
+    "exit_code": 0,
+    "output_bytes": 2987514
+  },
+  "exit_code": 0,
+  "max_rss_mb": 59.8,
+  "stage": "download",
+  "url": "http://127.0.0.1:49673/loop.mp3",
+  "wall_seconds": 1.504
+}

@@ -1,0 +1,30 @@
+{
+  "command": [
+    "python",
+    "-m",
+    "yt_dlp",
+    "--dump-single-json",
+    "--skip-download",
+    "--no-playlist",
+    "--socket-timeout",
+    "10",
+    "--retries",
+    "1",
+    "--extractor-retries",
+    "1",
+    "--format",
+    "bestaudio/best",
+    "--",
+    "http://127.0.0.1:56765/loop.mp3"
+  ],
+  "cpu_seconds": 1.922,
+  "detail": {
+    "exit_code": 0,
+    "output_bytes": 2602
+  },
+  "exit_code": 0,
+  "max_rss_mb": 59.3,
+  "stage": "extract",
+  "url": "http://127.0.0.1:56765/loop.mp3",
+  "wall_seconds": 2.273
+}

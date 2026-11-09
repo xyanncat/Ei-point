@@ -1,0 +1,11 @@
+{
+  "cache_root": "C:\\Users\\DELL\\AppData\\Local\\Temp\\robin-bench-cache",
+  "commands": 19,
+  "import_cpu_seconds": 1.594,
+  "import_wall_seconds": 2.638,
+  "max_voice_sessions": 2,
+  "rss_after_mb": 62.2,
+  "rss_before_mb": 26.0,
+  "source": "E:\\github\\Ei Point\\apps\\bots\\music-py\\src\\main.py",
+  "stage": "idle"
+}

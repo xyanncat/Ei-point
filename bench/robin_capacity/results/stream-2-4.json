@@ -1,0 +1,60 @@
+{
+  "audio_seconds": 60.0,
+  "concurrency": 2,
+  "core_per_stream": 0.2779,
+  "core_seconds_per_audio_second": 0.5558,
+  "cpu_freq_mhz": 1300.0,
+  "cpu_seconds_per_stream": 16.6953,
+  "ffmpeg_cpu_complete": true,
+  "ffmpeg_cpu_seconds": 6.203,
+  "ffmpeg_rss_mb_each": [
+    21.4,
+    21.4,
+    7.4,
+    7.4
+  ],
+  "ffmpeg_rss_mb_total": 57.7,
+  "realtime_ratio": 0.9988,
+  "repeat": 4,
+  "requested_seconds": 60.0,
+  "self_cpu_seconds": 27.188,
+  "self_rss_mb": 54.0,
+  "source": "E:\\github\\Ei Point\\apps\\dashboard\\public\\media\\loop.mp3",
+  "source_sha256": "c12f9d9167ca251628c2ca24f2e06017d29d37d4db7587bd943b6f8e788cfc67",
+  "stage": "stream",
+  "streams": [
+    {
+      "audio_seconds": 60.0,
+      "encode_cpu_seconds": 15.953,
+      "frames": 3000,
+      "late_100ms": 0,
+      "late_20ms": 1,
+      "late_50ms": 0,
+      "lateness_max_ms": 22.183,
+      "lateness_p50_ms": 5.857,
+      "lateness_p95_ms": 9.818,
+      "lateness_p99_ms": 11.724,
+      "read_cpu_seconds": 0.234,
+      "stream": 0
+    },
+    {
+      "audio_seconds": 60.0,
+      "encode_cpu_seconds": 18.359,
+      "frames": 3000,
+      "late_100ms": 0,
+      "late_20ms": 0,
+      "late_50ms": 0,
+      "lateness_max_ms": 17.8,
+      "lateness_p50_ms": 5.481,
+      "lateness_p95_ms": 9.439,
+      "lateness_p99_ms": 10.919,
+      "read_cpu_seconds": 0.672,
+      "stream": 1
+    }
+  ],
+  "sustained": true,
+  "system_cpu_percent_max": 89.4,
+  "system_cpu_percent_mean": 67.1,
+  "total_cpu_seconds": 33.391,
+  "wall_seconds": 60.073
+}

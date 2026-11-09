@@ -91,9 +91,15 @@ Constraints:
 
 Run one voice session and record: CPU per stream, RSS, dropped frames, and
 whether a second concurrent stream is possible. If it stutters on the phone,
-deploy Robin to a Render free workspace instead — but then Cyrene and Robin must
-stay on separate phones/workspaces, because one Render workspace allows one
-always-on service.
+use a second phone or a paid Render instance with at least **1.2 CPU / 512 MB**;
+Render free's 0.1 CPU is not sufficient for two streams (see the benchmark
+below). Cyrene and Robin must stay on separate phones/workspaces, because one
+Render workspace allows one always-on service.
+
+The source-side baseline and the sizing method are in
+[2026-11-09-robin-pool-capacity-benchmark](../audits/2026-11-09-robin-pool-capacity-benchmark.md).
+Run `bench/robin_capacity/runner.py` on the phone before freezing the pool or
+instance allocation; the development-host result is not a phone result.
 
 ## Backups and logs
 

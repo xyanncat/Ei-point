@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "description": "Robin (music-py) source audio-render capacity. All rates and limits are declared assumptions, not user traffic.",
+  "media": "apps/dashboard/public/media/loop.mp3",
+  "duration_seconds": 30,
+  "concurrency": [1, 2, 4, 6],
+  "repeats": 3,
+  "limits": {
+    "voice_sessions": 2,
+    "target_cpu_utilization": 0.5,
+    "safety_factor": 2.0,
+    "underrun_ms": 100,
+    "memory_headroom": 0.25
+  },
+  "pool": {
+    "cpu_ceiling": 9,
+    "shares_with_local_tts": 12544,
+    "shares_with_hosted_tts": 8448,
+    "share_rounding": 64
+  },
+  "existing_allocation": {
+    "shares": 512,
+    "memory_gib": 2,
+    "source": "scripts/check-resource-budget.mjs at the pre-retirement revision (bot-music)"
+  },
+  "render_free": {
+    "cpu": 0.1,
+    "memory_mb": 512
+  },
+  "isolation": {
+    "required": true,
+    "notes": "Loopback-only harness. No Discord token, production database, remote host or payment provider. Load stages refuse token/DATABASE_URL environments."
+  }
+}

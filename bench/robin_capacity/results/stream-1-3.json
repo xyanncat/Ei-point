@@ -1,0 +1,39 @@
+{
+  "audio_seconds": 30.0,
+  "concurrency": 1,
+  "core_seconds_per_audio_second": 0.148,
+  "core_seconds_per_stream": 4.4531,
+  "ffmpeg_cpu_complete": true,
+  "ffmpeg_cpu_seconds": 1.344,
+  "ffmpeg_rss_mb_each": [
+    21.4,
+    7.4
+  ],
+  "ffmpeg_rss_mb_total": 28.9,
+  "realtime_ratio": 0.9968,
+  "repeat": 3,
+  "requested_seconds": 30.0,
+  "self_cpu_seconds": 3.109,
+  "self_rss_mb": 53.4,
+  "source": "E:\\github\\Ei Point\\apps\\dashboard\\public\\media\\loop.mp3",
+  "source_sha256": "c12f9d9167ca251628c2ca24f2e06017d29d37d4db7587bd943b6f8e788cfc67",
+  "stage": "stream",
+  "streams": [
+    {
+      "audio_seconds": 30.0,
+      "encode_cpu_seconds": 2.031,
+      "frames": 1500,
+      "late_100ms": 0,
+      "late_20ms": 84,
+      "late_50ms": 0,
+      "lateness_max_ms": 47.019,
+      "lateness_p50_ms": 6.693,
+      "lateness_p95_ms": 20.651,
+      "lateness_p99_ms": 28.019,
+      "read_cpu_seconds": 0.125,
+      "stream": 0
+    }
+  ],
+  "total_cpu_seconds": 4.453,
+  "wall_seconds": 30.095
+}
