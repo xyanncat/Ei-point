@@ -1023,7 +1023,7 @@ BOT_STARTED_AT = time.monotonic()
 def guild_runtime_allowed_sync(guild_id: str) -> bool:
     with db_lock:
         if not db_conn or not db_ready:
-            return False
+            raise RuntimeError("database not ready")
         with db_conn.cursor() as cur:
             cur.execute("""SELECT g.approved AND NOT COALESCE(c.server_paused,false)
                 AND COALESCE(s.enabled,true) AND NOT COALESCE(s.paused,false)
@@ -1039,7 +1039,7 @@ def guild_runtime_allowed_sync(guild_id: str) -> bool:
 def reserve_voice_sync(guild_id: str) -> bool:
     with db_lock:
         if not db_conn or not db_ready:
-            return False
+            raise RuntimeError("database not ready")
         with db_conn.transaction():
             with db_conn.cursor() as cur:
                 cur.execute("SELECT pg_advisory_xact_lock(810208)")
@@ -1057,7 +1057,7 @@ async def runtime_allowed(interaction: discord.Interaction) -> bool:
     def query():
         with db_lock:
             if not db_conn or not db_ready:
-                return False
+                raise RuntimeError("database not ready")
             with db_conn.cursor() as cur:
                 cur.execute("""SELECT g.approved, COALESCE(c.server_paused,false),
                   COALESCE(s.enabled,true), COALESCE(s.paused,false), p.enabled, p.role_ids,
@@ -1071,16 +1071,31 @@ async def runtime_allowed(interaction: discord.Interaction) -> bool:
                 return bool(row and row[0] and not row[1] and row[2] and not row[3] and row[4] is not False
                     and (not row[5] or set(row[5]).intersection(str(r.id) for r in interaction.user.roles))
                     and str(row[6]) == str(bot.user.id))
-    try:
+    async def check():
         return await asyncio.to_thread(query)
-    except Exception:
-        return False
+
+    try:
+        return await check()
+    except Exception as exc:
+        # Neon scales to zero; a long-idle connection can fail on the first
+        # command after a pause. Reconnect once, then retry before denying.
+        log.warning("Runtime permission check failed (%s); reconnecting database.", exc)
+        await asyncio.to_thread(init_db)
+        try:
+            return await check()
+        except Exception as retry_exc:
+            log.warning("Runtime permission check failed after reconnect: %s", retry_exc)
+            return False
 
 
 async def global_interaction_check(interaction: discord.Interaction) -> bool:
     if await runtime_allowed(interaction):
         return True
-    await respond(interaction, "This bot, server, or command is disabled for your roles.", ephemeral=True)
+    if not db_ready:
+        await respond(interaction, "❌ Robin's database is reconnecting. Please try again in a few seconds.", ephemeral=True)
+    else:
+        log.warning("Interaction denied: guild=%s command=%s", interaction.guild_id, interaction.command.name if interaction.command else "?")
+        await respond(interaction, "This bot, server, or command is disabled for your roles.", ephemeral=True)
     return False
 
 
@@ -1099,20 +1114,45 @@ async def ensure_voice_connection(interaction: discord.Interaction, member: disc
     voice_channel = member.voice.channel
     voice_client: discord.VoiceClient | None = interaction.guild.voice_client if interaction.guild else None
 
+    # A full channel is not a permission problem, but connect() raises a
+    # generic voice error; report the real cause before trying.
+    if (not voice_client or voice_client.channel != voice_channel):
+        if isinstance(voice_channel, discord.StageChannel):
+            await respond(interaction, "❌ Stage channels are not supported for music. Use a regular voice channel.", ephemeral=True)
+            return None
+        limit = getattr(voice_channel, "user_limit", 0) or 0
+        occupied = len(voice_channel.voice_states)
+        if limit and occupied >= limit:
+            await respond(interaction, f"❌ <#{voice_channel.id}> is full ({occupied}/{limit}). Increase the user limit or use another voice channel.", ephemeral=True)
+            return None
+
     # Enforce voice session budget (§5: max 2 simultaneous sessions across bot voice clients)
     if not voice_client and len(bot.voice_clients) >= MAX_VOICE_SESSIONS:
         await respond(interaction, "❌ Voice capacity limit reached (max 2 simultaneous server sessions on VPS envelope). Please try again later.", ephemeral=True)
         return None
 
     if not voice_client:
-        if not await asyncio.to_thread(reserve_voice_sync, str(interaction.guild_id)):
+        try:
+            reserved = await asyncio.to_thread(reserve_voice_sync, str(interaction.guild_id))
+        except Exception as exc:
+            log.warning("Voice lease check failed (%s); continuing with in-memory capacity.", exc)
+            reserved = True
+        if not reserved:
             await respond(interaction, "Fleet voice capacity is full or unavailable.", ephemeral=True)
             return None
         try:
             voice_client = await voice_channel.connect(timeout=10.0, reconnect=True)
+        except discord.Forbidden as exc:
+            log.error("Voice permission denied in channel %s: %s", voice_channel.id, exc)
+            await respond(interaction, f"❌ I lack **View Channel**, **Connect**, or **Speak** in <#{voice_channel.id}>. Grant those permissions and try again.", ephemeral=True)
+            return None
+        except asyncio.TimeoutError:
+            log.error("Voice connection timed out for channel %s", voice_channel.id)
+            await respond(interaction, "❌ Discord voice timed out. Please try again in a moment.", ephemeral=True)
+            return None
         except Exception as exc:
-            log.error("Failed to connect to voice channel: %s", exc)
-            await respond(interaction, "❌ Failed to connect to voice channel. Please check bot permissions and try again.", ephemeral=True)
+            log.error("Failed to connect to voice channel %s (%s, code=%s): %s", voice_channel.id, type(exc).__name__, getattr(exc, "code", None), exc)
+            await respond(interaction, "❌ Discord voice connection failed. If this repeats, check the channel's user limit and my Connect/Speak permissions.", ephemeral=True)
             return None
     elif voice_client.channel != voice_channel:
         await voice_client.move_to(voice_channel)
@@ -1263,6 +1303,10 @@ async def cmd_play(interaction: discord.Interaction, link: str):
     if not isinstance(member, discord.Member):
         await respond(interaction, "❌ Could not verify member.", ephemeral=True)
         return
+
+    member_voice = getattr(member, "voice", None)
+    voice_channel = getattr(member_voice, "channel", None) if member_voice else None
+    log.info("play requested guild=%s voice_channel=%s", interaction.guild_id, getattr(voice_channel, "id", None))
 
     # Owner requirement (2026-10-17): playback is link-driven. A song link
     # enqueues one track; a playlist link enqueues its tracks, bounded.
@@ -1681,8 +1725,15 @@ async def periodic_tasks():
                 guild_id = str(voice_client.guild.id)
                 try:
                     authorized = await asyncio.to_thread(guild_runtime_allowed_sync, guild_id) and await asyncio.to_thread(reserve_voice_sync, guild_id)
-                except Exception:
-                    authorized = False
+                except Exception as exc:
+                    # A suspended Neon compute must not cut off a live session;
+                    # reconnect and keep playing, then re-check on the next tick.
+                    log.warning("Voice authorization check failed (%s); keeping session and reconnecting DB.", exc)
+                    try:
+                        await asyncio.to_thread(init_db)
+                    except Exception as db_exc:
+                        log.warning("Database reconnect failed: %s", db_exc)
+                    continue
                 if not authorized:
                     await voice_client.disconnect(force=True)
         except Exception as exc:

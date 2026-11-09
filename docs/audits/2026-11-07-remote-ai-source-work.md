@@ -193,6 +193,14 @@ the account owners. There is no deployed revision, image ID or health status to 
     warming. Measured: 5.1 s extraction, 3.6 s direct download, 0.7 s to FFmpeg's first two seconds. yt-dlp is
     pinned to 2026.10.26. Deployed on the phone at `8a7262f`; Robin restarted with
     `YTDLP_FAST_PATH=/usr/bin:/bin` and `/health/ready` reports `ready`.
+    **Robin voice/permission diagnosis (2026-11-09):** verified the bot's managed role and effective channel
+    permissions (`View Channel`, `Connect`, `Speak` on every voice channel), a real voice handshake to both
+    `test` and `🔊 Cat`, Opus loading (`libopus.so.0`), and the installed `ffmpeg 7.1.5` / `davey 0.2.0` /
+    `yt-dlp 2026.10.26` stack. The old generic "check bot permissions" message was used for every connect
+    failure, including a full channel (only `🔊 Cat` has a user limit, 2) and timeouts; the global gate also
+    denied every command silently when a long-idle Neon connection failed. Added full-channel/stage checks,
+    specific Forbidden/timeout/error messages, a runtime-gate reconnect-and-retry, and a periodic guard that
+    keeps an active music session through transient database errors.
     **Robin injected via proot Debian (2026-11-09):** Debian 13.7 / Python 3.13.5 on the phone, with
     `/opt/robin-venv` containing discord.py 2.7.1, **davey 0.2.0**, PyNaCl 1.5.0, yt-dlp 2026.8.19, certifi and
     psycopg[binary] 3.2.9 — davey's manylinux `aarch64` wheel works under Debian glibc, unlike Termux. The repo is

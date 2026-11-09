@@ -184,6 +184,21 @@ proot-distro login debian \
 - Cyrene + TTS + Robin share one phone: watch thermals, CPU and battery. If
   Robin stutters, use the benchmark sizing above rather than guessing.
 
+### Voice troubleshooting
+
+- The user must be connected to a regular voice channel; stage channels are
+  rejected.
+- The bot needs **View Channel**, **Connect** and **Speak** in that channel.
+  Its managed role already carries them; a channel-specific deny wins.
+- `🔊 Cat` has a user limit of **2**. If two humans are already there, Robin
+  cannot join even with permissions; the bot now says the channel is full
+  instead of blaming permissions.
+- A first command after Neon has scaled to zero may need a short reconnect;
+  the bot retries once and keeps an active music session through transient
+  database errors.
+- Opus is loaded from `/lib/aarch64-linux-gnu/libopus.so.0`; `ffmpeg` is
+  `/usr/bin/ffmpeg` in the Debian rootfs.
+
 ## Backups and logs
 
 The phone is not a backup target. Neon is dumped nightly to Drive by GitHub
