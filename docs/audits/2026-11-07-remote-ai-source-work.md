@@ -184,6 +184,14 @@ the account owners. There is no deployed revision, image ID or health status to 
     restarted both; the built resolver returns the six distinct `project assets/bots/<Bot>/embed.png` URLs, the
     phone envs contain no image overrides, and both `/health/ready` endpoints report `ready`. The shared GIF is
     no longer in the repository.
+    **Robin playback latency (2026-11-09):** profiling showed the phone was not resource-bound (6 GB total,
+    ~3.2 GB available; Cyrene 85 MB, Robin 77 MB, TTS 196 MB). The delay was yt-dlp extraction with the EJS
+    solver (~11 s), a full audio download before playback, an unreachable IPv6 route, and a throttled YouTube
+    CDN host (15–36 KB/s while the phone's general link was ~3 MB/s). Robin now uses a fast yt-dlp path that
+    hides Deno (~5.1 s), retries with EJS only on failure, forces IPv4, selects 60–72 kbps Opus, streams the
+    direct URL immediately instead of waiting for the cache, and uses chunked IPv4 downloads for background
+    warming. Measured: 5.1 s extraction, 3.6 s direct download, 0.7 s to FFmpeg's first two seconds. yt-dlp is
+    pinned to 2026.10.26.
     **Robin injected via proot Debian (2026-11-09):** Debian 13.7 / Python 3.13.5 on the phone, with
     `/opt/robin-venv` containing discord.py 2.7.1, **davey 0.2.0**, PyNaCl 1.5.0, yt-dlp 2026.8.19, certifi and
     psycopg[binary] 3.2.9 — davey's manylinux `aarch64` wheel works under Debian glibc, unlike Termux. The repo is

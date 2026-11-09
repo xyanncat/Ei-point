@@ -179,39 +179,72 @@ async def check_dj_permission(interaction: discord.Interaction) -> bool:
 
 
 # --- yt-dlp Audio Resolution (§5: max 2 concurrent) ---
-async def extract_tracks(query: str, max_results: int = 1) -> list[dict]:
-    """Resolve track metadata and direct streaming URLs via yt-dlp."""
+# 60-72 kbps Opus is enough for Discord voice and roughly halves the bytes the
+# phone must pull from YouTube. Higher formats made the first play noticeably
+# slower on a mobile link without an audible benefit in the voice channel.
+YTDLP_FORMAT = "bestaudio[abr<=72]/bestaudio/best"
+# Fast path: hide the Deno JS runtime from yt-dlp. On the phone the EJS solver
+# adds ~6 s per extraction; the formats it returns are still playable. A failed
+# fast attempt retries once with the normal PATH and the EJS solver.
+YTDLP_FAST_PATH = os.environ.get("YTDLP_FAST_PATH", "/usr/bin:/bin")
+YTDLP_EJS_ARGS = ("--remote-components", "ejs:github")
+
+
+async def run_ytdlp_json(target: str, extra_args: list[str]) -> dict | None:
+    """Run `yt-dlp --dump-single-json` with a fast path and an EJS fallback."""
     if not yt_dlp:
         log.warning("yt_dlp is not installed; audio extraction unavailable.")
-        return []
-
-    # Streaming only: no downloaded media cache is claimed or populated.
-    if query.startswith(("http://", "https://")) and not is_safe_url(query):
-        return []
-    target = query if query.startswith(("http://", "https://")) else f"ytsearch{min(5,max_results)}:{query}"
+        return None
+    base = [
+        sys.executable, "-m", "yt_dlp", "--dump-single-json", "--skip-download",
+        "--force-ipv4", "--socket-timeout", "10", "--retries", "1",
+        "--extractor-retries", "1", "--format", YTDLP_FORMAT, *extra_args,
+    ]
     try:
         async with asyncio.timeout(30):
             async with metadata_semaphore:
-                process = await asyncio.create_subprocess_exec(
-                    sys.executable, "-m", "yt_dlp", "--dump-single-json", "--skip-download",
-                    "--no-playlist", "--socket-timeout", "10", "--retries", "1",
-                    "--extractor-retries", "1", "--format", "bestaudio/best", "--", target,
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-                )
-                try:
-                    output, _ = await asyncio.wait_for(process.communicate(), timeout=30)
-                    if process.returncode != 0 or len(output) > 4_000_000:
-                        return []
-                    data = json.loads(output)
-                    return [e for e in data.get("entries", [data]) if e][:max_results]
-                except (asyncio.TimeoutError, ValueError):
-                    return []
-                finally:
-                    if process.returncode is None:
-                        process.kill()
-                        await process.wait()
+                for fallback in (False, True):
+                    command = [*base, *(YTDLP_EJS_ARGS if fallback else ()), "--", target]
+                    env = os.environ.copy()
+                    if not fallback:
+                        env["PATH"] = YTDLP_FAST_PATH
+                    process = await asyncio.create_subprocess_exec(
+                        *command,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.DEVNULL,
+                        env=env,
+                    )
+                    try:
+                        output, _ = await asyncio.wait_for(process.communicate(), timeout=30)
+                        if process.returncode == 0 and 0 < len(output) <= 4_000_000:
+                            try:
+                                data = json.loads(output)
+                            except ValueError:
+                                data = None
+                            if isinstance(data, dict):
+                                return data
+                    except asyncio.TimeoutError:
+                        break
+                    except ValueError:
+                        pass
+                    finally:
+                        if process.returncode is None:
+                            process.kill()
+                            await process.wait()
     except asyncio.TimeoutError:
+        pass
+    return None
+
+
+async def extract_tracks(query: str, max_results: int = 1) -> list[dict]:
+    """Resolve track metadata and direct streaming URLs via yt-dlp."""
+    if query.startswith(("http://", "https://")) and not is_safe_url(query):
         return []
+    target = query if query.startswith(("http://", "https://")) else f"ytsearch{min(5,max_results)}:{query}"
+    data = await run_ytdlp_json(target, ["--no-playlist"])
+    if not data:
+        return []
+    return [e for e in data.get("entries", [data]) if e][:max_results]
 
 
 def tracks_from_dump(data, limit: int) -> list[dict]:
@@ -356,36 +389,15 @@ async def extract_link(url: str) -> list[dict]:
     --no-playlist is deliberately absent so playlist links expand, while lazy
     per-track resolution during playback keeps the single-track semantics.
     """
-    if not yt_dlp:
-        log.warning("yt_dlp is not installed; audio extraction unavailable.")
-        return []
     if not url.startswith(("http://", "https://")) or not is_safe_url(url):
         return []
     spotify = spotify_target(url)
     if spotify:
         return await spotify_tracks(*spotify)
-    try:
-        async with asyncio.timeout(30):
-            async with metadata_semaphore:
-                process = await asyncio.create_subprocess_exec(
-                    sys.executable, "-m", "yt_dlp", "--dump-single-json", "--skip-download",
-                    "--flat-playlist", "--socket-timeout", "10", "--retries", "1",
-                    "--extractor-retries", "1", "--format", "bestaudio/best", "--", url,
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-                )
-                try:
-                    output, _ = await asyncio.wait_for(process.communicate(), timeout=30)
-                    if process.returncode != 0 or len(output) > 4_000_000:
-                        return []
-                    return tracks_from_dump(json.loads(output), PLAYLIST_MAX_TRACKS)
-                except (asyncio.TimeoutError, ValueError):
-                    return []
-                finally:
-                    if process.returncode is None:
-                        process.kill()
-                        await process.wait()
-    except asyncio.TimeoutError:
+    data = await run_ytdlp_json(url, ["--flat-playlist"])
+    if not data:
         return []
+    return tracks_from_dump(data, PLAYLIST_MAX_TRACKS)
 
 
 # --- Playback Engine ---
@@ -395,7 +407,7 @@ async def download_media(url, destination):
 limit=int(sys.argv[3])
 def progress(event):
  if event.get("downloaded_bytes",0)>limit: raise yt_dlp.utils.DownloadError("cache item limit")
-with yt_dlp.YoutubeDL({"format":"bestaudio/best","outtmpl":sys.argv[2],"noplaylist":True,"quiet":True,"no_warnings":True,"nopart":True,"max_filesize":limit,"progress_hooks":[progress],"cachedir":False}) as ydl:
+with yt_dlp.YoutubeDL({"format":"bestaudio[abr<=72]/bestaudio/best","outtmpl":sys.argv[2],"noplaylist":True,"quiet":True,"no_warnings":True,"nopart":True,"max_filesize":limit,"progress_hooks":[progress],"cachedir":False,"http_chunk_size":1048576,"source_address":"0.0.0.0","socket_timeout":10,"retries":1}) as ydl:
  ydl.download([sys.argv[1]])
 '''
     process = await asyncio.create_subprocess_exec(sys.executable, '-c', code, url, str(destination), str(MUSIC_CACHE.max_item_bytes), stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL, start_new_session=os.name != 'nt')
@@ -583,8 +595,20 @@ async def start_playback(guild_id: str, start_sec: int = 0):
                 if not current_track.title and resolved[0].get("title"):
                     current_track.title = resolved[0].get("title", "")
 
-    # Cache-first from the direct URL when available (no second extraction);
-    # a lazy playlist entry still re-extracts through its webpage URL.
+    # Stream immediately. Waiting for the full cache download was the dominant
+    # first-play delay on the phone (a 3-5 MB file over a throttled YouTube CDN
+    # can take 10+ seconds); FFmpeg can start from the resolved direct URL. The
+    # next track is still warmed in the background, and repeat plays hit the
+    # cache through the lookup above.
+    if current_track.url and current_track.url.startswith(("http://", "https://")) and is_safe_url(current_track.url):
+        log.info("Streaming %s without waiting for the full audio cache", current_track.title)
+        play_track(guild_id, start_sec=start_sec)
+        await refresh_music_panel(guild_id)
+        asyncio.create_task(prefetch_next(guild_id))
+        return
+
+    # Fallback for a rare entry that has no direct URL: cache from the webpage
+    # URL, then play the local file. The normal path never reaches this branch.
     download_url = current_track.url or current_track.webpage_url
     if download_url and is_safe_url(download_url):
         try:

@@ -16,11 +16,12 @@ from queue_state import QueueState, Track
 def service_functions():
     path = Path(os.environ.get("MUSIC_SOURCE_PATH", str(Path(__file__).parents[1] / "src/main.py")))
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    names = {"get_or_create_queue", "cmd_pause", "cmd_resume", "extract_tracks"}
+    names = {"get_or_create_queue", "cmd_pause", "cmd_resume", "extract_tracks", "run_ytdlp_json"}
     tree.body = [node for node in tree.body if isinstance(node, (ast.FunctionDef,ast.AsyncFunctionDef)) and node.name in names]
     for node in tree.body:
         node.decorator_list = []
-    namespace = dict(asyncio=asyncio,sys=sys,yt_dlp=True,metadata_semaphore=asyncio.Semaphore(2),is_safe_url=lambda query:True, discord=MagicMock(), check_dj_permission=AsyncMock(return_value=True),respond=AsyncMock(),json=json, threading=threading, time=time, QueueState=QueueState, db_lock=threading.Lock(),
+    namespace = dict(asyncio=asyncio,sys=sys,os=os,yt_dlp=True,metadata_semaphore=asyncio.Semaphore(2),is_safe_url=lambda query:True, discord=MagicMock(), check_dj_permission=AsyncMock(return_value=True),respond=AsyncMock(),json=json, threading=threading, time=time, QueueState=QueueState, db_lock=threading.Lock(),
+                     YTDLP_FORMAT="bestaudio[abr<=72]/bestaudio/best", YTDLP_FAST_PATH="/usr/bin:/bin", YTDLP_EJS_ARGS=("--remote-components","ejs:github"),
                      db_conn=MagicMock(), db_ready=True, guild_queues={}, track_started_at={}, refresh_music_panel=AsyncMock(), log=MagicMock())
     exec(compile(tree, str(path), "exec"), namespace)
     return namespace

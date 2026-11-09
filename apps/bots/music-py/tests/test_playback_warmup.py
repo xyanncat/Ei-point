@@ -1,11 +1,10 @@
 """Owner feedback (2026-10-18): next-song gaps and cache reliability.
-
-`start_playback` now skips re-resolution for tracks that already carry a direct
-URL (prefetched or freshly resolved), caches from that direct URL instead of
-re-extracting, and warms the next queued track in the background while the
-current one plays. The media cache sweeps stale staging files so a leftover
-lock cannot poison later fetches. These tests exercise the real functions with
-injected mocks (discord.py is not installed for tests)."""
+`start_playback` streams a resolved direct URL immediately instead of waiting
+for the full cache download, warms the next queued track in the background, and
+still falls back to the cache when an entry has no direct URL. The media cache
+sweeps stale staging files so a leftover lock cannot poison later fetches. These
+tests exercise the real functions with injected mocks (discord.py is not
+installed for tests)."""
 import ast
 import sys
 import unittest
@@ -98,7 +97,7 @@ class PrefetchTest(unittest.IsolatedAsyncioTestCase):
 
 
 class StartPlaybackFastPathTest(unittest.IsolatedAsyncioTestCase):
-    async def test_resolved_track_skips_reextraction_and_prefetches(self):
+    async def test_resolved_track_streams_directly_and_prefetches(self):
         ns = base_namespace()
         load({"get_or_create_queue", "prefetch_next", "start_playback"}, ns)
         q = QueueState(tracks=[playable("a", url="https://cdn.example/direct", webpage="https://youtu.be/a")])
@@ -109,11 +108,12 @@ class StartPlaybackFastPathTest(unittest.IsolatedAsyncioTestCase):
         await ns["start_playback"](GUILD)
 
         ns["extract_tracks"].assert_not_awaited()
-        ns["MUSIC_CACHE"].fetch.assert_awaited()
+        ns["MUSIC_CACHE"].fetch.assert_not_awaited()
         ns["play_track"].assert_called_once_with(GUILD, start_sec=0)
+        self.assertEqual(q.tracks[0].url, "https://cdn.example/direct")
         ns["asyncio"].create_task.assert_called()
 
-    async def test_lazy_playlist_entry_still_resolves_through_its_page(self):
+    async def test_lazy_playlist_entry_streams_after_page_resolution(self):
         ns = base_namespace()
         load({"get_or_create_queue", "prefetch_next", "start_playback"}, ns)
         ns["extract_tracks"] = AsyncMock(return_value=[{"url": "https://cdn.example/lazy", "title": "Lazy"}])
@@ -124,7 +124,23 @@ class StartPlaybackFastPathTest(unittest.IsolatedAsyncioTestCase):
         await ns["start_playback"](GUILD)
 
         ns["extract_tracks"].assert_awaited_once_with("https://youtu.be/lazy", max_results=1)
-        self.assertEqual(ns["guild_queues"][GUILD].tracks[0].url, "/cache/lazy")
+        ns["MUSIC_CACHE"].fetch.assert_not_awaited()
+        self.assertEqual(ns["guild_queues"][GUILD].tracks[0].url, "https://cdn.example/lazy")
+        ns["play_track"].assert_called_once_with(GUILD, start_sec=0)
+
+    async def test_entry_without_direct_url_still_uses_the_cache_fallback(self):
+        ns = base_namespace()
+        load({"get_or_create_queue", "prefetch_next", "start_playback"}, ns)
+        ns["extract_tracks"] = AsyncMock(return_value=[])
+        ns["guild_queues"][GUILD] = QueueState(tracks=[playable("a", webpage="https://youtu.be/a")])
+        ns["MUSIC_CACHE"].lookup.return_value = None
+        ns["MUSIC_CACHE"].fetch = AsyncMock(return_value="/cache/a")
+
+        await ns["start_playback"](GUILD)
+
+        ns["MUSIC_CACHE"].fetch.assert_awaited()
+        self.assertEqual(ns["guild_queues"][GUILD].tracks[0].url, "/cache/a")
+        ns["play_track"].assert_called_once_with(GUILD, start_sec=0)
 
 
 if __name__ == "__main__":

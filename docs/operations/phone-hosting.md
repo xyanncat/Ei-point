@@ -98,14 +98,50 @@ Constraints:
 - If the bridge is down, users get an honest "voice service unavailable" answer;
   chat still works.
 
+## Playback latency on the phone
+
+Measured on the Redmi (2026-11-09): the phone is not memory-bound — 6 GB total,
+~3.2 GB available, Cyrene 85 MB RSS, Robin 77 MB, sherpa TTS 196 MB. The first
+`/play` was slow because yt-dlp extracted with the EJS solver (~11 s), then
+Robin waited for a full YouTube download (a throttled CDN host served
+15–36 KB/s while the phone's general link was ~3 MB/s).
+
+The runtime now:
+
+- runs yt-dlp with **`--force-ipv4`** (the phone has no IPv6 route);
+- uses a **fast extraction path** that hides the Deno/EJS solver
+  (`YTDLP_FAST_PATH`, default `/usr/bin:/bin`) and retries with EJS only if
+  extraction fails;
+- selects **60–72 kbps** Opus (`bestaudio[abr<=72]/bestaudio/best`) instead of
+  128 kbps, halving the bytes for voice playback;
+- **streams the direct URL immediately** and warms the next track in the
+  background; it no longer downloads the whole file before the first note;
+- uses `--http-chunk-size 1M` and IPv4 for background cache downloads.
+
+Extraction measured **5–6 s** on the fast path (vs ~11 s with EJS). First audio
+no longer waits for the full download; repeat and prefetched tracks use the
+bounded cache. YouTube CDN host selection still varies (one host measured
+15 KB/s, another 158 KB/s, `mweb` 464 KB/s); if a song stutters, queue the next
+track and let the cache warm, or retry the link to get a different host.
+
+Optional EJS fallback (needed only when the fast extraction fails):
+
+```sh
+curl -fsSL --retry 2 \
+  https://github.com/denoland/deno/releases/latest/download/deno-aarch64-unknown-linux-gnu.zip \
+  -o /tmp/deno.zip
+/opt/robin-venv/bin/python -c 'import zipfile; zipfile.ZipFile("/tmp/deno.zip").extractall("/usr/local/bin")'
+chmod 755 /usr/local/bin/deno
+```
+
 ## Robin benchmark (before relying on it)
 
 Run one voice session and record: CPU per stream, RSS, dropped frames, and
-whether a second concurrent stream is possible. If it stutters on the phone,
-use a second phone or a paid Render instance with at least **1.2 CPU / 512 MB**;
-Render free's 0.1 CPU is not sufficient for two streams (see the benchmark
-below). Cyrene and Robin must stay on separate phones/workspaces, because one
-Render workspace allows one always-on service.
+whether a second concurrent stream is possible. The current deployment runs
+Cyrene + Robin + TTS on the same 6 GB phone and has ~3.2 GB available, so RAM
+is not the constraint; if playback stutters under load, use a second phone or a
+paid Render instance with at least **1.2 CPU / 512 MB**. Render free's 0.1 CPU
+is not sufficient for two streams (see the benchmark below).
 
 The source-side baseline and the sizing method are in
 [2026-11-09-robin-pool-capacity-benchmark](../audits/2026-11-09-robin-pool-capacity-benchmark.md).
@@ -125,7 +161,7 @@ proot-distro login debian -- bash -lc '
   apt-get update && apt-get install -y python3 python3-venv ffmpeg ca-certificates
   python3 -m venv /opt/robin-venv
   /opt/robin-venv/bin/pip install "discord.py[voice]==2.7.1" \
-    "yt-dlp==2026.8.19" "certifi==2026.10.18" "psycopg[binary]==3.2.9"
+    "yt-dlp==2026.10.26" "certifi==2026.10.18" "psycopg[binary]==3.2.9"
 '
 ```
 
