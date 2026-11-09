@@ -128,8 +128,12 @@ def init_db():
                 DATABASE_URL,
                 autocommit=True,
                 connect_timeout=5,
-                options="-c statement_timeout=5000",
             )
+            try:
+                with db_conn.cursor() as cur:
+                    cur.execute("SET statement_timeout=5000")
+            except Exception as exc:
+                log.warning("Could not set statement_timeout (%s); continuing without it.", exc)
             db_ready = True
             log.info("Connected to PostgreSQL.")
         except Exception as exc:

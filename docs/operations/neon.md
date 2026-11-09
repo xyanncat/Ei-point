@@ -82,6 +82,12 @@ Keep pools small: bots use `max: 5`, the worker pool `max: 2`, the API its
 existing limit. Use the pooled endpoint so bursts from Render cold starts do
 not exhaust direct connections.
 
+Neon's pooler rejects libpq **startup options** such as
+`options="-c statement_timeout=5000"`. Set session settings with a `SET`
+statement after connecting (and tolerate the pooler refusing it); this is what
+the music bot does. A long-lived single process may alternatively use the
+direct endpoint.
+
 ## Backups
 
 Nightly encrypted dumps go to Google Drive (see
