@@ -132,11 +132,14 @@ Run the repository from Termux home by binding it into Debian:
 ```sh
 proot-distro login debian \
   --bind "$HOME/ei-point:/root/ei-point" \
+  --bind "$HOME/robin.env:/root/robin.env" \
   -- bash -lc 'set -a; . /root/robin.env; set +a; cd /root/ei-point/apps/bots/music-py; exec /opt/robin-venv/bin/python src/main.py'
 ```
 
-- Env template: [`infra/phone/robin.env.example`](../infra/phone/robin.env.example)
-  copied to `/root/robin.env` inside Debian.
+- Env: copy [`infra/phone/robin.env.example`](../infra/phone/robin.env.example)
+  to `~/robin.env` in Termux and edit it there; the bind exposes it as
+  `/root/robin.env`. Verified: Robin loads in Debian and stops with
+  `BOT_TOKEN is required` until the token and Neon URL are filled.
 - Cache lives at `/root/music-cache`; health is `127.0.0.1:3105`.
 - A boot script can wrap the same command; keep it below the Cyrene boot
   service so TTS starts first.
