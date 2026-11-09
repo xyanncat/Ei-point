@@ -542,7 +542,7 @@ def stage_all(args: argparse.Namespace, out: Path) -> None:
     summary.update(analyse(summary, scenario))
     write_json(out / "summary.json", summary)
     write_csv(out / "summary.csv", stream_runs)
-    print(json.dumps({key: summary[key] for key in ("verdict", "pool", "render_free", "smooth_capacity")}, indent=2))
+    print(json.dumps({key: summary[key] for key in ("verdict", "legacy_pool", "render_free", "smooth_capacity")}, indent=2))
 
 
 def analyse(summary: dict, scenario: dict) -> dict:
@@ -632,20 +632,25 @@ def analyse(summary: dict, scenario: dict) -> dict:
         "sizing_basis": "sustained" if sustained else "burst",
         "sustained_runs": len(sustained),
         "required_cores_with_safety": required_cores,
+        "recommended_cpu": round(math.ceil(required_cores * 10) / 10, 1) if required_cores else None,
         "required_memory_mb": required_memory,
+        "recommended_memory_mb": max(512, int(math.ceil(required_memory))) if required_memory else None,
         "smooth_streams_tested": smooth_capacity,
         "host_stall_runs": stall_runs,
         "host_stall_frames_over_100ms": stall_frames,
         "note": (
-            "Per-stream core is measured steady-state CPU at the configured session count. "
-            "Smooth = real-time ratio >= 0.99 and median per-run p99 lateness <= 50 ms. "
-            "Isolated >100 ms stalls are reported separately; they are host scheduling evidence, "
-            "not proof of a Robin defect, when CPU utilization was low."
+            "Robin's requirement is independent of Cyrene/TTS. Per-stream core is measured "
+            "steady-state CPU at the configured session count. Smooth = real-time ratio >= 0.99 "
+            "and median per-run p99 lateness <= 50 ms. Isolated >100 ms stalls are reported "
+            "separately; they are host scheduling evidence, not proof of a Robin defect, when "
+            "CPU utilization was low."
         ),
     }
     return {
         "verdict": verdict,
-        "pool": {
+        "legacy_pool": {
+            "retired": True,
+            "note": "Optional conversion only; the share denominator includes or excludes Cyrene's separate TTS service. Robin's requirement is the hard CPU/memory figure above.",
             "cpu_ceiling": cpu_ceiling,
             "required_shares": required_shares,
             "existing": existing,
@@ -707,7 +712,7 @@ def analyse_existing(out: Path, scenario_path: Path) -> None:
     summary.update(analyse(summary, scenario))
     write_json(out / "summary.json", summary)
     write_csv(out / "summary.csv", runs["streams"])
-    print(json.dumps({key: summary[key] for key in ("verdict", "pool", "render_free", "smooth_capacity")}, indent=2))
+    print(json.dumps({key: summary[key] for key in ("verdict", "legacy_pool", "render_free", "smooth_capacity")}, indent=2))
 
 
 def self_test(args: argparse.Namespace) -> None:

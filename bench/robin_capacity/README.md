@@ -64,18 +64,21 @@ Load stages refuse to start when `BOT_TOKEN`, `DISCORD_ROBIN_BOT_TOKEN`,
 
 `summary.json` contains:
 
-- `verdict.measured_per_stream_core` — measured core-seconds per stream, taken
-  from the configured 2-session level, worst repeat.
+- `verdict.measured_per_stream_core` — measured cores per stream, taken from
+  the configured 2-session level, worst sustained repeat.
 - `verdict.required_cores_with_safety` — `sessions × per-stream × safety_factor`.
+- `verdict.recommended_cpu` — the hard CPU limit to set (rounded up, 1.2 for
+  the recorded run).
 - `verdict.required_memory_mb` — idle import + FFmpeg per session + yt-dlp
-  transient + memory headroom.
-- `pool.required_shares` — the shares that yield that CPU under full contention
-  in the retired 9-CPU pool: 12 544 shares with Cyrene's TTS service present,
-  or 8 448 shares without it.
+  transient + memory headroom; `recommended_memory_mb` applies the 512 MB floor.
+- `legacy_pool.required_shares` — **optional** conversion to the retired 9-CPU
+  weighted-share pool: 12 544 shares with Cyrene's TTS service in the pool, or
+  8 448 without it. This is not a Robin/TTS dependency; the share denominator
+  changes, Robin's CPU requirement does not.
 - `render_free.max_streams_at_50_percent` — how many streams Render free's
   0.1 CPU can sustain with 50 % headroom.
-- `smooth_capacity` — largest tested concurrency with zero frames more than
-  100 ms late and real-time throughput ≥ 0.99.
+- `smooth_capacity` — largest tested concurrency with real-time throughput
+  ≥ 0.99 and median p99 frame lateness ≤ 50 ms.
 
 Use the **worst** repeat, not the best. A `max_late_100ms_frames` value above
 zero means a frame missed a typical jitter buffer; that is an underrun risk, not

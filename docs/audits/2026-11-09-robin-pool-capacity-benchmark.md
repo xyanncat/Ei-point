@@ -14,28 +14,35 @@ active music session was touched.
 
 ## Answer first
 
-For the configured two simultaneous voice sessions (`MAX_VOICE_SESSIONS = 2`
-and the `ai.voice_leases` fleet limit of 2):
+Robin's standalone requirement for the configured two simultaneous music
+sessions (`MAX_VOICE_SESSIONS = 2` and the `ai.voice_leases` fleet limit of 2):
 
-| Requirement | Burst (30 s runs) | Sustained (60 s runs) | Provision with 2× margin |
-|---|---:|---:|---:|
-| CPU per stream | 0.108–0.149 core | 0.273–0.278 core | — |
-| CPU for 2 streams | 0.22–0.30 core | 0.546–0.556 core | **1.11 core** |
-| Retired 9-CPU pool, with Cyrene TTS in the pool (12 544 shares) | — | — | **1 600 shares** |
-| Retired 9-CPU pool, without Cyrene TTS (8 448 shares) | — | — | **1 088 shares** |
-| Memory (idle + 2 FFmpeg + yt-dlp transient + 25 %) | — | **224.6 MB** | **512 MB** (existing 2 GiB is ample) |
-| DB connections | — | **1** (not a pool) | 1 |
-| Render free instance (0.1 CPU / 512 MB) | — | **not sufficient** | phone or a paid host with ≥1.2 CPU |
+| Requirement | Measured | Provision |
+|---|---:|---:|
+| CPU per stream | 0.273–0.278 core sustained | — |
+| CPU for 2 streams | 0.546–0.556 core | **1.2 CPU** (hard) |
+| Memory (idle + 2 FFmpeg + yt-dlp transient + 25 %) | **224.6 MB** | **512 MB** |
+| DB connections | **1** (not a pool) | 1 |
+| Music-session cap | **2** | 2 |
+| Render free instance (0.1 CPU / 512 MB) | **not sufficient** | phone or a paid host with ≥1.2 CPU |
 
-The two pool rows differ only because the old 9-CPU share total included
-Cyrene's optional `tts` service (12 544 shares) or omitted it (8 448 shares
-with hosted AI). Both rows size **Robin's music playback**; neither is a TTS
-workload.
+That is the whole answer. Robin needs **1.2 dedicated CPU and 512 MB** for the
+two-session policy. There is no Cyrene/TTS dependency in that number.
 
-The old `bot-music` allocation of **512 shares / 2 GiB** gave about **0.367
-core under full pool contention**. That is 66 % of the measured two-stream
-sustained CPU (0.556 core) and 33 % of the 1.112-core provision. It is
-**under-sized** for a shared pool, even though memory was more than enough.
+### Legacy 9-CPU pool conversion (optional)
+
+The old VPS weighted-share model is retired and is **not** part of Robin's
+requirement. If it were restored, shares are relative weights, so the share
+count needed for 1.11 core depends on the pool denominator:
+
+- 12 544-share pool (Cyrene's TTS service present): **1 600 shares**.
+- 8 448-share pool (Cyrene's TTS service absent): **1 088 shares**.
+
+The only difference is what else is in the pool; the numerator is Robin's
+1.11-core requirement either way. The old `bot-music` allocation of 512 shares
+gave about **0.367 core under full contention** — 66 % of the measured
+two-stream load (0.556 core), so it was under-sized. Do not read the Cyrene
+figures as a Robin dependency.
 
 ## What was measured
 
@@ -123,28 +130,35 @@ Two concurrent streams add 57.7 MB of FFmpeg RSS. The memory derivation is:
 yt-dlp transients are bounded by the existing metadata semaphore (2), 30 s task
 timeout and 50 MiB item cap.
 
-## Pool arithmetic
+## Hard CPU recommendation
+
+```
+required cores = 2 sessions × 0.2779 core/stream × 2.0 safety = 1.112 core
+```
+
+Set a hard limit of **`cpus: 1.2`** (2 sessions, 2× the measured sustained
+load) and give the process at least **512 MB**. If the target host measures
+closer to the 0.15-core burst figure, 0.6 core is the floor; the 1.2-core
+figure is deliberately conservative because the benchmark host was shared and
+slow-clocked.
+
+### If the retired share pool returns (optional)
 
 Using the retired resource-pool contract in
 `scripts/check-resource-budget.mjs` at its pre-retirement revision (9-CPU
 aggregate cap, weighted CFS shares):
 
 ```
-required cores = 2 sessions × 0.2779 core/stream × 2.0 safety = 1.112 core
-
-local model pool (with Cyrene TTS):  1.112 / 9 × 12 544 = 1 549.5 → 1 600 shares (64-share rounding)
-hosted AI pool (without Cyrene TTS): 1.112 / 9 ×  8 448 = 1 043.2 → 1 088 shares
+1.112 / 9 × 12 544 = 1 549.5 → 1 600 shares (Cyrene TTS in the pool)
+1.112 / 9 ×  8 448 = 1 043.2 → 1 088 shares (Cyrene TTS absent)
 
 existing 512 shares = 512 / 12 544 × 9 = 0.367 core
   vs measured 2-stream load 0.556 core → 0.66×
   vs 1.112-core provision       → 0.33×
 ```
 
-If the pool model is not restored and a hard limit is used instead, set
-`cpus: 1.2` (2 sessions, 2× the measured sustained load) and give the process
-at least 512 MB. If the target host measures closer to the 0.15-core burst
-figure, 0.6 core is the floor; the 1.2-core figure is deliberately conservative
-because the benchmark host was shared and slow-clocked.
+Again, the two share counts differ only because the pool denominator changes;
+Robin's 1.112-core requirement is independent of Cyrene.
 
 ## Render free is not sufficient
 
@@ -173,7 +187,8 @@ The operational pool is **2 sessions**:
 - `MAX_VOICE_SESSIONS = 2` in `main.py`;
 - `reserve_voice_sync()` refuses when another owner already holds a lease and
   the count reaches 2 in `ai.voice_leases`;
-- Cyrene shares the same lease table.
+- Cyrene shares the same `ai.voice_leases` table, so the 2-session cap is a
+  fleet-wide admission limit, not a Robin CPU or TTS dependency.
 
 The benchmark shows Robin's music playback path can keep real time beyond 2
 streams on this host, but the pool capacity should be sized to the **2-session
